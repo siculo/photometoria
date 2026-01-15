@@ -9,3 +9,6 @@
 # Rust
 /api/target/
 Cargo.lock
+
+# Test results
+/scripts/test_results/
