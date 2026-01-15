@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Test script for tag generation with Qwen3-VL
-Analyzes photos with different approaches and saves results
+Test script for AI vision models tag generation.
+Analyzes photos with different approaches and saves results.
+Supports multiple models: Qwen3-VL, LLaVA.
 """
 
 import os
