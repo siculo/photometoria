@@ -1,21 +1,36 @@
-# Photometoria
+# Photometoria API
 
-## Project Overview
+## Overview
 
-Photometoria is an AI-powered metadata generation system for photography that integrates local AI models with Adobe Lightroom. The system is designed for manual batch processing of large photo collections, using a multi-level tagging approach that analyzes individual photos for fine details, groups photos for contextual macro categories, incorporates user-provided context hints, and extracts EXIF metadata.
+This is the **REST API server** component of Photometoria, implemented in Rust using the Axum framework. It provides HTTP endpoints for managing photo analysis tasks, uploading images, and orchestrating AI-powered metadata generation through local Ollama models.
 
-The project aims to automate photo tagging workflows for photographers managing substantial image libraries.
+**Key Responsibilities:**
+
+- **Task Management**: Create and manage working sessions for photo collections
+- **Photo Storage**: Handle image uploads with configurable storage quotas
+- **AI Processing**: Coordinate concurrent job execution across multiple GPUs
+- **Real-time Updates**: Stream job progress via Server-Sent Events (SSE)
+- **Model Abstraction**: Support multiple AI models with optimized prompts
+
+**Architecture Highlights:**
+
+- Async-first design with Tokio runtime
+- Worker pool pattern for GPU resource management
+- In-memory storage with abstraction layers for future database integration
+- Modular structure: routes, handlers, services, models, storage
 
 ## Development Environment
 
 ### Hardware Setup
 
 **Linux Development Machine:**
+
 - Two NVIDIA GPUs: RTX 3060Ti and GTX 1080 (each with 8GB VRAM)
 - Runs Ollama for AI model inference
 - Primary development environment for the REST API server
 
 **Mac Machine:**
+
 - Adobe Lightroom Classic
 - Future Lua plugin development
 - Integration testing environment
@@ -23,6 +38,7 @@ The project aims to automate photo tagging workflows for photographers managing 
 ### Software Stack
 
 **Core Technologies:**
+
 - **Rust** - REST API server implementation
 - **Ollama** - Local AI model inference engine
 - **Python** - Initial testing and prototyping
@@ -30,6 +46,7 @@ The project aims to automate photo tagging workflows for photographers managing 
 - **GitKraken** - Preferred Git client
 
 **Development Tools:**
+
 - Node.js (updated)
 - Rust toolchain (updated)
 - Claude Code - AI-assisted development
@@ -42,18 +59,20 @@ The project aims to automate photo tagging workflows for photographers managing 
 The original design concept involves multiple analysis levels:
 
 1. **Individual Analysis (Micro)**: Each photo analyzed separately for specific details
-   - Example: "golden gate bridge, sunset, long exposure, red suspension cables"
+    - Example: "golden gate bridge, sunset, long exposure, red suspension cables"
 
 2. **Group Analysis (Macro)**: Photos analyzed together for broader context
-   - Example: 20 photos → "san francisco vacation, summer 2024, california coast"
+    - Example: 20 photos → "san francisco vacation, summer 2024, california coast"
 
 3. **User Context Hints**: Manually provided information
-   - Example: "trip to northern california"
+    - Example: "trip to northern california"
 
 4. **EXIF Metadata**: Technical information extracted from camera data
 
 **Current Implementation:**
-The initial version simplifies this to a single-level tagging system that produces one set of tags per photo, while still considering:
+The initial version simplifies this to a single-level tagging system that produces one set of tags per photo, while
+still considering:
+
 - Individual photo content
 - User-provided context hints
 - Other photos in the same processing batch
@@ -61,10 +80,12 @@ The initial version simplifies this to a single-level tagging system that produc
 ### Model Selection & Testing
 
 **Key Findings:**
+
 - **qwen2-vl:8b**: Superior quality for landmark identification and detailed tagging, but slower
 - **llava**: Faster iteration for development work, acceptable quality
 
 **Technical Approach:**
+
 - Use Ollama's HTTP API directly (more reliable than subprocess calls)
 - Different models require optimized prompts for clean comma-separated tag output
 - Always test on real photo collections before production use
@@ -74,16 +95,19 @@ The initial version simplifies this to a single-level tagging system that produc
 ### Architecture Overview
 
 **Framework & Runtime:**
+
 - **Axum** - Modern async web framework
 - **Tokio** - Async runtime
 - **SSE (Server-Sent Events)** - Real-time updates to clients
 
 **Storage Strategy:**
+
 - In-memory data structures for jobs and metadata
 - Filesystem storage for uploaded photos
 - Abstraction layer designed for future evolution (database, object storage)
 
 **Concurrency Model:**
+
 - Task-based async processing (Tokio tasks)
 - Worker pool with GPU-based limits
 - Multiple jobs can run concurrently (up to GPU capacity)
@@ -95,16 +119,19 @@ The initial version simplifies this to a single-level tagging system that produc
 A **Task** represents a working session for a photographer.
 
 **Characteristics:**
+
 - Container for uploaded photos and shared context hints
 - Short-lived (one working session), but no automatic timeout initially
 - Photos remain available until task is explicitly deleted
 - Context can be modified after creation
 
 **Current Limitation:**
+
 - Only one active task allowed at a time (returns error if another exists)
 - This simplification may be lifted in future versions
 
 **Lifecycle:**
+
 ```
 Created → Photos Uploaded → Jobs Created/Executed → Explicitly Deleted
 ```
@@ -114,12 +141,14 @@ Created → Photos Uploaded → Jobs Created/Executed → Explicitly Deleted
 A **Photo** is an image file uploaded for analysis.
 
 **Characteristics:**
+
 - Belongs to exactly one task
 - Stored on filesystem (with configurable storage quota)
 - Identified by unique photo_id
 - Contains metadata: original filename, size, upload timestamp
 
 **Constraints:**
+
 - Cannot be deleted if referenced by any active job
 - Deleted automatically when parent task is deleted
 
@@ -128,6 +157,7 @@ A **Photo** is an image file uploaded for analysis.
 A **Job** is an AI analysis process that runs on photos within a task.
 
 **Characteristics:**
+
 - References a specific task
 - Specifies which AI model to use
 - Can process all photos in the task or a specific subset
@@ -135,6 +165,7 @@ A **Job** is an AI analysis process that runs on photos within a task.
 - Multiple jobs can be active concurrently (GPU limit permitting)
 
 **States:**
+
 - `queued` - Waiting for available worker
 - `processing` - Currently being executed
 - `completed` - Finished successfully
@@ -142,11 +173,13 @@ A **Job** is an AI analysis process that runs on photos within a task.
 - `cancelled` - Manually stopped by user
 
 **Results:**
+
 - Available incrementally during processing (partial results)
 - Remain available after completion until job is deleted
 - Each photo in the job has individual status (completed/failed)
 
 **Lifecycle:**
+
 ```
 Created → Queued → Processing → Completed/Failed/Cancelled → Deleted
 ```
@@ -156,12 +189,14 @@ Created → Queued → Processing → Completed/Failed/Cancelled → Deleted
 The **Worker Pool** manages concurrent job execution based on available GPU resources.
 
 **Design:**
+
 - One worker per GPU (configured in settings)
 - Workers pull jobs from a queue
 - Jobs wait in queue until a worker becomes available
 - Each worker processes photos sequentially within a job
 
 **Configuration:**
+
 ```toml
 [gpu]
 devices = [0, 1]  # GPU indices to use
@@ -225,6 +260,7 @@ max_workers = 2   # Maximum concurrent jobs
 Returns server configuration and limits relevant to the client.
 
 Response:
+
 ```json
 {
   "upload": {
@@ -249,6 +285,7 @@ Response:
 Returns list of supported AI models that are currently available (both configured and installed in Ollama).
 
 Response:
+
 ```json
 {
   "models": [
@@ -273,6 +310,7 @@ Response:
 Creates a new task. Returns error if a task already exists (single task mode).
 
 Request:
+
 ```json
 {
   "context": "vacation in San Francisco, summer 2024"
@@ -280,6 +318,7 @@ Request:
 ```
 
 Response:
+
 ```json
 {
   "task_id": "task_abc",
@@ -289,6 +328,7 @@ Response:
 ```
 
 Errors:
+
 - `409` - Task already exists
 
 **GET /api/tasks**
@@ -296,6 +336,7 @@ Errors:
 Returns list of all tasks.
 
 Response:
+
 ```json
 {
   "tasks": [
@@ -316,6 +357,7 @@ Response:
 Returns detailed information about a specific task, including all associated jobs.
 
 Response:
+
 ```json
 {
   "task_id": "task_abc",
@@ -348,6 +390,7 @@ Response:
 Updates the task context.
 
 Request:
+
 ```json
 {
   "context": "updated context information"
@@ -355,6 +398,7 @@ Request:
 ```
 
 Response:
+
 ```json
 {
   "task_id": "task_abc",
@@ -367,6 +411,7 @@ Response:
 Deletes a task and all associated resources (photos, jobs).
 
 Errors:
+
 - `409` - Cannot delete task with active jobs
 
 #### Photo Endpoints
@@ -376,20 +421,27 @@ Errors:
 Uploads one or more photos to a task using multipart/form-data.
 
 Request:
+
 - Content-Type: multipart/form-data
 - Field name: "files" (can be repeated for multiple files)
 - Limits: max_photos_per_request, max_photo_size_mb (from config)
 
 Response:
+
 ```json
 {
-  "photo_ids": ["p1", "p2", "p3"],
+  "photo_ids": [
+    "p1",
+    "p2",
+    "p3"
+  ],
   "uploaded_count": 3,
   "total_size_mb": 12.4
 }
 ```
 
 Errors:
+
 - `400` - File too large or too many files
 - `404` - Task not found
 - `507` - Insufficient storage space
@@ -399,9 +451,16 @@ Errors:
 Returns list of photo IDs in the task.
 
 Response:
+
 ```json
 {
-  "photo_ids": ["p1", "p2", "p3", "p4", "p5"],
+  "photo_ids": [
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5"
+  ],
   "count": 5
 }
 ```
@@ -411,6 +470,7 @@ Response:
 Returns detailed information about a specific photo.
 
 Response:
+
 ```json
 {
   "photo_id": "p1",
@@ -426,6 +486,7 @@ Response:
 Deletes a specific photo from the task.
 
 Errors:
+
 - `409` - Cannot delete photo referenced by active jobs
 
 #### Job Endpoints
@@ -435,14 +496,17 @@ Errors:
 Creates and starts a new analysis job.
 
 Request:
+
 ```json
 {
   "model": "qwen2-vl:8b",
-  "photo_ids": null  // null = all photos, or array of specific IDs
+  "photo_ids": null
+  // null = all photos, or array of specific IDs
 }
 ```
 
 Response:
+
 ```json
 {
   "job_id": "job_xyz",
@@ -451,26 +515,31 @@ Response:
   "photo_count": 15,
   "model": "qwen2-vl:8b",
   "created_at": "2024-01-15T10:35:00Z",
-  "queue_position": 1  // optional, if in queue
+  "queue_position": 1
+  // optional, if in queue
 }
 ```
 
 Errors:
+
 - `400` - Invalid model or photo_ids
 - `404` - Task not found
 
 **POST /api/jobs/{job_id}/retry**
 
-Retries only the failed photos from a completed job, using the same model and enriched context from successfully processed photos.
+Retries only the failed photos from a completed job, using the same model and enriched context from successfully
+processed photos.
 
 Response:
+
 ```json
 {
   "job_id": "job_new_123",
   "parent_job_id": "job_xyz",
   "task_id": "task_abc",
   "status": "queued",
-  "photo_count": 2,  // only failed photos
+  "photo_count": 2,
+  // only failed photos
   "model": "qwen2-vl:8b",
   "retry": true,
   "created_at": "2024-01-15T10:50:00Z"
@@ -478,6 +547,7 @@ Response:
 ```
 
 Errors:
+
 - `400` - No failed photos to retry
 - `409` - Original job still processing
 
@@ -486,6 +556,7 @@ Errors:
 Returns list of all jobs across all tasks.
 
 Response:
+
 ```json
 {
   "jobs": [
@@ -507,6 +578,7 @@ Response:
 Returns current state of a specific job.
 
 Response:
+
 ```json
 {
   "job_id": "job_xyz",
@@ -529,6 +601,7 @@ Response:
 Returns analysis results. Available even for jobs in "processing" or "cancelled" state (partial results).
 
 Response:
+
 ```json
 {
   "job_id": "job_xyz",
@@ -569,6 +642,7 @@ Opens a Server-Sent Events (SSE) stream for real-time job updates.
 Event Types:
 
 **started:**
+
 ```json
 {
   "event": "started",
@@ -578,6 +652,7 @@ Event Types:
 ```
 
 **progress:**
+
 ```json
 {
   "event": "progress",
@@ -588,6 +663,7 @@ Event Types:
 ```
 
 **progress (failed photo):**
+
 ```json
 {
   "event": "progress",
@@ -599,6 +675,7 @@ Event Types:
 ```
 
 **completed:**
+
 ```json
 {
   "event": "completed",
@@ -610,6 +687,7 @@ Event Types:
 ```
 
 **cancelled:**
+
 ```json
 {
   "event": "cancelled",
@@ -618,18 +696,21 @@ Event Types:
 ```
 
 **Client Disconnection:**
-When a client disconnects from the SSE stream, the server detects this and marks the job as "abandoned". Currently, no automatic timeout/cleanup is implemented for abandoned jobs (future enhancement).
+When a client disconnects from the SSE stream, the server detects this and marks the job as "abandoned". Currently, no
+automatic timeout/cleanup is implemented for abandoned jobs (future enhancement).
 
 **DELETE /api/jobs/{job_id}**
 
 Cancels and deletes a job.
 
 Behavior:
+
 - If job is running: completes current photo processing, then stops
 - Partial results are preserved and retrievable
 - Associated photos remain in the task
 
 Response:
+
 ```json
 {
   "job_id": "job_xyz",
@@ -640,6 +721,7 @@ Response:
 ### Data Models
 
 #### Task
+
 ```json
 {
   "task_id": "string (UUID)",
@@ -649,6 +731,7 @@ Response:
 ```
 
 #### Photo
+
 ```json
 {
   "photo_id": "string (UUID)",
@@ -660,13 +743,18 @@ Response:
 ```
 
 #### Job
+
 ```json
 {
   "job_id": "string (UUID)",
   "task_id": "string (UUID)",
   "status": "queued|processing|completed|failed|cancelled",
   "model": "string",
-  "photo_ids": ["string (UUID)"] | null,
+  "photo_ids": [
+    "string (UUID)"
+  ]
+  |
+  null,
   "created_at": "ISO 8601 timestamp",
   "started_at": "ISO 8601 timestamp | null",
   "completed_at": "ISO 8601 timestamp | null"
@@ -674,6 +762,7 @@ Response:
 ```
 
 #### Result
+
 ```json
 {
   "photo_id": "string (UUID)",
@@ -752,25 +841,31 @@ description = "Faster, good for testing"
 **Configuration Sections:**
 
 **[server]**
+
 - `host` - Bind address
 - `port` - Server port
 
 **[gpu]**
+
 - `devices` - Array of GPU device indices to use
 - `max_workers` - Maximum concurrent job executions (typically 1 per GPU)
 
 **[storage]**
+
 - `path` - Filesystem path for photo storage
 - `max_size_gb` - Total storage quota
 
 **[upload]**
+
 - `max_photos_per_request` - Limit for batch uploads
 - `max_photo_size_mb` - Maximum size per individual photo
 
 **[ollama]**
+
 - `base_url` - Ollama API endpoint
 
 **[[models]]** (array of supported models)
+
 - `name` - Model identifier used in API requests
 - `ollama_model` - Actual Ollama model name
 - `prompt_template` - Prompt template for this model (supports {context} placeholder)
@@ -785,6 +880,7 @@ The server maintains a list of supported models with their corresponding prompt 
 3. Only models that are both configured and installed appear in `GET /api/models`
 
 **Benefits:**
+
 - Centralized prompt optimization per model
 - Validation at job creation (400 error if model unavailable)
 - Easy to add new models without code changes
@@ -797,30 +893,36 @@ The server maintains a list of supported models with their corresponding prompt 
 The implementation uses abstraction to allow future evolution without major refactoring:
 
 **JobStore**
+
 - Current: In-memory `HashMap` with `RwLock`
 - Future: PostgreSQL, SQLite, or other database
 
 **PhotoStore**
+
 - Current: Filesystem with metadata in memory
 - Future: Object storage (S3, MinIO), database-backed metadata
 
 **TaskQueue**
+
 - Current: In-memory `VecDeque` with `Mutex`
 - Future: Redis, RabbitMQ, or other message queue
 
 **NotificationManager**
+
 - Current: SSE with in-memory connection tracking
 - Future: WebSocket, or external pub/sub system
 
 #### Worker Pool Implementation
 
 **Design:**
+
 - Tokio task per worker
 - Shared job queue (`Arc<Mutex<VecDeque<JobId>>>`)
 - Workers pull jobs and process photos sequentially
 - Semaphore pattern to limit concurrency
 
 **Pseudo-flow:**
+
 ```
 Worker loop:
   1. Acquire semaphore permit (enforces max_workers limit)
@@ -836,17 +938,20 @@ Worker loop:
 #### Photo Deduplication (Future)
 
 **Design for future implementation:**
+
 - Calculate SHA256 hash on upload
 - Store photos by content hash (content-addressable storage)
 - Task maintains references to photo hashes, not file copies
 - Reference counting: delete photo file when no task references it
 
 **API Impact:**
+
 - Transparent to client (no API changes needed)
 - Upload response still returns photo_id
 - Internally: photo_id maps to content hash
 
 **Benefits:**
+
 - Significant storage savings for repeated uploads
 - Faster uploads (skip if already stored)
 
@@ -910,11 +1015,13 @@ src/
 ### Prerequisites
 
 **On Linux Development Machine:**
+
 - Rust toolchain installed
 - Ollama running with desired models pulled
 - NVIDIA drivers and CUDA configured for GPUs
 
 **On Mac (for future plugin development):**
+
 - Adobe Lightroom Classic installed
 - Lua development environment (planned)
 
@@ -929,15 +1036,18 @@ src/
 ### Testing Strategy
 
 **Unit Tests:**
+
 - Storage abstractions (mock implementations)
 - Model selection and validation logic
 - Configuration parsing
 
 **Integration Tests:**
+
 - Full API endpoint tests with real server instance
 - Mock Ollama responses for predictable testing
 
 **Manual Testing:**
+
 - Use curl, Postman, or custom client
 - Test with real photos and Ollama models
 - Validate SSE streaming behavior
@@ -945,6 +1055,7 @@ src/
 ### Development with Claude Code
 
 Claude Code is used for AI-assisted development, particularly for:
+
 - Code structure and architecture decisions
 - Implementation of complex async patterns
 - Error handling strategies
@@ -953,21 +1064,25 @@ Claude Code is used for AI-assisted development, particularly for:
 ## Key Learnings
 
 ### Model Performance
+
 - **qwen2-vl:8b** produces superior results but slower (use for production)
 - **llava** good for rapid iteration during development
 - Different models require different prompt engineering for optimal output
 
 ### API Design
+
 - Direct HTTP API calls to Ollama more reliable than subprocess management
 - SSE provides simple, effective real-time updates without WebSocket complexity
 - Separating Task and Job concepts enables flexible workflows and retry logic
 
 ### Rust Development
+
 - Axum + Tokio provides excellent async web framework
 - Abstraction layers essential for future-proofing
 - In-memory implementations good starting point before adding complexity
 
 ### Version Control
+
 - Git SSH authentication works well across machines
 - GitKraken simplifies complex repository operations
 - Comprehensive CLAUDE.md documentation captures full project state
@@ -975,41 +1090,44 @@ Claude Code is used for AI-assisted development, particularly for:
 ## Future Roadmap
 
 ### Short-term (Current Focus)
+
 - Complete REST API server implementation
 - Thorough testing with real photo collections
 - Performance optimization for batch processing
 
 ### Medium-term
+
 - **Lightroom Lua Plugin**: Direct integration with Adobe Lightroom Classic
-  - Photo upload from Lightroom catalog
-  - Metadata write-back to Lightroom
-  - UI for job monitoring and retry
-  
+    - Photo upload from Lightroom catalog
+    - Metadata write-back to Lightroom
+    - UI for job monitoring and retry
+
 - **Multi-user Support**: Remove single-task limitation
-  - User authentication and authorization
-  - Per-user storage quotas
-  - Isolated task/job workspaces
+    - User authentication and authorization
+    - Per-user storage quotas
+    - Isolated task/job workspaces
 
 ### Long-term
+
 - **Enhanced Storage**:
-  - Photo deduplication (content-addressable storage)
-  - Database-backed metadata
-  - Object storage integration (S3, MinIO)
+    - Photo deduplication (content-addressable storage)
+    - Database-backed metadata
+    - Object storage integration (S3, MinIO)
 
 - **Advanced Features**:
-  - Job timeout and automatic cleanup
-  - Task templates and presets
-  - Batch operations on multiple tasks
-  - Export/import of results
+    - Job timeout and automatic cleanup
+    - Task templates and presets
+    - Batch operations on multiple tasks
+    - Export/import of results
 
 - **Performance**:
-  - Rust-based image preprocessing (resize, format conversion)
-  - GPU pooling optimization
-  - Caching layer for repeated analyses
+    - Rust-based image preprocessing (resize, format conversion)
+    - GPU pooling optimization
+    - Caching layer for repeated analyses
 
 - **Alternative Implementations**:
-  - Potential Python version for easier community contributions
-  - Desktop application (non-server mode) for single-user scenarios
+    - Potential Python version for easier community contributions
+    - Desktop application (non-server mode) for single-user scenarios
 
 ## Version History
 

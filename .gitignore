@@ -33,6 +33,7 @@ OPENAI.md
 COPILOT.md
 .github/copilot-instructions.md
 
-# OpenCode (user-specific only)
+# OpenCode
+AGENTS.md
 .opencode/config.json
 .opencode/auth.json
