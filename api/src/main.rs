@@ -8,10 +8,42 @@ mod storage;
 
 use std::sync::Arc;
 
+use tokio::signal;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use app_state::AppState;
 use storage::{InMemoryTaskStore, TaskStore};
+
+/// Handles graceful shutdown on CTRL+C (SIGINT) or SIGTERM.
+///
+/// This function waits for either a CTRL+C signal or a SIGTERM signal (Unix only),
+/// and logs a shutdown message when received. This allows the server to complete
+/// in-flight requests before terminating.
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    tracing::info!("Shutdown signal received, stopping server gracefully...");
+}
 
 #[tokio::main]
 async fn main() {
@@ -47,5 +79,8 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await
         .unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
 }
