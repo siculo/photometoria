@@ -2,8 +2,8 @@
 //!
 //! This module contains handler functions for task-related endpoints.
 
-use axum::{extract::Json, http::StatusCode};
 use crate::models::{CreateTaskRequest, Task, TaskResponse};
+use axum::{extract::Json, http::StatusCode};
 
 /// Handler for POST /api/tasks
 ///

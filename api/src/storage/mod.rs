@@ -7,4 +7,5 @@ pub mod in_memory_task_store;
 pub mod task_store;
 
 // Re-export commonly used types
+pub use in_memory_task_store::InMemoryTaskStore;
 pub use task_store::{TaskStore, TaskStoreError, TaskStoreResult};

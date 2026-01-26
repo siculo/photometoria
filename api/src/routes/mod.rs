@@ -1,7 +1,11 @@
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 
-pub fn create_router() -> Router {
-    Router::new().route("/version", get(version))
+use crate::app_state::AppState;
+
+pub fn create_router(state: AppState) -> Router {
+    Router::new()
+        .route("/version", get(version))
+        .with_state(state)
 }
 
 async fn version() -> &'static str {
@@ -11,13 +15,22 @@ async fn version() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+
     use axum::{body::Body, http::Request};
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
+    use crate::app_state::AppState;
+    use crate::storage::{InMemoryTaskStore, TaskStore};
+
     #[tokio::test]
     async fn test_version_returns_package_version() {
-        let app = create_router();
+        // Create a test state with an in-memory task store
+        let task_store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new());
+        let state = AppState::new(task_store);
+
+        let app = create_router(state);
         let request = Request::get("/version").body(Body::empty()).unwrap();
         let response = app.oneshot(request).await.unwrap();
 

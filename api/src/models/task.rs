@@ -182,7 +182,6 @@ pub struct TaskDetail {
 
     /// Total storage used by photos in this task (MB)
     pub storage_used_mb: f64,
-
     // TODO: Uncomment and use Vec<JobSummary> when job model is implemented
     // /// List of jobs associated with this task
     // pub jobs: Vec<JobSummary>,
@@ -248,7 +247,7 @@ mod tests {
     fn test_task_to_response_conversion() {
         let task = Task::new("test".to_string());
         let response: TaskResponse = task.clone().into();
-        
+
         assert_eq!(response.task_id, task.task_id);
         assert_eq!(response.context, task.context);
         assert_eq!(response.created_at, task.created_at);
@@ -258,7 +257,7 @@ mod tests {
     fn test_task_serialization() {
         let task = Task::new("test context".to_string());
         let json = serde_json::to_string(&task).unwrap();
-        
+
         assert!(json.contains("task_id"));
         assert!(json.contains("context"));
         assert!(json.contains("created_at"));

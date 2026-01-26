@@ -6,6 +6,4 @@
 pub mod task;
 
 // Re-export public types for convenient access
-pub use task::{
-    CreateTaskRequest, Task, TaskDetail, TaskResponse, TaskSummary, UpdateTaskRequest,
-};
+pub use task::{CreateTaskRequest, Task, TaskDetail, TaskResponse, TaskSummary, UpdateTaskRequest};
