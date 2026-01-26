@@ -21,19 +21,46 @@ This is the **REST API server** component of Photometoria, implemented in Rust u
 
 ## Development Environment
 
-### Hardware Setup
+### Requirements by Component
 
-**Linux Development Machine:**
+#### Ollama & AI Models
 
-- Two NVIDIA GPUs: RTX 3060Ti and GTX 1080 (each with 8GB VRAM)
-- Runs Ollama for AI model inference
-- Primary development environment for the REST API server
+**Hardware:**
 
-**Mac Machine:**
+- GPU with sufficient memory for the AI models you intend to use
+- Currently tested models: **qwen2-vl:8b** (higher quality, requires more VRAM) and **llava** (faster, lower requirements)
+- Multi-GPU setup supported for concurrent processing
 
-- Adobe Lightroom Classic
-- Future Lua plugin development
-- Integration testing environment
+**Supported Systems:**
+
+- **Linux** - GPU support via appropriate drivers (CUDA for NVIDIA, ROCm for AMD)
+- **Windows** - Native GPU support or via WSL2
+- **Mac** - Metal support (Apple Silicon recommended for better inference performance)
+
+#### API Server Development
+
+**Requirements:**
+
+- System capable of compiling and running Rust applications
+- Modern development environment with sufficient resources for async runtime
+
+**Supported Systems:**
+
+- **Linux** - Primary development and production platform
+- **Windows** - Full support
+- **Mac** - Full support
+
+#### Lightroom Plugin Development
+
+**Requirements:**
+
+- Adobe Lightroom Classic installed
+- Lua development environment
+
+**Supported Systems:**
+
+- **Mac** - Fully supported
+- **Windows** - Fully supported
 
 ### Software Stack
 
@@ -42,15 +69,45 @@ This is the **REST API server** component of Photometoria, implemented in Rust u
 - **Rust** - REST API server implementation
 - **Ollama** - Local AI model inference engine
 - **Python** - Initial testing and prototyping
-- **Git/GitHub** - Version control (SSH authentication)
-- **GitKraken** - Preferred Git client
+- **Git/GitHub** - Version control
 
 **Development Tools:**
 
-- Node.js (updated)
-- Rust toolchain (updated)
-- Claude Code - AI-assisted development
-- VS Code - Editor (with planned Lua extensions)
+- Node.js - JavaScript runtime
+- Rust toolchain - Compiler and package manager
+- Adobe Lightroom software development kit (SDK) - Lightroom plugin development
+
+### Recommended Development Tools
+
+**Code Editors:**
+
+- **VS Code** - Versatile editor with extensive plugin ecosystem
+- **RustRover** - JetBrains IDE optimized for Rust development
+
+**AI-Assisted Development:**
+
+- **OpenCode** - AI-powered development assistant
+
+**Lua Development:**
+
+- **Lua Language Server** - Language support and IntelliSense
+- **Lua Debug** - Debugging support for Lua scripts
+
+**Rust Development:**
+
+- **rust-analyzer** - IDE support for Rust with intelligent code completion
+- **Cargo** - Build system and package manager (included in Rust toolchain)
+
+**API Testing:**
+
+- **curl** - Command-line HTTP client
+- **Postman** - GUI-based API testing tool
+- **Bruno** - Open-source API client
+
+**Git Clients:**
+
+- **Command-line git** - Standard git CLI
+- **GUI options** - GitKraken, SourceTree, or other clients based on preference
 
 ## Core System Design
 
@@ -106,6 +163,14 @@ still considering:
 - Filesystem storage for uploaded photos
 - Abstraction layer designed for future evolution (database, object storage)
 
+**Multi-Task Support:**
+
+- Multiple tasks can coexist simultaneously in the system
+- Each task maintains independent photo collections and job queues
+- Task isolation ensures no cross-task interference
+- Current limitation: In-memory storage is bound only by available RAM
+- Future enhancement: Configurable limits on task count, storage per-task, and TTL-based cleanup
+
 **Concurrency Model:**
 
 - Task-based async processing (Tokio tasks)
@@ -125,10 +190,14 @@ A **Task** represents a working session for a photographer.
 - Photos remain available until task is explicitly deleted
 - Context can be modified after creation
 
-**Current Limitation:**
+**Task Limits:**
 
-- Only one active task allowed at a time (returns error if another exists)
-- This simplification may be lifted in future versions
+- The current implementation does not enforce limits on the number of tasks
+- Future versions may introduce configurable limits based on:
+  - Total task count (system-wide or per-user)
+  - Storage quota enforcement
+  - Time-based cleanup policies (TTL)
+- The architecture supports adding these constraints without major refactoring
 
 **Lifecycle:**
 
@@ -274,11 +343,13 @@ Response:
   },
   "limits": {
     "max_concurrent_jobs": 2,
-    "single_task_mode": true
+    "max_tasks": null
   },
   "version": "0.1.0"
 }
 ```
+
+**Note:** `max_tasks: null` indicates that task count limits are not currently enforced. Future versions may introduce configurable quotas.
 
 **GET /api/models**
 
@@ -307,7 +378,9 @@ Response:
 
 **POST /api/tasks**
 
-Creates a new task. Returns error if a task already exists (single task mode).
+Creates a new task. Multiple tasks can be active simultaneously.
+
+**Note:** The current implementation does not enforce task count limits. Future versions may introduce configurable quotas.
 
 Request:
 
@@ -326,10 +399,6 @@ Response:
   "created_at": "2024-01-15T10:30:00Z"
 }
 ```
-
-Errors:
-
-- `409` - Task already exists
 
 **GET /api/tasks**
 
@@ -786,7 +855,6 @@ All errors follow a consistent JSON format:
 
 **Common Error Codes:**
 
-- `task_already_exists` (409) - Cannot create task when one already exists
 - `task_not_found` (404) - Specified task does not exist
 - `job_not_found` (404) - Specified job does not exist
 - `photo_not_found` (404) - Specified photo does not exist
@@ -892,6 +960,12 @@ The server maintains a list of supported models with their corresponding prompt 
 
 The implementation uses abstraction to allow future evolution without major refactoring:
 
+**TaskStore**
+
+- Interface: Trait-based abstraction (`TaskStore` trait)
+- Current: `InMemoryTaskStore` using `DashMap` for concurrent access
+- Future: Database-backed (PostgreSQL, SQLite), Redis cache, or hybrid approaches
+
 **JobStore**
 
 - Current: In-memory `HashMap` with `RwLock`
@@ -911,6 +985,38 @@ The implementation uses abstraction to allow future evolution without major refa
 
 - Current: SSE with in-memory connection tracking
 - Future: WebSocket, or external pub/sub system
+
+#### TaskStore Abstraction
+
+The task storage layer uses a trait-based abstraction pattern to enable future evolution.
+
+**Design Pattern:**
+
+- `TaskStore` trait defines the storage interface (create, get, list, update, delete, exists, count)
+- Trait-based design allows multiple implementations without changing business logic
+- All methods are async and return `Result<T, TaskStoreError>` for proper error handling
+- Thread-safe operations (`Send + Sync` bounds) for concurrent access from multiple Tokio tasks
+
+**Current Implementation: InMemoryTaskStore**
+
+- Uses `DashMap` for thread-safe concurrent access (lock-free reads)
+- O(1) lookup performance by task_id
+- Data persists only for the lifetime of the server process
+- No built-in limits on task count (memory-bound only)
+- Suitable for development and single-user scenarios
+
+**Future Implementations:**
+
+- **Database-backed**: PostgreSQL or SQLite for persistence across restarts
+- **Redis**: Distributed cache with TTL support for automatic cleanup
+- **Hybrid**: In-memory cache + database for read performance + persistence
+- **Custom limits**: Quota enforcement, LRU eviction, per-user isolation
+
+**Thread Safety:**
+
+All TaskStore implementations must be `Send + Sync` and support concurrent access
+from multiple Tokio tasks without data races. The trait design ensures this contract
+is enforced at compile time.
 
 #### Worker Pool Implementation
 
@@ -1052,6 +1158,71 @@ src/
 - Test with real photos and Ollama models
 - Validate SSE streaming behavior
 
+### Testing the API
+
+**Manual Testing with curl:**
+
+All endpoints can be tested using curl. Below are examples for common workflows.
+
+**1. Create a task:**
+```bash
+curl -X POST http://localhost:3000/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"context":"vacation in San Francisco, summer 2024"}'
+```
+
+Response:
+```json
+{
+  "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "context": "vacation in San Francisco, summer 2024",
+  "created_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**2. List all tasks:**
+```bash
+curl http://localhost:3000/api/tasks
+```
+
+**3. Get task details:**
+```bash
+curl http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000
+```
+
+**4. Update task context:**
+```bash
+curl -X PATCH http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Content-Type: application/json" \
+  -d '{"context":"updated context information"}'
+```
+
+**5. Delete a task:**
+```bash
+curl -X DELETE http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000
+```
+
+**6. Create multiple tasks (to test multi-task support):**
+```bash
+# Create first task
+curl -X POST http://localhost:3000/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"context":"San Francisco trip"}'
+
+# Create second task (should succeed, not return 409)
+curl -X POST http://localhost:3000/api/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"context":"New York vacation"}'
+
+# List both tasks
+curl http://localhost:3000/api/tasks
+```
+
+**Expected behavior:**
+- Multiple tasks should be created without conflicts
+- Each task gets a unique UUID
+- All tasks appear in the list endpoint
+
 ### Development with Claude Code
 
 Claude Code is used for AI-assisted development, particularly for:
@@ -1102,10 +1273,11 @@ Claude Code is used for AI-assisted development, particularly for:
     - Metadata write-back to Lightroom
     - UI for job monitoring and retry
 
-- **Multi-user Support**: Remove single-task limitation
+- **Multi-user Support**: Add authentication and resource isolation
     - User authentication and authorization
-    - Per-user storage quotas
+    - Per-user task limits and storage quotas
     - Isolated task/job workspaces
+    - Role-based access control (RBAC)
 
 ### Long-term
 
