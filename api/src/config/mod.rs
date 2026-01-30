@@ -22,18 +22,10 @@ impl Default for ServerConfig {
 }
 
 /// Application configuration.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct Config {
     /// Server binding and network configuration.
     pub server: ServerConfig,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-        }
-    }
 }
 
 impl Config {
@@ -84,6 +76,7 @@ pub fn load_config(config_path: &Path) -> Result<Config, ConfigError> {
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("Configuration file '{0}' not found")]
+    #[allow(dead_code)]
     FileNotFound(String),
 
     #[error("Failed to read configuration file '{path}': {source}")]

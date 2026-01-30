@@ -26,6 +26,7 @@ pub enum TaskStoreError {
 
     /// A generic storage error occurred.
     #[error("Storage error: {0}")]
+    #[allow(dead_code)]
     StorageError(String),
 }
 
@@ -178,6 +179,7 @@ pub trait TaskStore: Send + Sync {
     ///     println!("Task exists");
     /// }
     /// ```
+    #[allow(dead_code)]
     async fn exists(&self, task_id: &str) -> TaskStoreResult<bool>;
 
     /// Returns the total number of tasks in the store.
@@ -191,5 +193,6 @@ pub trait TaskStore: Send + Sync {
     /// let count = store.count().await?;
     /// println!("Total tasks: {}", count);
     /// ```
+    #[allow(dead_code)]
     async fn count(&self) -> TaskStoreResult<usize>;
 }

@@ -20,7 +20,13 @@ async fn main() {
 
     tracing::info!("Starting Photometoria REST API...");
 
-    let config = load_config(&args.config).expect("Failed to load configuration");
+    let config = match load_config(&args.config) {
+        Ok(config) => config,
+        Err(e) => {
+            tracing::error!("{}", e);
+            std::process::exit(1);
+        }
+    };
 
     let state = init_app_state();
     let app = routes::create_router(state);
@@ -28,12 +34,19 @@ async fn main() {
     let addr = config.server_addr();
     tracing::info!("Server listening on http://{}", addr);
 
-    let listener = tokio::net::TcpListener::bind(&addr)
-        .await
-        .expect("Failed to bind to address");
+    let listener = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            tracing::error!("Failed to bind to {}: {}", addr, e);
+            std::process::exit(1);
+        }
+    };
 
-    axum::serve(listener, app)
+    if let Err(e) = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .expect("Server error");
+    {
+        tracing::error!("Server error: {}", e);
+        std::process::exit(1);
+    }
 }

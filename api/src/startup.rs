@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use tokio::signal;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::app_state::AppState;
 use crate::storage::{InMemoryTaskStore, TaskStore};
@@ -30,9 +30,7 @@ pub fn init_tracing() {
     let default_log_level = "photometoria_rest_api=info,tower_http=info";
 
     tracing_subscriber::registry()
-        .with(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| default_log_level.into()),
-        )
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| default_log_level.into()))
         .with(tracing_subscriber::fmt::layer())
         .init();
 }

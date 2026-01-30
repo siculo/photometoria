@@ -1,0 +1,337 @@
+{
+	"info": {
+		"_postman_id": "photometoria-api-collection",
+		"name": "Photometoria API",
+		"description": "Collection per testare gli endpoint REST di Photometoria",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "task_id",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Get Version",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/version",
+							"host": ["{{base_url}}"],
+							"path": ["version"]
+						},
+						"description": "Ritorna la versione dell'API"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tasks",
+			"item": [
+				{
+					"name": "Create Task",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('task_id', jsonData.task_id);",
+									"    console.log('Task ID salvato:', jsonData.task_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks"]
+						},
+						"description": "Crea un nuovo task con il contesto specificato.\n\nIl task_id viene salvato automaticamente nella variabile di collection per le richieste successive."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks"]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"context\": \"vacation in San Francisco, summer 2024\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
+						}
+					]
+				},
+				{
+					"name": "List Tasks",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks"]
+						},
+						"description": "Ritorna la lista di tutti i task con informazioni di riepilogo."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "[\n    {\n        \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n        \"context\": \"vacation in San Francisco\",\n        \"photo_count\": 0,\n        \"storage_used_mb\": 0.0,\n        \"created_at\": \"2024-01-15T10:30:00Z\",\n        \"job_count\": 0\n    }\n]"
+						}
+					]
+				},
+				{
+					"name": "Get Task by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}"]
+						},
+						"description": "Ritorna i dettagli di un task specifico.\n\nUsa il task_id salvato dalla creazione o sostituiscilo manualmente."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "{{task_id}}"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"context\": \"vacation in San Francisco\",\n    \"created_at\": \"2024-01-15T10:30:00Z\",\n    \"photo_count\": 0,\n    \"storage_used_mb\": 0.0\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks/nonexistent",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "nonexistent"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "text",
+							"header": [],
+							"body": ""
+						}
+					]
+				},
+				{
+					"name": "Update Task",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}"]
+						},
+						"description": "Aggiorna il contesto di un task esistente.\n\nUsa il task_id salvato dalla creazione o sostituiscilo manualmente."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "{{task_id}}"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"context\": \"updated context\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/nonexistent",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "nonexistent"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "text",
+							"header": [],
+							"body": ""
+						}
+					]
+				},
+				{
+					"name": "Delete Task",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}"]
+						},
+						"description": "Elimina un task e tutti i dati associati.\n\nUsa il task_id salvato dalla creazione o sostituiscilo manualmente."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "{{task_id}}"]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "text",
+							"header": [],
+							"body": ""
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks/nonexistent",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "nonexistent"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "text",
+							"header": [],
+							"body": ""
+						}
+					]
+				}
+			]
+		}
+	]
+}
