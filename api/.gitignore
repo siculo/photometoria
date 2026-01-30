@@ -1,0 +1,11 @@
+# Configuration (use config.toml.example as template)
+config.toml
+
+# Build artifacts
+target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -1,0 +1,9 @@
+# Photometoria API Server Configuration
+#
+# Copy this file to config.toml and adjust values as needed.
+# In development mode, the server uses default values if config.toml is missing.
+# In production mode, config.toml is required.
+
+[server]
+host = "0.0.0.0"
+port = 8080
