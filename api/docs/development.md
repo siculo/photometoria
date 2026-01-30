@@ -31,18 +31,6 @@
 - **Windows** - Full support
 - **Mac** - Full support
 
-#### Lightroom Plugin Development
-
-**Requirements:**
-
-- Adobe Lightroom Classic installed
-- Lua development environment
-
-**Supported Systems:**
-
-- **Mac** - Fully supported
-- **Windows** - Fully supported
-
 ### Software Stack
 
 **Core Technologies:**
@@ -56,7 +44,6 @@
 
 - Node.js - JavaScript runtime
 - Rust toolchain - Compiler and package manager
-- Adobe Lightroom software development kit (SDK) - Lightroom plugin development
 
 ### Recommended Development Tools
 
@@ -64,15 +51,6 @@
 
 - **VS Code** - Versatile editor with extensive plugin ecosystem
 - **RustRover** - JetBrains IDE optimized for Rust development
-
-**AI-Assisted Development:**
-
-- **OpenCode** - AI-powered development assistant
-
-**Lua Development:**
-
-- **Lua Language Server** - Language support and IntelliSense
-- **Lua Debug** - Debugging support for Lua scripts
 
 **Rust Development:**
 
@@ -99,11 +77,6 @@
 - Rust toolchain installed (1.70+)
 - Ollama running with desired models pulled
 - GPU with appropriate drivers (CUDA/ROCm/Metal)
-
-**For Lightroom Plugin Development:**
-
-- Adobe Lightroom Classic installed
-- Lua development environment
 
 ### Initial Setup
 
@@ -308,11 +281,6 @@ cargo fmt
 
 ### Medium-term
 
-**Lightroom Lua Plugin**: Direct integration with Adobe Lightroom Classic
-- Photo upload from Lightroom catalog
-- Metadata write-back to Lightroom
-- UI for job monitoring and retry
-
 **Multi-user Support**: Add authentication and resource isolation
 - User authentication and authorization
 - Per-user task limits and storage quotas
@@ -350,3 +318,4 @@ cargo fmt
 - [Architecture](architecture.md) - System design and core concepts
 - [API Reference](api-reference.md) - Complete endpoint documentation
 - [Configuration](configuration.md) - Server configuration reference
+
