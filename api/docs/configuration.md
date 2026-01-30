@@ -21,11 +21,11 @@ max_workers = 2        # Maximum concurrent jobs
 
 [storage]
 path = "/var/photometoria/storage"
-max_size_gb = 100
+max_size = "100GB"
 
 [upload]
 max_photos_per_request = 50
-max_photo_size_mb = 20
+max_photo_size = "20MB"
 
 [ollama]
 base_url = "http://localhost:11434"
@@ -112,8 +112,9 @@ Photo storage configuration.
   - Should have sufficient disk space
   - Can be relative or absolute
 
-- **max_size_gb** (integer, required)
-  - Total storage quota in gigabytes
+- **max_size** (string, required)
+  - Total storage quota with unit suffix
+  - Supported units: `KB`, `MB`, `GB`, `TB`
   - Applies to all photos across all tasks
   - Upload requests fail with 507 error when quota exceeded
   - Set based on available disk space
@@ -123,7 +124,7 @@ Photo storage configuration.
 ```toml
 [storage]
 path = "/var/photometoria/storage"
-max_size_gb = 100
+max_size = "100GB"
 ```
 
 **Notes:**
@@ -143,18 +144,18 @@ Photo upload limits.
   - Recommended: 50-100
   - Must be ≥ 1
 
-- **max_photo_size_mb** (integer, required)
-  - Maximum size per individual photo in megabytes
+- **max_photo_size** (string, required)
+  - Maximum size per individual photo with unit suffix
+  - Supported units: `KB`, `MB`, `GB`
   - Photos larger than this are rejected with 400 error
-  - Recommended: 20-50 MB
-  - Must be > 0
+  - Recommended: `"20MB"` - `"50MB"`
 
 **Example:**
 
 ```toml
 [upload]
 max_photos_per_request = 50
-max_photo_size_mb = 20
+max_photo_size = "20MB"
 ```
 
 **Notes:**

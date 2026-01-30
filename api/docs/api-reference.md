@@ -74,12 +74,12 @@ Returns server configuration and limits relevant to the client.
 {
   "upload": {
     "max_photos_per_request": 50,
-    "max_photo_size_mb": 20
+    "max_photo_size_bytes": 20971520
   },
   "storage": {
-    "total_gb": 100,
-    "used_gb": 23.5,
-    "available_gb": 76.5
+    "total_bytes": 107374182400,
+    "used_bytes": 25243074560,
+    "available_bytes": 82131107840
   },
   "limits": {
     "max_concurrent_jobs": 2,
@@ -89,7 +89,7 @@ Returns server configuration and limits relevant to the client.
 }
 ```
 
-**Note:** `max_tasks: null` indicates that task count limits are not currently enforced. Future versions may introduce configurable quotas.
+**Note:** `max_tasks: null` indicates that task count limits are not currently enforced. Future versions may introduce configurable quotas. All size values are in bytes for consistency with other API responses.
 
 ### GET /api/models
 
@@ -233,7 +233,7 @@ Uploads one or more photos to a task using multipart/form-data.
 
 - Content-Type: multipart/form-data
 - Field name: "files" (can be repeated for multiple files)
-- Limits: max_photos_per_request, max_photo_size_mb (from config)
+- Limits: max_photos_per_request, max_photo_size (from config)
 
 **Response:**
 
@@ -245,7 +245,7 @@ Uploads one or more photos to a task using multipart/form-data.
     "p3"
   ],
   "uploaded_count": 3,
-  "total_size_mb": 12.4
+  "total_size_bytes": 13000000
 }
 ```
 
@@ -285,7 +285,7 @@ Returns detailed information about a specific photo.
   "photo_id": "p1",
   "task_id": "task_abc",
   "filename": "IMG_1234.jpg",
-  "size_mb": 4.2,
+  "size_bytes": 4200000,
   "uploaded_at": "2024-01-15T10:32:00Z"
 }
 ```
@@ -545,7 +545,7 @@ Cancels and deletes a job.
   "photo_id": "string (UUID)",
   "task_id": "string (UUID)",
   "filename": "string",
-  "size_mb": "number",
+  "size_bytes": "number",
   "uploaded_at": "ISO 8601 timestamp"
 }
 ```
@@ -601,7 +601,7 @@ All errors follow a consistent JSON format:
 - `photo_not_found` (404) - Specified photo does not exist
 - `invalid_model` (400) - Model not in supported/available list
 - `invalid_photo_ids` (400) - Photo IDs invalid or not in task
-- `file_too_large` (400) - Uploaded file exceeds max_photo_size_mb
+- `file_too_large` (400) - Uploaded file exceeds max_photo_size
 - `too_many_files` (400) - Upload exceeds max_photos_per_request
 - `insufficient_storage` (507) - Storage quota exceeded
 - `resource_in_use` (409) - Cannot delete resource referenced by active jobs
