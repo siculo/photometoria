@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "photometoria-api-collection",
 		"name": "Photometoria API",
-		"description": "Collection per testare gli endpoint REST di Photometoria",
+		"description": "Collection for testing Photometoria REST API endpoints",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -31,7 +31,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["version"]
 						},
-						"description": "Ritorna la versione dell'API"
+						"description": "Returns the API version"
 					},
 					"response": []
 				}
@@ -50,7 +50,7 @@
 									"if (pm.response.code === 201) {",
 									"    var jsonData = pm.response.json();",
 									"    pm.collectionVariables.set('task_id', jsonData.task_id);",
-									"    console.log('Task ID salvato:', jsonData.task_id);",
+									"    console.log('Task ID saved:', jsonData.task_id);",
 									"}"
 								],
 								"type": "text/javascript"
@@ -74,7 +74,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "tasks"]
 						},
-						"description": "Crea un nuovo task con il contesto specificato.\n\nIl task_id viene salvato automaticamente nella variabile di collection per le richieste successive."
+						"description": "Creates a new task with the specified context.\n\nThe task_id is automatically saved to a collection variable for subsequent requests."
 					},
 					"response": [
 						{
@@ -120,7 +120,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "tasks"]
 						},
-						"description": "Ritorna la lista di tutti i task con informazioni di riepilogo."
+						"description": "Returns the list of all tasks with summary information."
 					},
 					"response": [
 						{
@@ -157,7 +157,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "tasks", "{{task_id}}"]
 						},
-						"description": "Ritorna i dettagli di un task specifico.\n\nUsa il task_id salvato dalla creazione o sostituiscilo manualmente."
+						"description": "Returns the details of a specific task.\n\nUses the task_id saved from creation or replace it manually."
 					},
 					"response": [
 						{
@@ -220,7 +220,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "tasks", "{{task_id}}"]
 						},
-						"description": "Aggiorna il contesto di un task esistente.\n\nUsa il task_id salvato dalla creazione o sostituiscilo manualmente."
+						"description": "Updates the context of an existing task.\n\nUses the task_id saved from creation or replace it manually."
 					},
 					"response": [
 						{
@@ -292,7 +292,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "tasks", "{{task_id}}"]
 						},
-						"description": "Elimina un task e tutti i dati associati.\n\nUsa il task_id salvato dalla creazione o sostituiscilo manualmente."
+						"description": "Deletes a task and all associated data.\n\nUses the task_id saved from creation or replace it manually."
 					},
 					"response": [
 						{
