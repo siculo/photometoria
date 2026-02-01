@@ -112,12 +112,15 @@ Photo storage configuration.
   - Should have sufficient disk space
   - Can be relative or absolute
 
-- **max_size** (string, required)
+- **max_size** (string or integer, required)
   - Total storage quota with unit suffix
-  - Supported units: `KB`, `MB`, `GB`, `TB`
+  - Decimal units (base 1000): `KB`, `MB`, `GB`, `TB`
+  - Binary units (base 1024): `KiB`, `MiB`, `GiB`, `TiB`
+  - Can also be a plain integer (bytes)
   - Applies to all photos across all tasks
   - Upload requests fail with 507 error when quota exceeded
   - Set based on available disk space
+  - Note: Filesystems typically report in binary units (GiB), hard drives in decimal (GB)
 
 **Example:**
 
@@ -144,9 +147,11 @@ Photo upload limits.
   - Recommended: 50-100
   - Must be ≥ 1
 
-- **max_photo_size** (string, required)
+- **max_photo_size** (string or integer, required)
   - Maximum size per individual photo with unit suffix
-  - Supported units: `KB`, `MB`, `GB`
+  - Decimal units (base 1000): `KB`, `MB`, `GB`
+  - Binary units (base 1024): `KiB`, `MiB`, `GiB`
+  - Can also be a plain integer (bytes)
   - Photos larger than this are rejected with 400 error
   - Recommended: `"20MB"` - `"50MB"`
 

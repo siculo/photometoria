@@ -1,7 +1,9 @@
+mod byte_size;
+
+use crate::config::byte_size::ByteSize;
+use serde::Deserialize;
 use std::fs;
 use std::path::Path;
-
-use serde::Deserialize;
 
 /// Server configuration section.
 #[derive(Debug, Clone, Deserialize)]
@@ -21,17 +23,39 @@ impl Default for ServerConfig {
     }
 }
 
+/// Storage configuration section
+#[derive(Debug, Clone, Deserialize)]
+pub struct StorageConfig {
+    pub path: String,
+    pub max_size: ByteSize,
+}
+
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            path: "/var/photometoria/storage".to_string(),
+            max_size: ByteSize("10GiB".parse().unwrap()),
+        }
+    }
+}
+
 /// Application configuration.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Config {
     /// Server binding and network configuration.
     pub server: ServerConfig,
+    pub storage: StorageConfig,
 }
 
 impl Config {
     /// Returns the server address as a string suitable for binding.
     pub fn server_addr(&self) -> String {
         format!("{}:{}", self.server.host, self.server.port)
+    }
+
+    /// Returns the storage max size in bytes
+    pub fn storage_max_size(&self) -> u64 {
+        self.storage.max_size.0
     }
 }
 

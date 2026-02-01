@@ -7,3 +7,28 @@
 [server]
 host = "0.0.0.0"
 port = 8080
+
+[storage]
+path = "/var/photometoria/storage"
+# Storage size with optional unit suffix.
+#
+# Decimal units (SI, base 1000):
+#   KB = 1,000 bytes
+#   MB = 1,000,000 bytes
+#   GB = 1,000,000,000 bytes
+#   TB = 1,000,000,000,000 bytes
+#
+# Binary units (IEC, base 1024):
+#   KiB = 1,024 bytes
+#   MiB = 1,048,576 bytes
+#   GiB = 1,073,741,824 bytes
+#   TiB = 1,099,511,627,776 bytes
+#
+# Examples:
+#   max_size = "100GB"   # 100 billion bytes (decimal)
+#   max_size = "100GiB"  # ~107.4 billion bytes (binary)
+#   max_size = 1000000   # 1 million bytes (no suffix)
+#
+# Note: Filesystems typically use binary units (GiB), while
+# hard drive manufacturers use decimal units (GB).
+max_size = "10GiB"
