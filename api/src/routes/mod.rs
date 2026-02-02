@@ -49,7 +49,7 @@ mod tests {
     use crate::app_state::AppState;
     use crate::config::Config;
     use crate::models::{TaskDetail, TaskResponse, TaskSummary};
-    use crate::storage::{InMemoryPhotoStore, InMemoryTaskStore, PhotoStore, TaskStore};
+    use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, PhotoStore, TaskStore};
 
     struct TestApp {
         router: Router,
@@ -57,12 +57,12 @@ mod tests {
         _temp_dir: TempDir,
     }
 
-    fn create_test_app() -> TestApp {
+    async fn create_test_app() -> TestApp {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let storage_path = temp_dir.path().to_path_buf();
         let config = Config::default();
-        let task_store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new(storage_path.clone()));
-        let photo_store: Arc<dyn PhotoStore> = Arc::new(InMemoryPhotoStore::new(storage_path));
+        let task_store: Arc<dyn TaskStore> = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let photo_store: Arc<dyn PhotoStore> = Arc::new(FileSystemPhotoStore::new(storage_path).await);
         let state = AppState::new(config, task_store, photo_store);
         let router = create_router(state.clone());
         TestApp {
@@ -74,7 +74,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_version_returns_package_version() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
         let request = Request::get("/version").body(Body::empty()).unwrap();
         let response = ta.router.oneshot(request).await.unwrap();
 
@@ -88,7 +88,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_post_tasks_creates_task() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
         let request = Request::post("/api/tasks")
             .header("Content-Type", "application/json")
             .body(Body::from(json!({"context": "test context"}).to_string()))
@@ -107,7 +107,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_tasks_returns_empty_list() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
         let request = Request::get("/api/tasks").body(Body::empty()).unwrap();
 
         let response = ta.router.oneshot(request).await.unwrap();
@@ -122,7 +122,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_tasks_returns_created_tasks() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
 
         // Create a task first using the store directly
         let task = crate::models::Task::new("test task".to_string());
@@ -144,7 +144,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_task_by_id_found() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
 
         // Create a task first
         let task = crate::models::Task::new("test task".to_string());
@@ -167,7 +167,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_task_by_id_not_found() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
 
         let request = Request::get("/api/tasks/nonexistent")
             .body(Body::empty())
@@ -179,7 +179,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_patch_task_updates_context() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
 
         // Create a task first
         let task = crate::models::Task::new("original context".to_string());
@@ -205,7 +205,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_patch_task_not_found() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
 
         let request = Request::patch("/api/tasks/nonexistent")
             .header("Content-Type", "application/json")
@@ -220,7 +220,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_task_success() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
 
         // Create a task first
         let task = crate::models::Task::new("task to delete".to_string());
@@ -241,7 +241,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_task_not_found() {
-        let ta = create_test_app();
+        let ta = create_test_app().await;
 
         let request = Request::delete("/api/tasks/nonexistent")
             .body(Body::empty())

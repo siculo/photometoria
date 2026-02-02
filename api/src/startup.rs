@@ -6,21 +6,22 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 use crate::app_state::AppState;
 use crate::config::Config;
-use crate::storage::{InMemoryPhotoStore, InMemoryTaskStore, PhotoStore, TaskStore};
+use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, PhotoStore, TaskStore};
 
 /// Initializes the application state with all required dependencies.
 ///
 /// Creates the task store and wraps it in the application state struct
 /// that will be shared across all request handlers.
-pub fn init_app_state(config: Config) -> AppState {
+/// Loads existing data from the filesystem.
+pub async fn init_app_state(config: Config) -> AppState {
     let storage_path = PathBuf::from(&config.storage.path);
     tracing::info!("Using storage path: {:?}", storage_path);
 
-    let task_store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new(storage_path.clone()));
-    tracing::info!("Initialized in-memory task store");
+    let task_store: Arc<dyn TaskStore> = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+    tracing::info!("Initialized filesystem task store");
 
-    let photo_store: Arc<dyn PhotoStore> = Arc::new(InMemoryPhotoStore::new(storage_path));
-    tracing::info!("Initialized in-memory photo store");
+    let photo_store: Arc<dyn PhotoStore> = Arc::new(FileSystemPhotoStore::new(storage_path).await);
+    tracing::info!("Initialized filesystem photo store");
 
     AppState::new(config, task_store, photo_store)
 }

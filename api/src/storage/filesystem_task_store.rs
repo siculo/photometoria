@@ -1,38 +1,35 @@
-//! In-memory implementation of TaskStore using DashMap
+//! Filesystem-backed implementation of TaskStore
 //!
-//! This module provides a thread-safe in-memory implementation of the TaskStore trait
-//! using DashMap for concurrent access without global locks.
+//! This module provides a thread-safe implementation of the TaskStore trait
+//! with full persistence to the filesystem. Task metadata is stored as JSON files.
 
 use async_trait::async_trait;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::models::Task;
 
 use super::{TaskStore, TaskStoreError, TaskStoreResult};
 
 // ============================================================================
-// InMemoryTaskStore Implementation
+// FileSystemTaskStore Implementation
 // ============================================================================
 
-/// In-memory implementation of TaskStore using DashMap for thread-safe concurrent access.
+/// Filesystem-backed implementation of TaskStore with full persistence.
 ///
-/// This implementation stores tasks in memory using DashMap, which provides excellent
-/// concurrent read/write performance through internal sharding.
-///
-/// Task directories are created on the filesystem when tasks are created, and removed
-/// when tasks are deleted. This provides storage for photos associated with each task.
+/// This implementation stores task metadata both in memory (using DashMap for
+/// fast concurrent access) and on the filesystem (as JSON files for persistence).
 ///
 /// ## Characteristics
 ///
 /// - **Thread-safe**: Supports concurrent access from multiple Tokio tasks
 /// - **Lock-free reads**: Get operations don't acquire locks
 /// - **Fine-grained locking**: Writes lock only the specific shard
-/// - **No persistence**: Task metadata is lost when the server restarts
-/// - **Filesystem integration**: Creates/removes task directories
+/// - **Full persistence**: Task metadata survives server restarts
+/// - **Filesystem integration**: Creates/removes task directories and metadata files
 ///
 /// ## Directory Structure
 ///
@@ -40,35 +37,125 @@ use super::{TaskStore, TaskStoreError, TaskStoreResult};
 /// {storage_path}/
 /// └── tasks/
 ///     ├── {task_id_1}/
+///     │   └── task.json
 ///     ├── {task_id_2}/
+///     │   └── task.json
 ///     └── ...
 /// ```
 ///
-/// ## Use Cases
+/// ## Persistence Strategy
 ///
-/// - Development and testing
-/// - Single-user scenarios
-/// - Prototyping before adding database persistence
-pub struct InMemoryTaskStore {
+/// - Metadata is written to disk after each create/update operation
+/// - On startup, all existing task.json files are loaded into memory
+/// - Deleting a task removes both the in-memory entry and the entire directory
+pub struct FileSystemTaskStore {
     tasks: Arc<DashMap<String, Task>>,
     storage_path: PathBuf,
 }
 
-impl InMemoryTaskStore {
-    /// Creates a new empty in-memory task store.
+impl FileSystemTaskStore {
+    /// Creates a new filesystem-backed task store.
+    ///
+    /// This constructor loads all existing tasks from the filesystem.
+    /// Any errors during loading are logged but don't prevent startup.
     ///
     /// # Arguments
     /// * `storage_path` - Base path for storing task directories
-    pub fn new(storage_path: PathBuf) -> Self {
-        Self {
+    pub async fn new(storage_path: PathBuf) -> Self {
+        let store = Self {
             tasks: Arc::new(DashMap::new()),
             storage_path,
-        }
+        };
+        store.load_all().await;
+        store
     }
 
     /// Returns the directory path for a specific task.
     fn task_dir(&self, task_id: &str) -> PathBuf {
         self.storage_path.join("tasks").join(task_id)
+    }
+
+    /// Returns the path to the task's metadata file.
+    fn task_json_path(&self, task_id: &str) -> PathBuf {
+        self.task_dir(task_id).join("task.json")
+    }
+
+    /// Loads all tasks from the filesystem into memory.
+    async fn load_all(&self) {
+        let tasks_dir = self.storage_path.join("tasks");
+
+        if !tasks_dir.exists() {
+            debug!("Tasks directory does not exist, starting with empty store");
+            return;
+        }
+
+        let mut entries = match tokio::fs::read_dir(&tasks_dir).await {
+            Ok(entries) => entries,
+            Err(e) => {
+                warn!("Failed to read tasks directory: {}", e);
+                return;
+            }
+        };
+
+        let mut loaded_count = 0;
+        let mut error_count = 0;
+
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+
+            let task_json = path.join("task.json");
+            if !task_json.exists() {
+                warn!("Task directory {:?} has no task.json, skipping", path);
+                error_count += 1;
+                continue;
+            }
+
+            match self.load_task_from_file(&task_json).await {
+                Ok(task) => {
+                    self.tasks.insert(task.task_id.clone(), task);
+                    loaded_count += 1;
+                }
+                Err(e) => {
+                    warn!("Failed to load task from {:?}: {}", task_json, e);
+                    error_count += 1;
+                }
+            }
+        }
+
+        info!(
+            "Loaded {} tasks from filesystem ({} errors)",
+            loaded_count, error_count
+        );
+    }
+
+    /// Loads a single task from a JSON file.
+    async fn load_task_from_file(&self, path: &PathBuf) -> TaskStoreResult<Task> {
+        let content = tokio::fs::read_to_string(path).await.map_err(|e| {
+            TaskStoreError::StorageError(format!("Failed to read task file: {}", e))
+        })?;
+
+        serde_json::from_str(&content).map_err(|e| {
+            TaskStoreError::StorageError(format!("Failed to parse task JSON: {}", e))
+        })
+    }
+
+    /// Saves a task's metadata to the filesystem.
+    async fn save_task_to_file(&self, task: &Task) -> TaskStoreResult<()> {
+        let path = self.task_json_path(&task.task_id);
+        let content = serde_json::to_string_pretty(task).map_err(|e| {
+            TaskStoreError::StorageError(format!("Failed to serialize task: {}", e))
+        })?;
+
+        tokio::fs::write(&path, content).await.map_err(|e| {
+            error!("Failed to write task file {:?}: {}", path, e);
+            TaskStoreError::StorageError(format!("Failed to write task file: {}", e))
+        })?;
+
+        debug!("Saved task metadata to {:?}", path);
+        Ok(())
     }
 }
 
@@ -77,7 +164,7 @@ impl InMemoryTaskStore {
 // ============================================================================
 
 #[async_trait]
-impl TaskStore for InMemoryTaskStore {
+impl TaskStore for FileSystemTaskStore {
     async fn create(&self, task: Task) -> TaskStoreResult<Task> {
         let task_id = task.task_id.clone();
 
@@ -97,6 +184,9 @@ impl TaskStore for InMemoryTaskStore {
                     )));
                 }
                 debug!("Created task directory: {:?}", task_dir);
+
+                // Save metadata to filesystem
+                self.save_task_to_file(&task).await?;
 
                 entry.insert(task.clone());
                 info!(
@@ -142,6 +232,16 @@ impl TaskStore for InMemoryTaskStore {
             Some(mut entry) => {
                 let old_context = entry.context.clone();
                 *entry = task.clone();
+
+                // Save updated metadata to filesystem
+                if let Err(e) = self.save_task_to_file(&task).await {
+                    // Rollback in-memory change on filesystem error
+                    let mut rollback_task = task.clone();
+                    rollback_task.context = old_context.clone();
+                    *entry = rollback_task;
+                    return Err(e);
+                }
+
                 info!(
                     "Task updated successfully: {} (context: '{}' -> '{}')",
                     task_id, old_context, task.context
@@ -158,12 +258,12 @@ impl TaskStore for InMemoryTaskStore {
         // remove() returns Some((key, value)) if the entry existed
         match self.tasks.remove(task_id) {
             Some((_, task)) => {
-                // Remove task directory and all its contents
+                // Remove task directory and all its contents (includes task.json and photos)
                 let task_dir = self.task_dir(task_id);
                 if task_dir.exists() {
                     if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
                         error!("Failed to remove task directory {:?}: {}", task_dir, e);
-                        // Log but don't fail - the task metadata is already removed
+                        // Log but don't fail - the task metadata is already removed from memory
                     } else {
                         debug!("Removed task directory: {:?}", task_dir);
                     }
@@ -207,14 +307,14 @@ mod tests {
 
     // Helper struct to keep temp dir alive during test
     struct TestStore {
-        store: InMemoryTaskStore,
+        store: FileSystemTaskStore,
         _temp_dir: TempDir,
     }
 
     // Helper function to create a fresh store with temp directory
-    fn create_store() -> TestStore {
+    async fn create_store() -> TestStore {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let store = InMemoryTaskStore::new(temp_dir.path().to_path_buf());
+        let store = FileSystemTaskStore::new(temp_dir.path().to_path_buf()).await;
         TestStore {
             store,
             _temp_dir: temp_dir,
@@ -237,7 +337,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_task() {
-        let ts = create_store();
+        let ts = create_store().await;
         let task = create_test_task("vacation in SF");
 
         let result = ts.store.create(task.clone()).await;
@@ -253,11 +353,14 @@ mod tests {
 
         // Verify directory was created
         assert!(ts.store.task_dir(&task.task_id).exists());
+
+        // Verify task.json was created
+        assert!(ts.store.task_json_path(&task.task_id).exists());
     }
 
     #[tokio::test]
     async fn test_create_duplicate_fails() {
-        let ts = create_store();
+        let ts = create_store().await;
         let task = create_test_task("vacation in SF");
 
         // First creation should succeed
@@ -277,7 +380,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_existing_task() {
-        let ts = create_store();
+        let ts = create_store().await;
         let task = create_test_task("vacation in SF");
 
         ts.store.create(task.clone()).await.unwrap();
@@ -293,7 +396,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_nonexistent_task() {
-        let ts = create_store();
+        let ts = create_store().await;
 
         let result = ts.store.get("nonexistent_id").await.unwrap();
 
@@ -302,7 +405,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_tasks_ordered_by_created_at() {
-        let ts = create_store();
+        let ts = create_store().await;
 
         // Create tasks with explicit timestamps to control ordering
         let now = Utc::now();
@@ -329,7 +432,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_task() {
-        let ts = create_store();
+        let ts = create_store().await;
         let task = create_test_task("vacation in SF");
 
         ts.store.create(task.clone()).await.unwrap();
@@ -351,7 +454,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_nonexistent_fails() {
-        let ts = create_store();
+        let ts = create_store().await;
         let task = create_test_task("vacation in SF");
 
         // Try to update without creating first
@@ -368,7 +471,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_task() {
-        let ts = create_store();
+        let ts = create_store().await;
         let task = create_test_task("vacation in SF");
 
         ts.store.create(task.clone()).await.unwrap();
@@ -390,7 +493,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_nonexistent_fails() {
-        let ts = create_store();
+        let ts = create_store().await;
 
         let result = ts.store.delete("nonexistent_id").await;
 
@@ -405,7 +508,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_exists() {
-        let ts = create_store();
+        let ts = create_store().await;
         let task = create_test_task("vacation in SF");
 
         // Should not exist initially
@@ -426,7 +529,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_count() {
-        let ts = create_store();
+        let ts = create_store().await;
 
         // Empty store should have count 0
         let count = ts.store.count().await.unwrap();
@@ -451,5 +554,83 @@ mod tests {
         // Should have count 2
         let count = ts.store.count().await.unwrap();
         assert_eq!(count, 2);
+    }
+
+    // ========================================================================
+    // Persistence Tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_persistence_survives_reload() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+
+        // Create store and add tasks
+        let task1 = create_test_task("First task");
+        let task2 = create_test_task("Second task");
+        let task1_id = task1.task_id.clone();
+        let task2_id = task2.task_id.clone();
+
+        {
+            let store = FileSystemTaskStore::new(storage_path.clone()).await;
+            store.create(task1).await.unwrap();
+            store.create(task2).await.unwrap();
+            assert_eq!(store.count().await.unwrap(), 2);
+        }
+
+        // Create new store instance (simulates server restart)
+        let store = FileSystemTaskStore::new(storage_path).await;
+
+        // Tasks should be loaded from filesystem
+        assert_eq!(store.count().await.unwrap(), 2);
+        assert!(store.exists(&task1_id).await.unwrap());
+        assert!(store.exists(&task2_id).await.unwrap());
+
+        let loaded_task1 = store.get(&task1_id).await.unwrap().unwrap();
+        assert_eq!(loaded_task1.context, "First task");
+    }
+
+    #[tokio::test]
+    async fn test_update_persists() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+
+        let task = create_test_task("Original context");
+        let task_id = task.task_id.clone();
+
+        {
+            let store = FileSystemTaskStore::new(storage_path.clone()).await;
+            store.create(task.clone()).await.unwrap();
+
+            // Update the task
+            let mut updated = task.clone();
+            updated.context = "Updated context".to_string();
+            store.update(updated).await.unwrap();
+        }
+
+        // Reload and verify update persisted
+        let store = FileSystemTaskStore::new(storage_path).await;
+        let loaded = store.get(&task_id).await.unwrap().unwrap();
+        assert_eq!(loaded.context, "Updated context");
+    }
+
+    #[tokio::test]
+    async fn test_delete_removes_from_filesystem() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+
+        let task = create_test_task("Task to delete");
+        let task_id = task.task_id.clone();
+
+        {
+            let store = FileSystemTaskStore::new(storage_path.clone()).await;
+            store.create(task).await.unwrap();
+            store.delete(&task_id).await.unwrap();
+        }
+
+        // Reload and verify task is gone
+        let store = FileSystemTaskStore::new(storage_path).await;
+        assert_eq!(store.count().await.unwrap(), 0);
+        assert!(!store.exists(&task_id).await.unwrap());
     }
 }

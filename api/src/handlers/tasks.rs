@@ -122,7 +122,7 @@ pub async fn delete_task(State(state): State<AppState>, Path(task_id): Path<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::{InMemoryPhotoStore, InMemoryTaskStore};
+    use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore};
     use std::sync::Arc;
     use crate::config::Config;
     use tempfile::TempDir;
@@ -132,12 +132,12 @@ mod tests {
         _temp_dir: TempDir,
     }
 
-    fn create_test_state() -> TestState {
+    async fn create_test_state() -> TestState {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let storage_path = temp_dir.path().to_path_buf();
         let config = Config::default();
-        let task_store = Arc::new(InMemoryTaskStore::new(storage_path.clone()));
-        let photo_store = Arc::new(InMemoryPhotoStore::new(storage_path));
+        let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path).await);
         TestState {
             state: AppState::new(config, task_store, photo_store),
             _temp_dir: temp_dir,
@@ -146,7 +146,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_task_returns_task_response() {
-        let ts = create_test_state();
+        let ts = create_test_state().await;
         let request = CreateTaskRequest {
             context: "vacation in San Francisco".to_string(),
         };
@@ -162,7 +162,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_tasks_empty() {
-        let ts = create_test_state();
+        let ts = create_test_state().await;
 
         let result = list_tasks(State(ts.state.clone())).await;
 
@@ -173,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_tasks_returns_created_tasks() {
-        let ts = create_test_state();
+        let ts = create_test_state().await;
 
         // Create two tasks
         let request1 = CreateTaskRequest {
@@ -200,7 +200,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_task_found() {
-        let ts = create_test_state();
+        let ts = create_test_state().await;
 
         // Create a task first
         let request = CreateTaskRequest {
@@ -222,7 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_task_not_found() {
-        let ts = create_test_state();
+        let ts = create_test_state().await;
 
         let result = get_task(State(ts.state.clone()), Path("nonexistent".to_string())).await;
 
@@ -232,7 +232,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_task_success() {
-        let ts = create_test_state();
+        let ts = create_test_state().await;
 
         // Create a task first
         let request = CreateTaskRequest {
@@ -262,7 +262,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_task_not_found() {
-        let ts = create_test_state();
+        let ts = create_test_state().await;
 
         let update_request = UpdateTaskRequest {
             context: "updated context".to_string(),
@@ -280,7 +280,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_task_success() {
-        let ts = create_test_state();
+        let ts = create_test_state().await;
 
         // Create a task first
         let request = CreateTaskRequest {
@@ -303,7 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_task_not_found() {
-        let ts = create_test_state();
+        let ts = create_test_state().await;
 
         let status = delete_task(State(ts.state.clone()), Path("nonexistent".to_string())).await;
 
