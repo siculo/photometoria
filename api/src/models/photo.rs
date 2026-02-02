@@ -149,7 +149,7 @@ pub struct PhotoSummary {
 ///   "failed": [
 ///     {"filename": "IMG_003.jpg", "reason": "file_too_large"}
 ///   ],
-///   "total_size_bytes": 8000000
+///   "uploaded_size_bytes": 8000000
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -161,7 +161,7 @@ pub struct UploadPhotosResponse {
     pub failed: Vec<FailedUpload>,
 
     /// Total size of successfully uploaded photos in bytes
-    pub total_size_bytes: u64,
+    pub uploaded_size_bytes: u64,
 }
 
 /// Information about a successfully uploaded photo.
@@ -337,13 +337,13 @@ mod tests {
                 filename: "IMG_003.jpg".to_string(),
                 reason: "file_too_large".to_string(),
             }],
-            total_size_bytes: 8_500_000,
+            uploaded_size_bytes: 8_500_000,
         };
         let json = serde_json::to_string(&response).unwrap();
 
         assert!(json.contains("uploaded"));
         assert!(json.contains("failed"));
-        assert!(json.contains("total_size_bytes"));
+        assert!(json.contains("uploaded_size_bytes"));
         assert!(json.contains("photo_id"));
         assert!(json.contains("filename"));
         assert!(json.contains("reason"));

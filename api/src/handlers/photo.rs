@@ -6,6 +6,7 @@ use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
+use tracing::{debug, error, info, warn};
 
 use crate::app_state::AppState;
 use crate::config::Config;
@@ -24,6 +25,8 @@ pub async fn upload_photos(
     Path(task_id): Path<String>,
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<UploadPhotosResponse>), StatusCode> {
+    debug!("Upload photos request for task_id={}", task_id);
+
     // Verify task exists
     let task_exists = state
         .task_store
@@ -31,10 +34,11 @@ pub async fn upload_photos(
         .await
         .map_err(to_internal_server_error)?;
     if !task_exists {
+        warn!("Task not found: {}", task_id);
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let (uploaded, failed, total_size_bytes) = process_multipart(&state, &task_id, &mut multipart).await?;
+    let (uploaded, failed, uploaded_size_bytes) = process_multipart(&state, &task_id, &mut multipart).await?;
 
     let status = if uploaded.is_empty() {
         StatusCode::OK
@@ -42,10 +46,18 @@ pub async fn upload_photos(
         StatusCode::CREATED
     };
 
+    info!(
+        "Upload completed for task_id={}: {} uploaded, {} failed, {} bytes",
+        task_id,
+        uploaded.len(),
+        failed.len(),
+        uploaded_size_bytes
+    );
+
     let response = UploadPhotosResponse {
         uploaded,
         failed,
-        total_size_bytes,
+        uploaded_size_bytes,
     };
 
     Ok((status, Json(response)))
@@ -60,11 +72,30 @@ async fn process_multipart(state: &AppState, task_id: &String, multipart: &mut M
         .map_err(to_internal_server_error)?;
     let mut uploaded: Vec<UploadedPhoto> = vec![];
     let mut failed: Vec<FailedUpload> = vec![];
-    let mut total_size_bytes: u64 = 0;
+    let mut uploaded_size_bytes: u64 = 0;
 
-    while let Some(field) = multipart.next_field().await.map_err(to_bad_request)? {
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(field)) => field,
+            Ok(None) => break,
+            Err(e) => {
+                error!("Error reading multipart field: {:?}", e);
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        };
+
+        let field_name = field.name().map(|s| s.to_string());
         let filename = field.file_name().unwrap_or_default().to_string();
-        let data = field.bytes().await.map_err(to_bad_request)?;
+        debug!("Processing field: name={:?}, filename={}", field_name, filename);
+
+        let data = match field.bytes().await {
+            Ok(data) => data,
+            Err(e) => {
+                error!("Error reading field bytes for '{}': {:?}", filename, e);
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        };
+        debug!("Read {} bytes for '{}'", data.len(), filename);
 
         let result = process_field(
             data,
@@ -79,16 +110,18 @@ async fn process_multipart(state: &AppState, task_id: &String, multipart: &mut M
 
         match result {
             ProcessedField::Uploaded(photo, size) => {
+                debug!("Photo uploaded: {} ({} bytes)", photo.photo_id, size);
                 used_storage += size;
-                total_size_bytes += size;
+                uploaded_size_bytes += size;
                 uploaded.push(photo);
             }
             ProcessedField::Failed(failure) => {
+                warn!("Photo failed: {} - {}", failure.filename, failure.reason);
                 failed.push(failure);
             }
         }
     }
-    Ok((uploaded, failed, total_size_bytes))
+    Ok((uploaded, failed, uploaded_size_bytes))
 }
 
 /// Process a single upload field: validate and save to store.
@@ -171,4 +204,155 @@ fn to_bad_request<E>(_: E) -> StatusCode {
 
 fn to_internal_server_error<E>(_: E) -> StatusCode {
     StatusCode::INTERNAL_SERVER_ERROR
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // JPEG magic bytes: FF D8 FF
+    fn create_jpeg_data(size: usize) -> Vec<u8> {
+        let mut data = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        data.resize(size, 0x00);
+        data
+    }
+
+    // PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A
+    fn create_png_data(size: usize) -> Vec<u8> {
+        let mut data = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        data.resize(size, 0x00);
+        data
+    }
+
+    fn create_test_config(max_photos: usize, max_photo_size_bytes: u64, max_storage_bytes: u64) -> Config {
+        Config {
+            upload: crate::config::UploadConfig {
+                max_photos_per_request: max_photos,
+                max_photo_size: crate::config::ByteSize(max_photo_size_bytes),
+            },
+            storage: crate::config::StorageConfig {
+                path: "/tmp".to_string(),
+                max_size: crate::config::ByteSize(max_storage_bytes),
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_validate_photo_valid_jpeg() {
+        let data = create_jpeg_data(1000);
+        let config = create_test_config(10, 10_000, 100_000);
+
+        let result = validate_photo(&data, 0, 0, &config);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_validate_photo_valid_png() {
+        let data = create_png_data(1000);
+        let config = create_test_config(10, 10_000, 100_000);
+
+        let result = validate_photo(&data, 0, 0, &config);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_validate_photo_invalid_format() {
+        let data = vec![0x00, 0x01, 0x02, 0x03]; // Not a valid image
+        let config = create_test_config(10, 10_000, 100_000);
+
+        let result = validate_photo(&data, 0, 0, &config);
+
+        assert_eq!(result, Some("invalid_format".to_string()));
+    }
+
+    #[test]
+    fn test_validate_photo_invalid_format_pdf() {
+        // PDF magic bytes: 25 50 44 46 (%PDF)
+        let data = vec![0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34];
+        let config = create_test_config(10, 10_000, 100_000);
+
+        let result = validate_photo(&data, 0, 0, &config);
+
+        assert_eq!(result, Some("invalid_format".to_string()));
+    }
+
+    #[test]
+    fn test_validate_photo_too_many_files() {
+        let data = create_jpeg_data(1000);
+        let config = create_test_config(5, 10_000, 100_000);
+
+        // Already uploaded 5 files (limit is 5)
+        let result = validate_photo(&data, 5, 0, &config);
+
+        assert_eq!(result, Some("too_many_files".to_string()));
+    }
+
+    #[test]
+    fn test_validate_photo_at_limit_ok() {
+        let data = create_jpeg_data(1000);
+        let config = create_test_config(5, 10_000, 100_000);
+
+        // Already uploaded 4 files (limit is 5), so one more is OK
+        let result = validate_photo(&data, 4, 0, &config);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_validate_photo_file_too_large() {
+        let data = create_jpeg_data(15_000);
+        let config = create_test_config(10, 10_000, 100_000); // max 10KB
+
+        let result = validate_photo(&data, 0, 0, &config);
+
+        assert_eq!(result, Some("file_too_large".to_string()));
+    }
+
+    #[test]
+    fn test_validate_photo_exactly_at_size_limit() {
+        let data = create_jpeg_data(10_000);
+        let config = create_test_config(10, 10_000, 100_000); // max 10KB
+
+        // Exactly at limit should be OK
+        let result = validate_photo(&data, 0, 0, &config);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_validate_photo_storage_full() {
+        let data = create_jpeg_data(5_000);
+        let config = create_test_config(10, 10_000, 10_000); // max storage 10KB
+
+        // Already used 6KB, trying to add 5KB = 11KB > 10KB
+        let result = validate_photo(&data, 0, 6_000, &config);
+
+        assert_eq!(result, Some("storage_full".to_string()));
+    }
+
+    #[test]
+    fn test_validate_photo_storage_exactly_fits() {
+        let data = create_jpeg_data(4_000);
+        let config = create_test_config(10, 10_000, 10_000); // max storage 10KB
+
+        // Already used 6KB, trying to add 4KB = 10KB = exactly at limit
+        let result = validate_photo(&data, 0, 6_000, &config);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_validate_photo_checks_format_first() {
+        // Invalid format should be reported even if other limits are exceeded
+        let data = vec![0x00, 0x01, 0x02, 0x03];
+        let config = create_test_config(1, 1, 1); // All limits very low
+
+        let result = validate_photo(&data, 10, 1000, &config);
+
+        // Should report invalid_format, not other errors
+        assert_eq!(result, Some("invalid_format".to_string()));
+    }
 }

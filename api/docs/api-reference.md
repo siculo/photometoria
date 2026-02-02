@@ -27,7 +27,7 @@ This example demonstrates a typical workflow from task creation to cleanup:
 2. Client uploads photos (single or batch)
    POST /api/tasks/task_abc/photos
    {files: [photo1.jpg, photo2.jpg, ...]}
-   ← {uploaded: [{photo_id: "p1", ...}, ...], failed: [], total_size_bytes: ...}
+   ← {uploaded: [{photo_id: "p1", ...}, ...], failed: [], uploaded_size_bytes: ...}
 
 3. Client starts analysis job
    POST /api/tasks/task_abc/jobs
@@ -266,7 +266,7 @@ The response always includes both `uploaded` (successful) and `failed` arrays.
       "reason": "file_too_large"
     }
   ],
-  "total_size_bytes": 8000000
+  "uploaded_size_bytes": 8000000
 }
 ```
 

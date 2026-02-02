@@ -28,10 +28,10 @@ pub fn init_app_state(config: Config) -> AppState {
 /// The log level can be overridden via the `RUST_LOG` environment variable.
 pub fn init_tracing() {
     #[cfg(debug_assertions)]
-    let default_log_level = "photometoria_rest_api=debug,tower_http=info";
+    let default_log_level = "photometoria=debug,tower_http=info";
 
     #[cfg(not(debug_assertions))]
-    let default_log_level = "photometoria_rest_api=info,tower_http=info";
+    let default_log_level = "photometoria=info,tower_http=info";
 
     tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| default_log_level.into()))

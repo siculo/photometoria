@@ -1,5 +1,6 @@
 use axum::{
     Router,
+    extract::DefaultBodyLimit,
     routing::{get, post},
 };
 
@@ -8,6 +9,11 @@ use crate::handlers::photo::upload_photos;
 use crate::handlers::tasks::{create_task, delete_task, get_task, list_tasks, update_task};
 
 pub fn create_router(state: AppState) -> Router {
+    // Calculate max body size for uploads: max_photo_size * max_photos + overhead
+    let max_upload_size = state.config.upload.max_photo_size.0 as usize
+        * state.config.upload.max_photos_per_request
+        + 1024 * 1024; // 1MB overhead for multipart boundaries
+
     Router::new()
         .route("/version", get(version))
         .route("/api/tasks", post(create_task).get(list_tasks))
@@ -15,7 +21,10 @@ pub fn create_router(state: AppState) -> Router {
             "/api/tasks/{task_id}",
             get(get_task).patch(update_task).delete(delete_task),
         )
-        .route("/api/tasks/{task_id}/photos", post(upload_photos))
+        .route(
+            "/api/tasks/{task_id}/photos",
+            post(upload_photos).layer(DefaultBodyLimit::max(max_upload_size)),
+        )
         .with_state(state)
 }
 

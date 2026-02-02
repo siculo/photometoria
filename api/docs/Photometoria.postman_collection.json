@@ -330,6 +330,91 @@
 							"body": ""
 						}
 					]
+				},
+				{
+					"name": "Upload Photos",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "files",
+									"type": "file",
+									"src": [],
+									"description": "Select one or more image files (JPEG or PNG)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}", "photos"]
+						},
+						"description": "Uploads one or more photos to a task.\n\nSupported formats: JPEG, PNG.\nUses the task_id saved from creation or replace it manually.\n\nReturns 201 if at least one photo was uploaded, 200 otherwise."
+					},
+					"response": [
+						{
+							"name": "Success (partial)",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "files",
+											"type": "file",
+											"src": []
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "{{task_id}}", "photos"]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"uploaded\": [\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440001\",\n            \"filename\": \"IMG_001.jpg\",\n            \"size_bytes\": 4200000\n        },\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"filename\": \"IMG_002.jpg\",\n            \"size_bytes\": 3800000\n        }\n    ],\n    \"failed\": [\n        {\n            \"filename\": \"document.pdf\",\n            \"reason\": \"invalid_format\"\n        }\n    ],\n    \"uploaded_size_bytes\": 8000000\n}"
+						},
+						{
+							"name": "Task Not Found",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "files",
+											"type": "file",
+											"src": []
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/nonexistent/photos",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "nonexistent", "photos"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "text",
+							"header": [],
+							"body": ""
+						}
+					]
 				}
 			]
 		}

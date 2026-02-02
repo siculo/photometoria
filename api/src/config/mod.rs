@@ -1,6 +1,6 @@
-mod byte_size;
+pub mod byte_size;
 
-use crate::config::byte_size::ByteSize;
+pub use byte_size::ByteSize;
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
