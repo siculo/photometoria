@@ -36,7 +36,10 @@ use super::{PhotoStore, PhotoStoreError, PhotoStoreResult};
 /// - Single-user scenarios
 /// - Prototyping before adding database persistence
 pub struct InMemoryPhotoStore {
+    /// Photo metadata storage
     photos: Arc<DashMap<String, Photo>>,
+    /// Binary image data storage (photo_id -> bytes)
+    data: Arc<DashMap<String, Vec<u8>>>,
 }
 
 impl InMemoryPhotoStore {
@@ -44,6 +47,7 @@ impl InMemoryPhotoStore {
     pub fn new() -> Self {
         Self {
             photos: Arc::new(DashMap::new()),
+            data: Arc::new(DashMap::new()),
         }
     }
 }
@@ -106,6 +110,8 @@ impl PhotoStore for InMemoryPhotoStore {
 
         match self.photos.remove(photo_id) {
             Some((_, photo)) => {
+                // Also delete associated binary data
+                self.data.remove(photo_id);
                 info!(
                     "Photo deleted successfully: {} (task: {}, filename: '{}')",
                     photo_id, photo.task_id, photo.filename
@@ -129,8 +135,9 @@ impl PhotoStore for InMemoryPhotoStore {
 
         let count = photo_ids.len();
 
-        for photo_id in photo_ids {
-            self.photos.remove(&photo_id);
+        for photo_id in &photo_ids {
+            self.photos.remove(photo_id);
+            self.data.remove(photo_id);
         }
 
         info!("Deleted {} photos for task {}", count, task_id);
@@ -178,6 +185,39 @@ impl PhotoStore for InMemoryPhotoStore {
         debug!("Checking if photo exists: {}", photo_id);
 
         Ok(self.photos.contains_key(photo_id))
+    }
+
+    async fn save_data(&self, photo_id: &str, data: &[u8]) -> PhotoStoreResult<()> {
+        debug!("Saving {} bytes for photo: {}", data.len(), photo_id);
+
+        // Verify photo metadata exists
+        if !self.photos.contains_key(photo_id) {
+            return Err(PhotoStoreError::NotFound(photo_id.to_string()));
+        }
+
+        self.data.insert(photo_id.to_string(), data.to_vec());
+        info!("Saved {} bytes for photo: {}", data.len(), photo_id);
+        Ok(())
+    }
+
+    async fn load_data(&self, photo_id: &str) -> PhotoStoreResult<Vec<u8>> {
+        debug!("Loading data for photo: {}", photo_id);
+
+        match self.data.get(photo_id) {
+            Some(data) => {
+                debug!("Loaded {} bytes for photo: {}", data.len(), photo_id);
+                Ok(data.clone())
+            }
+            None => Err(PhotoStoreError::NotFound(photo_id.to_string())),
+        }
+    }
+
+    async fn delete_data(&self, photo_id: &str) -> PhotoStoreResult<()> {
+        debug!("Deleting data for photo: {}", photo_id);
+
+        // Remove data if it exists, don't error if it doesn't
+        self.data.remove(photo_id);
+        Ok(())
     }
 }
 
@@ -420,5 +460,107 @@ mod tests {
         // Random ID should not exist
         let exists = store.exists("random_id").await.unwrap();
         assert!(!exists);
+    }
+
+    // ========================================================================
+    // Binary Data Tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_save_and_load_data() {
+        let store = create_store();
+        let photo = create_test_photo("task_123", "test.jpg", 1_000);
+
+        // Create the photo first
+        store.create(photo.clone()).await.unwrap();
+
+        // Save some data
+        let test_data = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10];
+        store.save_data(&photo.photo_id, &test_data).await.unwrap();
+
+        // Load the data back
+        let loaded = store.load_data(&photo.photo_id).await.unwrap();
+        assert_eq!(loaded, test_data);
+    }
+
+    #[tokio::test]
+    async fn test_save_data_requires_photo_metadata() {
+        let store = create_store();
+
+        // Try to save data without creating photo metadata first
+        let test_data = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        let result = store.save_data("nonexistent", &test_data).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(PhotoStoreError::NotFound(id)) => assert_eq!(id, "nonexistent"),
+            _ => panic!("Expected NotFound error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_load_nonexistent_data() {
+        let store = create_store();
+        let photo = create_test_photo("task_123", "test.jpg", 1_000);
+
+        // Create photo metadata but don't save data
+        store.create(photo.clone()).await.unwrap();
+
+        // Try to load data
+        let result = store.load_data(&photo.photo_id).await;
+
+        assert!(result.is_err());
+        match result {
+            Err(PhotoStoreError::NotFound(_)) => {}
+            _ => panic!("Expected NotFound error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_delete_also_removes_data() {
+        let store = create_store();
+        let photo = create_test_photo("task_123", "test.jpg", 1_000);
+
+        // Create photo and save data
+        store.create(photo.clone()).await.unwrap();
+        let test_data = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        store.save_data(&photo.photo_id, &test_data).await.unwrap();
+
+        // Delete the photo
+        store.delete(&photo.photo_id).await.unwrap();
+
+        // Data should also be gone
+        let result = store.load_data(&photo.photo_id).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_delete_by_task_also_removes_data() {
+        let store = create_store();
+
+        // Create photos with data
+        let photo1 = create_test_photo("task_A", "photo1.jpg", 1_000);
+        let photo2 = create_test_photo("task_A", "photo2.jpg", 2_000);
+
+        store.create(photo1.clone()).await.unwrap();
+        store.create(photo2.clone()).await.unwrap();
+        store.save_data(&photo1.photo_id, &[1, 2, 3]).await.unwrap();
+        store.save_data(&photo2.photo_id, &[4, 5, 6]).await.unwrap();
+
+        // Delete all photos for task_A
+        store.delete_by_task("task_A").await.unwrap();
+
+        // Data for both photos should be gone
+        assert!(store.load_data(&photo1.photo_id).await.is_err());
+        assert!(store.load_data(&photo2.photo_id).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_delete_data_idempotent() {
+        let store = create_store();
+
+        // Delete data that doesn't exist should not error
+        let result = store.delete_data("nonexistent").await;
+        assert!(result.is_ok());
     }
 }

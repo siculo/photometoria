@@ -100,7 +100,7 @@ async fn process_multipart(state: &AppState, task_id: &String, multipart: &mut M
         let result = process_field(
             data,
             filename,
-            &task_id,
+            task_id,
             uploaded.len(),
             used_storage,
             &state.config,
@@ -145,7 +145,16 @@ async fn process_field(
     let photo = Photo::new(task_id.to_string(), filename.clone(), data_size);
     match photo_store.create(photo.clone()).await {
         Ok(_) => {
-            // TODO: Save actual image data to disk
+            // Save actual image data
+            if let Err(e) = photo_store.save_data(&photo.photo_id, &data).await {
+                error!("Failed to save image data for '{}': {:?}", filename, e);
+                // Try to clean up the metadata we just created
+                let _ = photo_store.delete(&photo.photo_id).await;
+                return ProcessedField::Failed(FailedUpload {
+                    filename,
+                    reason: "storage_error".to_string(),
+                });
+            }
             ProcessedField::Uploaded(
                 UploadedPhoto {
                     photo_id: photo.photo_id,
@@ -196,10 +205,6 @@ fn validate_photo(
     }
 
     None
-}
-
-fn to_bad_request<E>(_: E) -> StatusCode {
-    StatusCode::BAD_REQUEST
 }
 
 fn to_internal_server_error<E>(_: E) -> StatusCode {

@@ -154,4 +154,49 @@ pub trait PhotoStore: Send + Sync {
     /// * `Err(StorageError)` - If a storage-level error occurs
     #[allow(dead_code)]
     async fn exists(&self, photo_id: &str) -> PhotoStoreResult<bool>;
+
+    // ========================================================================
+    // Binary Data Operations
+    // ========================================================================
+
+    /// Saves the raw image data for a photo.
+    ///
+    /// # Arguments
+    /// * `photo_id` - The unique identifier of the photo
+    /// * `data` - The raw image bytes to store
+    ///
+    /// # Returns
+    /// * `Ok(())` - Data saved successfully
+    /// * `Err(NotFound)` - If the photo metadata doesn't exist
+    /// * `Err(StorageError)` - If a storage-level error occurs
+    ///
+    /// # Note
+    /// The photo metadata must be created first using `create()`.
+    async fn save_data(&self, photo_id: &str, data: &[u8]) -> PhotoStoreResult<()>;
+
+    /// Loads the raw image data for a photo.
+    ///
+    /// # Arguments
+    /// * `photo_id` - The unique identifier of the photo
+    ///
+    /// # Returns
+    /// * `Ok(Vec<u8>)` - The raw image bytes
+    /// * `Err(NotFound)` - If the photo or its data doesn't exist
+    /// * `Err(StorageError)` - If a storage-level error occurs
+    #[allow(dead_code)]
+    async fn load_data(&self, photo_id: &str) -> PhotoStoreResult<Vec<u8>>;
+
+    /// Deletes the raw image data for a photo.
+    ///
+    /// # Arguments
+    /// * `photo_id` - The unique identifier of the photo
+    ///
+    /// # Returns
+    /// * `Ok(())` - Data deleted successfully (or didn't exist)
+    /// * `Err(StorageError)` - If a storage-level error occurs
+    ///
+    /// # Note
+    /// This is called internally by `delete()` and `delete_by_task()`.
+    /// It does not return an error if the data doesn't exist.
+    async fn delete_data(&self, photo_id: &str) -> PhotoStoreResult<()>;
 }
