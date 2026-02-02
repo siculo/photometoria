@@ -4,6 +4,7 @@ use axum::{
 };
 
 use crate::app_state::AppState;
+use crate::handlers::photo::upload_photos;
 use crate::handlers::tasks::{create_task, delete_task, get_task, list_tasks, update_task};
 
 pub fn create_router(state: AppState) -> Router {
@@ -14,6 +15,7 @@ pub fn create_router(state: AppState) -> Router {
             "/api/tasks/{task_id}",
             get(get_task).patch(update_task).delete(delete_task),
         )
+        .route("/api/tasks/{task_id}/photos", post(upload_photos))
         .with_state(state)
 }
 
@@ -35,12 +37,15 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::app_state::AppState;
+    use crate::config::{load_config, Config};
     use crate::models::{TaskDetail, TaskResponse, TaskSummary};
-    use crate::storage::{InMemoryTaskStore, TaskStore};
+    use crate::storage::{InMemoryPhotoStore, InMemoryTaskStore, PhotoStore, TaskStore};
 
     fn create_test_app() -> (Router, AppState) {
+        let config = Config::default();
         let task_store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new());
-        let state = AppState::new(task_store);
+        let photo_store: Arc<dyn PhotoStore> = Arc::new(InMemoryPhotoStore::new());
+        let state = AppState::new(config, task_store, photo_store);
         let app = create_router(state.clone());
         (app, state)
     }

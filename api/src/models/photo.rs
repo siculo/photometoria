@@ -134,24 +134,57 @@ pub struct PhotoSummary {
 ///
 /// Used by: `POST /api/tasks/{task_id}/photos`
 ///
-/// # Example JSON
+/// The response always has HTTP 200/201 status. Use `uploaded` and `failed`
+/// to determine the actual outcome:
+/// - 201 Created: at least one photo was uploaded (`!uploaded.is_empty()`)
+/// - 200 OK: no photos were uploaded (all failed or empty request)
+///
+/// # Example JSON (partial success)
 /// ```json
 /// {
-///   "photo_ids": ["p1", "p2", "p3"],
-///   "uploaded_count": 3,
-///   "total_size_bytes": 12400000
+///   "uploaded": [
+///     {"photo_id": "p1", "filename": "IMG_001.jpg", "size_bytes": 4200000},
+///     {"photo_id": "p2", "filename": "IMG_002.jpg", "size_bytes": 3800000}
+///   ],
+///   "failed": [
+///     {"filename": "IMG_003.jpg", "reason": "file_too_large"}
+///   ],
+///   "total_size_bytes": 8000000
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadPhotosResponse {
-    /// IDs of the uploaded photos
-    pub photo_ids: Vec<String>,
+    /// Successfully uploaded photos
+    pub uploaded: Vec<UploadedPhoto>,
 
-    /// Number of photos successfully uploaded
-    pub uploaded_count: usize,
+    /// Photos that failed to upload
+    pub failed: Vec<FailedUpload>,
 
-    /// Total size of uploaded photos in bytes
+    /// Total size of successfully uploaded photos in bytes
     pub total_size_bytes: u64,
+}
+
+/// Information about a successfully uploaded photo.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadedPhoto {
+    /// Unique photo identifier
+    pub photo_id: String,
+
+    /// Original filename
+    pub filename: String,
+
+    /// File size in bytes
+    pub size_bytes: u64,
+}
+
+/// Information about a photo that failed to upload.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FailedUpload {
+    /// Original filename
+    pub filename: String,
+
+    /// Reason for failure (e.g., "file_too_large", "invalid_format", "storage_full")
+    pub reason: String,
 }
 
 /// Response for listing photos in a task.
@@ -288,14 +321,31 @@ mod tests {
     #[test]
     fn test_upload_photos_response_serialization() {
         let response = UploadPhotosResponse {
-            photo_ids: vec!["p1".to_string(), "p2".to_string()],
-            uploaded_count: 2,
+            uploaded: vec![
+                UploadedPhoto {
+                    photo_id: "p1".to_string(),
+                    filename: "IMG_001.jpg".to_string(),
+                    size_bytes: 4_200_000,
+                },
+                UploadedPhoto {
+                    photo_id: "p2".to_string(),
+                    filename: "IMG_002.jpg".to_string(),
+                    size_bytes: 4_300_000,
+                },
+            ],
+            failed: vec![FailedUpload {
+                filename: "IMG_003.jpg".to_string(),
+                reason: "file_too_large".to_string(),
+            }],
             total_size_bytes: 8_500_000,
         };
         let json = serde_json::to_string(&response).unwrap();
 
-        assert!(json.contains("photo_ids"));
-        assert!(json.contains("uploaded_count"));
+        assert!(json.contains("uploaded"));
+        assert!(json.contains("failed"));
         assert!(json.contains("total_size_bytes"));
+        assert!(json.contains("photo_id"));
+        assert!(json.contains("filename"));
+        assert!(json.contains("reason"));
     }
 }

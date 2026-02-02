@@ -24,7 +24,7 @@ path = "/var/photometoria/storage"
 max_size = "100GB"
 
 [upload]
-max_photos_per_request = 50
+max_photos_per_request = 100
 max_photo_size = "20MB"
 
 [ollama]

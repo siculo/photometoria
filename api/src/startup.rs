@@ -4,17 +4,21 @@ use tokio::signal;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::app_state::AppState;
-use crate::storage::{InMemoryTaskStore, TaskStore};
+use crate::config::{Config, ServerConfig};
+use crate::storage::{InMemoryPhotoStore, InMemoryTaskStore, PhotoStore, TaskStore};
 
 /// Initializes the application state with all required dependencies.
 ///
 /// Creates the task store and wraps it in the application state struct
 /// that will be shared across all request handlers.
-pub fn init_app_state() -> AppState {
+pub fn init_app_state(config: Config) -> AppState {
     let task_store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new());
     tracing::info!("Initialized in-memory task store");
 
-    AppState::new(task_store)
+    let photo_store: Arc<dyn PhotoStore> = Arc::new(InMemoryPhotoStore::new());
+    tracing::info!("Initialized in-memory photo store");
+
+    AppState::new(config, task_store, photo_store)
 }
 
 /// Initializes the tracing subscriber with environment-aware defaults.

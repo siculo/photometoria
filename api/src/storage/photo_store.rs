@@ -136,6 +136,13 @@ pub trait PhotoStore: Send + Sync {
     /// This is used for TaskSummary.storage_used_bytes.
     async fn total_size_by_task(&self, task_id: &str) -> PhotoStoreResult<u64>;
 
+    /// Returns the total size in bytes of all photos across all tasks.
+    /// 
+    /// # Returns
+    /// * `Ok(u64)` - Total size in bytes
+    /// * `Err(StorageError)` - If a storage-level error occurs
+    async fn total_size(&self) -> PhotoStoreResult<u64>;
+
     /// Checks if a photo exists.
     ///
     /// # Arguments

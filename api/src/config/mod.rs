@@ -34,7 +34,23 @@ impl Default for StorageConfig {
     fn default() -> Self {
         Self {
             path: "/var/photometoria/storage".to_string(),
-            max_size: ByteSize("10GiB".parse().unwrap()),
+            max_size: "10GiB".parse().unwrap(),
+        }
+    }
+}
+
+/// Upload configuration section
+#[derive(Debug, Clone, Deserialize)]
+pub struct UploadConfig {
+    pub max_photos_per_request: usize,
+    pub max_photo_size: ByteSize,
+}
+
+impl Default for UploadConfig {
+    fn default() -> Self {
+        Self {
+            max_photos_per_request: 100,
+            max_photo_size: "20MB".parse().unwrap(),
         }
     }
 }
@@ -45,6 +61,7 @@ pub struct Config {
     /// Server binding and network configuration.
     pub server: ServerConfig,
     pub storage: StorageConfig,
+    pub upload: UploadConfig,
 }
 
 impl Config {

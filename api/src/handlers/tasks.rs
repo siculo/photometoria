@@ -122,12 +122,15 @@ pub async fn delete_task(State(state): State<AppState>, Path(task_id): Path<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::InMemoryTaskStore;
+    use crate::storage::{InMemoryPhotoStore, InMemoryTaskStore};
     use std::sync::Arc;
+    use crate::config::Config;
 
     fn create_test_state() -> AppState {
+        let config = Config::default();
         let task_store = Arc::new(InMemoryTaskStore::new());
-        AppState::new(task_store)
+        let photo_store = Arc::new(InMemoryPhotoStore::new());
+        AppState::new(config, task_store, photo_store)
     }
 
     #[tokio::test]

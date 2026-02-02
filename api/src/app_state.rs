@@ -1,6 +1,6 @@
 use std::sync::Arc;
-
-use crate::storage::TaskStore;
+use crate::config::Config;
+use crate::storage::{PhotoStore, TaskStore};
 
 /// Application state shared across all request handlers.
 ///
@@ -9,8 +9,12 @@ use crate::storage::TaskStore;
 /// cheaply (using Arc internally) and passed to each request handler.
 #[derive(Clone)]
 pub struct AppState {
+    /// Application configuration
+    pub config: Config,
     /// Thread-safe reference to the task storage backend.
     pub task_store: Arc<dyn TaskStore>,
+    /// Thread-safe reference to the photo storage backend.
+    pub photo_store: Arc<dyn PhotoStore>,
 }
 
 impl AppState {
@@ -18,15 +22,18 @@ impl AppState {
     ///
     /// # Arguments
     ///
+    /// * `config` - Current Server configuration
     /// * `task_store` - An Arc-wrapped implementation of TaskStore
     ///
     /// # Example
     ///
     /// ```ignore
+    /// let config = Config::default();
     /// let task_store = Arc::new(InMemoryTaskStore::new());
-    /// let state = AppState::new(task_store);
+    /// let photo_store = Arc::new(InMemoryPhotoStore::new());
+    /// let state = AppState::new(config, task_store);
     /// ```
-    pub fn new(task_store: Arc<dyn TaskStore>) -> Self {
-        Self { task_store }
+    pub fn new(config: Config, task_store: Arc<dyn TaskStore>, photo_store: Arc<dyn PhotoStore>) -> Self {
+        Self { config, task_store, photo_store }
     }
 }

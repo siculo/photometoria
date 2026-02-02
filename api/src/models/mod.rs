@@ -9,5 +9,8 @@ pub mod task;
 
 // Re-export public types for convenient access
 pub use job::{CreateJobRequest, Job, JobCancelledResponse, JobResponse, JobStatus, JobSummary};
-pub use photo::{Photo, PhotoListResponse, PhotoResponse, PhotoSummary, UploadPhotosResponse};
+pub use photo::{
+    FailedUpload, Photo, PhotoListResponse, PhotoResponse, PhotoSummary, UploadPhotosResponse,
+    UploadedPhoto,
+};
 pub use task::{CreateTaskRequest, Task, TaskDetail, TaskResponse, TaskSummary, UpdateTaskRequest};

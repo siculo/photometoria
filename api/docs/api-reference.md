@@ -27,7 +27,7 @@ This example demonstrates a typical workflow from task creation to cleanup:
 2. Client uploads photos (single or batch)
    POST /api/tasks/task_abc/photos
    {files: [photo1.jpg, photo2.jpg, ...]}
-   ← {photo_ids: ["p1", "p2", "p3"]}
+   ← {uploaded: [{photo_id: "p1", ...}, ...], failed: [], total_size_bytes: ...}
 
 3. Client starts analysis job
    POST /api/tasks/task_abc/jobs
@@ -235,25 +235,51 @@ Uploads one or more photos to a task using multipart/form-data.
 - Field name: "files" (can be repeated for multiple files)
 - Limits: max_photos_per_request, max_photo_size (from config)
 
+**Behavior:**
+
+The endpoint processes all photos and returns details about successes and failures.
+Photos are uploaded as long as storage space is available and validation passes.
+The response always includes both `uploaded` (successful) and `failed` arrays.
+
 **Response:**
+
+- `201 Created` - At least one photo was uploaded successfully
+- `200 OK` - No photos were uploaded (all failed or empty request)
 
 ```json
 {
-  "photo_ids": [
-    "p1",
-    "p2",
-    "p3"
+  "uploaded": [
+    {
+      "photo_id": "p1",
+      "filename": "IMG_001.jpg",
+      "size_bytes": 4200000
+    },
+    {
+      "photo_id": "p2",
+      "filename": "IMG_002.jpg",
+      "size_bytes": 3800000
+    }
   ],
-  "uploaded_count": 3,
-  "total_size_bytes": 13000000
+  "failed": [
+    {
+      "filename": "IMG_003.jpg",
+      "reason": "file_too_large"
+    }
+  ],
+  "total_size_bytes": 8000000
 }
 ```
 
+**Failure Reasons:**
+
+- `file_too_large` - File exceeds max_photo_size
+- `invalid_format` - Unsupported file format
+- `too_many_files` - Uploaded files count exceeds max_photos_per_request
+- `storage_full` - Insufficient storage space
+
 **Errors:**
 
-- `400` - File too large or too many files
 - `404` - Task not found
-- `507` - Insufficient storage space
 
 ### GET /api/tasks/{task_id}/photos
 

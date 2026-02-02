@@ -1,8 +1,17 @@
 use std::fmt;
+use std::str::FromStr;
 use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ByteSize(pub u64);
+
+impl FromStr for ByteSize {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_byte_size(s)
+    }
+}
 
 impl<'de> Deserialize<'de> for ByteSize {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

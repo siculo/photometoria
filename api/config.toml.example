@@ -32,3 +32,8 @@ path = "/var/photometoria/storage"
 # Note: Filesystems typically use binary units (GiB), while
 # hard drive manufacturers use decimal units (GB).
 max_size = "10GiB"
+
+[upload]
+max_photos_per_request = 100
+max_photo_size = 20MB
+# File maximum size with optional unit suffix.

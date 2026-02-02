@@ -162,6 +162,18 @@ impl PhotoStore for InMemoryPhotoStore {
         Ok(total)
     }
 
+    async fn total_size(&self) -> PhotoStoreResult<u64> {
+        debug!("Calculating total size");
+        
+        let total: u64 = self
+            .photos
+            .iter()
+            .map(|entry| entry.value().size_bytes)
+            .sum();
+
+        Ok(total)
+    }
+
     async fn exists(&self, photo_id: &str) -> PhotoStoreResult<bool> {
         debug!("Checking if photo exists: {}", photo_id);
 
