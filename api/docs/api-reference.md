@@ -232,8 +232,13 @@ Uploads one or more photos to a task using multipart/form-data.
 **Request:**
 
 - Content-Type: multipart/form-data
-- Field name: "files" (can be repeated for multiple files)
+- Field `client_ids`: JSON array of strings, one identifier per file (required)
+- Field `files`: image files (can be repeated for multiple files)
 - Limits: max_photos_per_request, max_photo_size (from config)
+
+The `client_ids` array must have the same length as the number of `files` fields.
+Each client_id is returned in the response, allowing the client to track which
+local file corresponds to which photo_id.
 
 **Behavior:**
 
@@ -250,11 +255,13 @@ The response always includes both `uploaded` (successful) and `failed` arrays.
 {
   "uploaded": [
     {
+      "client_id": "/Users/photos/IMG_001.jpg",
       "photo_id": "p1",
       "filename": "IMG_001.jpg",
       "size_bytes": 4200000
     },
     {
+      "client_id": "/Users/photos/IMG_002.jpg",
       "photo_id": "p2",
       "filename": "IMG_002.jpg",
       "size_bytes": 3800000
@@ -262,6 +269,7 @@ The response always includes both `uploaded` (successful) and `failed` arrays.
   ],
   "failed": [
     {
+      "client_id": "/Users/photos/IMG_003.jpg",
       "filename": "IMG_003.jpg",
       "reason": "file_too_large"
     }

@@ -10,8 +10,42 @@ use tracing::{debug, error, info, warn};
 
 use crate::app_state::AppState;
 use crate::config::Config;
-use crate::models::{FailedUpload, Photo, UploadPhotosResponse, UploadedPhoto};
+use crate::models::{ErrorResponse, FailedUpload, Photo, UploadPhotosResponse, UploadedPhoto};
 use crate::storage::PhotoStore;
+
+/// Upload error with status code and JSON body.
+struct UploadError {
+    status: StatusCode,
+    body: ErrorResponse,
+}
+
+impl UploadError {
+    fn new(status: StatusCode, error: &str, message: impl Into<String>) -> Self {
+        Self {
+            status,
+            body: ErrorResponse {
+                error: error.to_string(),
+                message: message.into(),
+            },
+        }
+    }
+
+    fn bad_request(error: &str, message: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, error, message)
+    }
+
+    fn not_found(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::NOT_FOUND, "not_found", message)
+    }
+
+    fn internal_error() -> Self {
+        Self::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+            "An internal server error occurred",
+        )
+    }
+}
 
 /// Result of processing a single upload field.
 enum ProcessedField {
@@ -24,7 +58,7 @@ pub async fn upload_photos(
     State(state): State<AppState>,
     Path(task_id): Path<String>,
     mut multipart: Multipart,
-) -> Result<(StatusCode, Json<UploadPhotosResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<UploadPhotosResponse>), (StatusCode, Json<ErrorResponse>)> {
     debug!("Upload photos request for task_id={}", task_id);
 
     // Verify task exists
@@ -32,13 +66,20 @@ pub async fn upload_photos(
         .task_store
         .exists(&task_id)
         .await
-        .map_err(to_internal_server_error)?;
+        .map_err(|_| UploadError::internal_error())
+        .map_err(into_response)?;
     if !task_exists {
         warn!("Task not found: {}", task_id);
-        return Err(StatusCode::NOT_FOUND);
+        return Err(into_response(UploadError::not_found(format!(
+            "Task '{}' not found",
+            task_id
+        ))));
     }
 
-    let (uploaded, failed, uploaded_size_bytes) = process_multipart(&state, &task_id, &mut multipart).await?;
+    let (uploaded, failed, uploaded_size_bytes) =
+        process_multipart(&state, &task_id, &mut multipart)
+            .await
+            .map_err(into_response)?;
 
     let status = if uploaded.is_empty() {
         StatusCode::OK
@@ -63,50 +104,133 @@ pub async fn upload_photos(
     Ok((status, Json(response)))
 }
 
-/// Processes the entire multipart request, returning the result the load operation.
-async fn process_multipart(state: &AppState, task_id: &String, multipart: &mut Multipart) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), StatusCode> {
-    let mut used_storage = state
-        .photo_store
-        .total_size()
-        .await
-        .map_err(to_internal_server_error)?;
-    let mut uploaded: Vec<UploadedPhoto> = vec![];
-    let mut failed: Vec<FailedUpload> = vec![];
-    let mut uploaded_size_bytes: u64 = 0;
+fn into_response(err: UploadError) -> (StatusCode, Json<ErrorResponse>) {
+    (err.status, Json(err.body))
+}
 
+/// Collected file data from multipart.
+struct FileData {
+    filename: String,
+    data: Bytes,
+}
+
+/// Processes the entire multipart request, returning the result of the upload operation.
+///
+/// Expects:
+/// - A `client_ids` field with a JSON array of strings
+/// - One or more `files` fields with the actual image data
+///
+/// The number of client_ids must match the number of files.
+async fn process_multipart(state: &AppState, task_id: &str, multipart: &mut Multipart) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), UploadError> {
+    let mut client_ids: Option<Vec<String>> = None;
+    let mut files: Vec<FileData> = vec![];
+
+    // First pass: collect client_ids and files
     loop {
         let field = match multipart.next_field().await {
             Ok(Some(field)) => field,
             Ok(None) => break,
             Err(e) => {
                 error!("Error reading multipart field: {:?}", e);
-                return Err(StatusCode::BAD_REQUEST);
+                return Err(UploadError::bad_request(
+                    "invalid_multipart",
+                    format!("Error reading multipart field: {}", e),
+                ));
             }
         };
 
-        let field_name = field.name().map(|s| s.to_string());
-        let filename = field.file_name().unwrap_or_default().to_string();
-        debug!("Processing field: name={:?}, filename={}", field_name, filename);
+        let field_name = field.name().unwrap_or_default().to_string();
 
-        let data = match field.bytes().await {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Error reading field bytes for '{}': {:?}", filename, e);
-                return Err(StatusCode::BAD_REQUEST);
+        match field_name.as_str() {
+            "client_ids" => {
+                let text = field.text().await.map_err(|e| {
+                    error!("Error reading client_ids field: {:?}", e);
+                    UploadError::bad_request(
+                        "invalid_client_ids",
+                        format!("Error reading client_ids field: {}", e),
+                    )
+                })?;
+
+                let ids: Vec<String> = serde_json::from_str(&text).map_err(|e| {
+                    error!("Error parsing client_ids JSON: {:?}", e);
+                    UploadError::bad_request(
+                        "invalid_client_ids",
+                        format!("client_ids must be a JSON array of strings: {}", e),
+                    )
+                })?;
+
+                debug!("Received {} client_ids", ids.len());
+                client_ids = Some(ids);
             }
-        };
-        debug!("Read {} bytes for '{}'", data.len(), filename);
+            "files" => {
+                let filename = field.file_name().unwrap_or_default().to_string();
+                let data = field.bytes().await.map_err(|e| {
+                    error!("Error reading file bytes for '{}': {:?}", filename, e);
+                    UploadError::bad_request(
+                        "invalid_file",
+                        format!("Error reading file '{}': {}", filename, e),
+                    )
+                })?;
+
+                debug!("Received file '{}' ({} bytes)", filename, data.len());
+                files.push(FileData { filename, data });
+            }
+            _ => {
+                warn!("Ignoring unknown field: {}", field_name);
+            }
+        }
+    }
+
+    // Validate: client_ids is required
+    let client_ids = client_ids.ok_or_else(|| {
+        error!("Missing required field: client_ids");
+        UploadError::bad_request(
+            "missing_client_ids",
+            "Missing required field: client_ids (JSON array of strings)",
+        )
+    })?;
+
+    // Validate: counts must match
+    if client_ids.len() != files.len() {
+        error!(
+            "Mismatch: {} client_ids but {} files",
+            client_ids.len(),
+            files.len()
+        );
+        return Err(UploadError::bad_request(
+            "client_ids_mismatch",
+            format!(
+                "Number of client_ids ({}) does not match number of files ({})",
+                client_ids.len(),
+                files.len()
+            ),
+        ));
+    }
+
+    // Process files
+    let mut used_storage = state
+        .photo_store
+        .total_size()
+        .await
+        .map_err(|_| UploadError::internal_error())?;
+    let mut uploaded: Vec<UploadedPhoto> = vec![];
+    let mut failed: Vec<FailedUpload> = vec![];
+    let mut uploaded_size_bytes: u64 = 0;
+
+    for (idx, file) in files.into_iter().enumerate() {
+        let client_id = client_ids[idx].clone();
 
         let result = process_field(
-            data,
-            filename,
+            file.data,
+            file.filename,
+            client_id,
             task_id,
             uploaded.len(),
             used_storage,
             &state.config,
             &state.photo_store,
         )
-            .await;
+        .await;
 
         match result {
             ProcessedField::Uploaded(photo, size) => {
@@ -121,6 +245,7 @@ async fn process_multipart(state: &AppState, task_id: &String, multipart: &mut M
             }
         }
     }
+
     Ok((uploaded, failed, uploaded_size_bytes))
 }
 
@@ -128,6 +253,7 @@ async fn process_multipart(state: &AppState, task_id: &String, multipart: &mut M
 async fn process_field(
     data: Bytes,
     filename: String,
+    client_id: String,
     task_id: &str,
     uploaded_count: usize,
     used_storage: u64,
@@ -138,7 +264,7 @@ async fn process_field(
 
     // Validate photo
     if let Some(reason) = validate_photo(&data, uploaded_count, used_storage, config) {
-        return ProcessedField::Failed(FailedUpload { filename, reason });
+        return ProcessedField::Failed(FailedUpload { client_id, filename, reason });
     }
 
     // Create photo and save to store
@@ -151,12 +277,14 @@ async fn process_field(
                 // Try to clean up the metadata we just created
                 let _ = photo_store.delete(&photo.photo_id).await;
                 return ProcessedField::Failed(FailedUpload {
+                    client_id,
                     filename,
                     reason: "storage_error".to_string(),
                 });
             }
             ProcessedField::Uploaded(
                 UploadedPhoto {
+                    client_id,
                     photo_id: photo.photo_id,
                     filename,
                     size_bytes: data_size,
@@ -165,6 +293,7 @@ async fn process_field(
             )
         }
         Err(_) => ProcessedField::Failed(FailedUpload {
+            client_id,
             filename,
             reason: "storage_error".to_string(),
         }),
@@ -205,10 +334,6 @@ fn validate_photo(
     }
 
     None
-}
-
-fn to_internal_server_error<E>(_: E) -> StatusCode {
-    StatusCode::INTERNAL_SERVER_ERROR
 }
 
 #[cfg(test)]

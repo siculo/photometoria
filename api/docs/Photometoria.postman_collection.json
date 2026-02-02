@@ -340,6 +340,12 @@
 							"mode": "formdata",
 							"formdata": [
 								{
+									"key": "client_ids",
+									"type": "text",
+									"value": "[\"/path/to/photo1.jpg\", \"/path/to/photo2.jpg\"]",
+									"description": "JSON array of client identifiers, one per file (required)"
+								},
+								{
 									"key": "files",
 									"type": "file",
 									"src": [],
@@ -352,7 +358,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "tasks", "{{task_id}}", "photos"]
 						},
-						"description": "Uploads one or more photos to a task.\n\nSupported formats: JPEG, PNG.\nUses the task_id saved from creation or replace it manually.\n\nReturns 201 if at least one photo was uploaded, 200 otherwise."
+						"description": "Uploads one or more photos to a task.\n\nRequires two fields:\n- client_ids: JSON array of identifiers (e.g., local file paths)\n- files: The actual image files\n\nThe number of client_ids must match the number of files.\n\nSupported formats: JPEG, PNG.\nReturns 201 if at least one photo was uploaded, 200 otherwise."
 					},
 					"response": [
 						{
@@ -385,7 +391,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"uploaded\": [\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440001\",\n            \"filename\": \"IMG_001.jpg\",\n            \"size_bytes\": 4200000\n        },\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"filename\": \"IMG_002.jpg\",\n            \"size_bytes\": 3800000\n        }\n    ],\n    \"failed\": [\n        {\n            \"filename\": \"document.pdf\",\n            \"reason\": \"invalid_format\"\n        }\n    ],\n    \"uploaded_size_bytes\": 8000000\n}"
+							"body": "{\n    \"uploaded\": [\n        {\n            \"client_id\": \"/Users/photos/IMG_001.jpg\",\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440001\",\n            \"filename\": \"IMG_001.jpg\",\n            \"size_bytes\": 4200000\n        },\n        {\n            \"client_id\": \"/Users/photos/IMG_002.jpg\",\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"filename\": \"IMG_002.jpg\",\n            \"size_bytes\": 3800000\n        }\n    ],\n    \"failed\": [\n        {\n            \"client_id\": \"/Users/photos/document.pdf\",\n            \"filename\": \"document.pdf\",\n            \"reason\": \"invalid_format\"\n        }\n    ],\n    \"uploaded_size_bytes\": 8000000\n}"
 						},
 						{
 							"name": "Task Not Found",

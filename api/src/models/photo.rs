@@ -167,6 +167,9 @@ pub struct UploadPhotosResponse {
 /// Information about a successfully uploaded photo.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadedPhoto {
+    /// Client-provided identifier for tracking
+    pub client_id: String,
+
     /// Unique photo identifier
     pub photo_id: String,
 
@@ -180,6 +183,9 @@ pub struct UploadedPhoto {
 /// Information about a photo that failed to upload.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FailedUpload {
+    /// Client-provided identifier for tracking
+    pub client_id: String,
+
     /// Original filename
     pub filename: String,
 
@@ -205,6 +211,24 @@ pub struct PhotoListResponse {
 
     /// Total count of photos
     pub count: usize,
+}
+
+/// Standard error response format.
+///
+/// # Example JSON
+/// ```json
+/// {
+///   "error": "client_ids_mismatch",
+///   "message": "Number of client_ids (1) does not match number of files (2)"
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorResponse {
+    /// Error code (machine-readable)
+    pub error: String,
+
+    /// Human-readable error description
+    pub message: String,
 }
 
 // ============================================================================
@@ -323,17 +347,20 @@ mod tests {
         let response = UploadPhotosResponse {
             uploaded: vec![
                 UploadedPhoto {
+                    client_id: "/path/to/IMG_001.jpg".to_string(),
                     photo_id: "p1".to_string(),
                     filename: "IMG_001.jpg".to_string(),
                     size_bytes: 4_200_000,
                 },
                 UploadedPhoto {
+                    client_id: "/path/to/IMG_002.jpg".to_string(),
                     photo_id: "p2".to_string(),
                     filename: "IMG_002.jpg".to_string(),
                     size_bytes: 4_300_000,
                 },
             ],
             failed: vec![FailedUpload {
+                client_id: "/path/to/IMG_003.jpg".to_string(),
                 filename: "IMG_003.jpg".to_string(),
                 reason: "file_too_large".to_string(),
             }],
@@ -344,6 +371,7 @@ mod tests {
         assert!(json.contains("uploaded"));
         assert!(json.contains("failed"));
         assert!(json.contains("uploaded_size_bytes"));
+        assert!(json.contains("client_id"));
         assert!(json.contains("photo_id"));
         assert!(json.contains("filename"));
         assert!(json.contains("reason"));
