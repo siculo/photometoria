@@ -33,7 +33,7 @@ pub struct StorageConfig {
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
-            path: "/var/photometoria/storage".to_string(),
+            path: "./storage".to_string(),
             max_size: "10GiB".parse().unwrap(),
         }
     }

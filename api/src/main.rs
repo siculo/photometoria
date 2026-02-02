@@ -31,7 +31,13 @@ async fn main() {
     let addr = config.server_addr();
     tracing::info!("Server listening on http://{}", addr);
 
-    let state = init_app_state(config).await;
+    let state = match init_app_state(config).await {
+        Ok(state) => state,
+        Err(e) => {
+            tracing::error!("{}", e);
+            std::process::exit(1);
+        }
+    };
     let app = routes::create_router(state);
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {

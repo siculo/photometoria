@@ -13,9 +13,31 @@ use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, PhotoStore, Task
 /// Creates the task store and wraps it in the application state struct
 /// that will be shared across all request handlers.
 /// Loads existing data from the filesystem.
-pub async fn init_app_state(config: Config) -> AppState {
+///
+/// # Errors
+///
+/// Returns an error if the storage path cannot be created or is not writable.
+pub async fn init_app_state(config: Config) -> Result<AppState, String> {
     let storage_path = PathBuf::from(&config.storage.path);
     tracing::info!("Using storage path: {:?}", storage_path);
+
+    // Ensure storage directory exists and is writable
+    if let Err(e) = tokio::fs::create_dir_all(&storage_path).await {
+        return Err(format!(
+            "Failed to create storage directory {:?}: {}",
+            storage_path, e
+        ));
+    }
+
+    // Verify the directory is writable by creating a test file
+    let test_file = storage_path.join(".write_test");
+    if let Err(e) = tokio::fs::write(&test_file, b"test").await {
+        return Err(format!(
+            "Storage directory {:?} is not writable: {}",
+            storage_path, e
+        ));
+    }
+    let _ = tokio::fs::remove_file(&test_file).await;
 
     let task_store: Arc<dyn TaskStore> = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
     tracing::info!("Initialized filesystem task store");
@@ -23,7 +45,7 @@ pub async fn init_app_state(config: Config) -> AppState {
     let photo_store: Arc<dyn PhotoStore> = Arc::new(FileSystemPhotoStore::new(storage_path).await);
     tracing::info!("Initialized filesystem photo store");
 
-    AppState::new(config, task_store, photo_store)
+    Ok(AppState::new(config, task_store, photo_store))
 }
 
 /// Initializes the tracing subscriber with environment-aware defaults.
