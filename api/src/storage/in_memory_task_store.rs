@@ -6,8 +6,9 @@
 use async_trait::async_trait;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use crate::models::Task;
 
@@ -22,52 +23,52 @@ use super::{TaskStore, TaskStoreError, TaskStoreResult};
 /// This implementation stores tasks in memory using DashMap, which provides excellent
 /// concurrent read/write performance through internal sharding.
 ///
+/// Task directories are created on the filesystem when tasks are created, and removed
+/// when tasks are deleted. This provides storage for photos associated with each task.
+///
 /// ## Characteristics
 ///
 /// - **Thread-safe**: Supports concurrent access from multiple Tokio tasks
 /// - **Lock-free reads**: Get operations don't acquire locks
 /// - **Fine-grained locking**: Writes lock only the specific shard
-/// - **No persistence**: Data is lost when the server restarts
-/// - **No limits**: Bounded only by available RAM
+/// - **No persistence**: Task metadata is lost when the server restarts
+/// - **Filesystem integration**: Creates/removes task directories
+///
+/// ## Directory Structure
+///
+/// ```text
+/// {storage_path}/
+/// └── tasks/
+///     ├── {task_id_1}/
+///     ├── {task_id_2}/
+///     └── ...
+/// ```
 ///
 /// ## Use Cases
 ///
 /// - Development and testing
 /// - Single-user scenarios
 /// - Prototyping before adding database persistence
-///
-/// ## Example
-///
-/// ```ignore
-/// use crate::storage::in_memory_task_store::InMemoryTaskStore;
-/// use crate::storage::TaskStore;
-///
-/// let store = InMemoryTaskStore::new();
-/// let task = Task::new("vacation in SF".to_string());
-/// let created = store.create(task).await?;
-/// ```
 pub struct InMemoryTaskStore {
     tasks: Arc<DashMap<String, Task>>,
+    storage_path: PathBuf,
 }
 
 impl InMemoryTaskStore {
     /// Creates a new empty in-memory task store.
     ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let store = InMemoryTaskStore::new();
-    /// ```
-    pub fn new() -> Self {
+    /// # Arguments
+    /// * `storage_path` - Base path for storing task directories
+    pub fn new(storage_path: PathBuf) -> Self {
         Self {
             tasks: Arc::new(DashMap::new()),
+            storage_path,
         }
     }
-}
 
-impl Default for InMemoryTaskStore {
-    fn default() -> Self {
-        Self::new()
+    /// Returns the directory path for a specific task.
+    fn task_dir(&self, task_id: &str) -> PathBuf {
+        self.storage_path.join("tasks").join(task_id)
     }
 }
 
@@ -86,6 +87,17 @@ impl TaskStore for InMemoryTaskStore {
         match self.tasks.entry(task_id.clone()) {
             Entry::Occupied(_) => Err(TaskStoreError::AlreadyExists(task_id)),
             Entry::Vacant(entry) => {
+                // Create task directory on filesystem
+                let task_dir = self.task_dir(&task_id);
+                if let Err(e) = tokio::fs::create_dir_all(&task_dir).await {
+                    error!("Failed to create task directory {:?}: {}", task_dir, e);
+                    return Err(TaskStoreError::StorageError(format!(
+                        "Failed to create task directory: {}",
+                        e
+                    )));
+                }
+                debug!("Created task directory: {:?}", task_dir);
+
                 entry.insert(task.clone());
                 info!(
                     "Task created successfully: {} (context: '{}')",
@@ -146,6 +158,17 @@ impl TaskStore for InMemoryTaskStore {
         // remove() returns Some((key, value)) if the entry existed
         match self.tasks.remove(task_id) {
             Some((_, task)) => {
+                // Remove task directory and all its contents
+                let task_dir = self.task_dir(task_id);
+                if task_dir.exists() {
+                    if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
+                        error!("Failed to remove task directory {:?}: {}", task_dir, e);
+                        // Log but don't fail - the task metadata is already removed
+                    } else {
+                        debug!("Removed task directory: {:?}", task_dir);
+                    }
+                }
+
                 info!(
                     "Task deleted successfully: {} (context: '{}')",
                     task_id, task.context
@@ -179,11 +202,23 @@ impl TaskStore for InMemoryTaskStore {
 mod tests {
     use super::*;
     use chrono::{DateTime, Duration, Utc};
+    use tempfile::TempDir;
     use uuid::Uuid;
 
-    // Helper function to create a fresh store
-    fn create_store() -> InMemoryTaskStore {
-        InMemoryTaskStore::new()
+    // Helper struct to keep temp dir alive during test
+    struct TestStore {
+        store: InMemoryTaskStore,
+        _temp_dir: TempDir,
+    }
+
+    // Helper function to create a fresh store with temp directory
+    fn create_store() -> TestStore {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let store = InMemoryTaskStore::new(temp_dir.path().to_path_buf());
+        TestStore {
+            store,
+            _temp_dir: temp_dir,
+        }
     }
 
     // Helper function to create a test task with specific timestamp
@@ -202,10 +237,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_task() {
-        let store = create_store();
+        let ts = create_store();
         let task = create_test_task("vacation in SF");
 
-        let result = store.create(task.clone()).await;
+        let result = ts.store.create(task.clone()).await;
 
         assert!(result.is_ok());
         let created = result.unwrap();
@@ -213,20 +248,23 @@ mod tests {
         assert_eq!(created.context, task.context);
 
         // Verify it exists in the store
-        let exists = store.exists(&task.task_id).await.unwrap();
+        let exists = ts.store.exists(&task.task_id).await.unwrap();
         assert!(exists);
+
+        // Verify directory was created
+        assert!(ts.store.task_dir(&task.task_id).exists());
     }
 
     #[tokio::test]
     async fn test_create_duplicate_fails() {
-        let store = create_store();
+        let ts = create_store();
         let task = create_test_task("vacation in SF");
 
         // First creation should succeed
-        store.create(task.clone()).await.unwrap();
+        ts.store.create(task.clone()).await.unwrap();
 
         // Second creation with same ID should fail
-        let result = store.create(task.clone()).await;
+        let result = ts.store.create(task.clone()).await;
 
         assert!(result.is_err());
         match result {
@@ -239,12 +277,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_existing_task() {
-        let store = create_store();
+        let ts = create_store();
         let task = create_test_task("vacation in SF");
 
-        store.create(task.clone()).await.unwrap();
+        ts.store.create(task.clone()).await.unwrap();
 
-        let result = store.get(&task.task_id).await.unwrap();
+        let result = ts.store.get(&task.task_id).await.unwrap();
 
         assert!(result.is_some());
         let retrieved = result.unwrap();
@@ -255,16 +293,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_nonexistent_task() {
-        let store = create_store();
+        let ts = create_store();
 
-        let result = store.get("nonexistent_id").await.unwrap();
+        let result = ts.store.get("nonexistent_id").await.unwrap();
 
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn test_list_tasks_ordered_by_created_at() {
-        let store = create_store();
+        let ts = create_store();
 
         // Create tasks with explicit timestamps to control ordering
         let now = Utc::now();
@@ -273,12 +311,12 @@ mod tests {
         let task3 = create_test_task_with_timestamp("Third", now + Duration::seconds(2));
 
         // Insert in random order
-        store.create(task2.clone()).await.unwrap();
-        store.create(task1.clone()).await.unwrap();
-        store.create(task3.clone()).await.unwrap();
+        ts.store.create(task2.clone()).await.unwrap();
+        ts.store.create(task1.clone()).await.unwrap();
+        ts.store.create(task3.clone()).await.unwrap();
 
         // List should return ordered by created_at (oldest first)
-        let tasks = store.list().await.unwrap();
+        let tasks = ts.store.list().await.unwrap();
 
         assert_eq!(tasks.len(), 3);
         assert_eq!(tasks[0].context, "First");
@@ -291,33 +329,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_task() {
-        let store = create_store();
+        let ts = create_store();
         let task = create_test_task("vacation in SF");
 
-        store.create(task.clone()).await.unwrap();
+        ts.store.create(task.clone()).await.unwrap();
 
         // Update the context
         let mut updated_task = task.clone();
         updated_task.context = "Updated context".to_string();
 
-        let result = store.update(updated_task.clone()).await;
+        let result = ts.store.update(updated_task.clone()).await;
 
         assert!(result.is_ok());
         let updated = result.unwrap();
         assert_eq!(updated.context, "Updated context");
 
         // Verify the change persisted
-        let retrieved = store.get(&task.task_id).await.unwrap().unwrap();
+        let retrieved = ts.store.get(&task.task_id).await.unwrap().unwrap();
         assert_eq!(retrieved.context, "Updated context");
     }
 
     #[tokio::test]
     async fn test_update_nonexistent_fails() {
-        let store = create_store();
+        let ts = create_store();
         let task = create_test_task("vacation in SF");
 
         // Try to update without creating first
-        let result = store.update(task.clone()).await;
+        let result = ts.store.update(task.clone()).await;
 
         assert!(result.is_err());
         match result {
@@ -330,26 +368,31 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_task() {
-        let store = create_store();
+        let ts = create_store();
         let task = create_test_task("vacation in SF");
 
-        store.create(task.clone()).await.unwrap();
+        ts.store.create(task.clone()).await.unwrap();
+        let task_dir = ts.store.task_dir(&task.task_id);
+        assert!(task_dir.exists());
 
         // Delete the task
-        let result = store.delete(&task.task_id).await;
+        let result = ts.store.delete(&task.task_id).await;
 
         assert!(result.is_ok());
 
         // Verify it no longer exists
-        let retrieved = store.get(&task.task_id).await.unwrap();
+        let retrieved = ts.store.get(&task.task_id).await.unwrap();
         assert!(retrieved.is_none());
+
+        // Verify directory was removed
+        assert!(!task_dir.exists());
     }
 
     #[tokio::test]
     async fn test_delete_nonexistent_fails() {
-        let store = create_store();
+        let ts = create_store();
 
-        let result = store.delete("nonexistent_id").await;
+        let result = ts.store.delete("nonexistent_id").await;
 
         assert!(result.is_err());
         match result {
@@ -362,31 +405,31 @@ mod tests {
 
     #[tokio::test]
     async fn test_exists() {
-        let store = create_store();
+        let ts = create_store();
         let task = create_test_task("vacation in SF");
 
         // Should not exist initially
-        let exists = store.exists(&task.task_id).await.unwrap();
+        let exists = ts.store.exists(&task.task_id).await.unwrap();
         assert!(!exists);
 
         // Create the task
-        store.create(task.clone()).await.unwrap();
+        ts.store.create(task.clone()).await.unwrap();
 
         // Should exist now
-        let exists = store.exists(&task.task_id).await.unwrap();
+        let exists = ts.store.exists(&task.task_id).await.unwrap();
         assert!(exists);
 
         // Random ID should not exist
-        let exists = store.exists("random_id").await.unwrap();
+        let exists = ts.store.exists("random_id").await.unwrap();
         assert!(!exists);
     }
 
     #[tokio::test]
     async fn test_count() {
-        let store = create_store();
+        let ts = create_store();
 
         // Empty store should have count 0
-        let count = store.count().await.unwrap();
+        let count = ts.store.count().await.unwrap();
         assert_eq!(count, 0);
 
         // Add 3 tasks
@@ -394,19 +437,19 @@ mod tests {
         let task2 = create_test_task("Second");
         let task3 = create_test_task("Third");
 
-        store.create(task1.clone()).await.unwrap();
-        store.create(task2.clone()).await.unwrap();
-        store.create(task3.clone()).await.unwrap();
+        ts.store.create(task1.clone()).await.unwrap();
+        ts.store.create(task2.clone()).await.unwrap();
+        ts.store.create(task3.clone()).await.unwrap();
 
         // Should have count 3
-        let count = store.count().await.unwrap();
+        let count = ts.store.count().await.unwrap();
         assert_eq!(count, 3);
 
         // Delete one task
-        store.delete(&task1.task_id).await.unwrap();
+        ts.store.delete(&task1.task_id).await.unwrap();
 
         // Should have count 2
-        let count = store.count().await.unwrap();
+        let count = ts.store.count().await.unwrap();
         assert_eq!(count, 2);
     }
 }

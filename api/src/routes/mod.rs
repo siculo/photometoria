@@ -43,27 +43,40 @@ mod tests {
     };
     use http_body_util::BodyExt;
     use serde_json::json;
+    use tempfile::TempDir;
     use tower::ServiceExt;
 
     use crate::app_state::AppState;
-    use crate::config::{load_config, Config};
+    use crate::config::Config;
     use crate::models::{TaskDetail, TaskResponse, TaskSummary};
     use crate::storage::{InMemoryPhotoStore, InMemoryTaskStore, PhotoStore, TaskStore};
 
-    fn create_test_app() -> (Router, AppState) {
+    struct TestApp {
+        router: Router,
+        state: AppState,
+        _temp_dir: TempDir,
+    }
+
+    fn create_test_app() -> TestApp {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
         let config = Config::default();
-        let task_store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new());
-        let photo_store: Arc<dyn PhotoStore> = Arc::new(InMemoryPhotoStore::new());
+        let task_store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new(storage_path.clone()));
+        let photo_store: Arc<dyn PhotoStore> = Arc::new(InMemoryPhotoStore::new(storage_path));
         let state = AppState::new(config, task_store, photo_store);
-        let app = create_router(state.clone());
-        (app, state)
+        let router = create_router(state.clone());
+        TestApp {
+            router,
+            state,
+            _temp_dir: temp_dir,
+        }
     }
 
     #[tokio::test]
     async fn test_version_returns_package_version() {
-        let (app, _) = create_test_app();
+        let ta = create_test_app();
         let request = Request::get("/version").body(Body::empty()).unwrap();
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), 200);
 
@@ -75,13 +88,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_post_tasks_creates_task() {
-        let (app, _) = create_test_app();
+        let ta = create_test_app();
         let request = Request::post("/api/tasks")
             .header("Content-Type", "application/json")
             .body(Body::from(json!({"context": "test context"}).to_string()))
             .unwrap();
 
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
 
@@ -94,10 +107,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_tasks_returns_empty_list() {
-        let (app, _) = create_test_app();
+        let ta = create_test_app();
         let request = Request::get("/api/tasks").body(Body::empty()).unwrap();
 
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -109,15 +122,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_tasks_returns_created_tasks() {
-        let (app, state) = create_test_app();
+        let ta = create_test_app();
 
         // Create a task first using the store directly
         let task = crate::models::Task::new("test task".to_string());
         let task_id = task.task_id.clone();
-        state.task_store.create(task).await.unwrap();
+        ta.state.task_store.create(task).await.unwrap();
 
         let request = Request::get("/api/tasks").body(Body::empty()).unwrap();
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -131,17 +144,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_task_by_id_found() {
-        let (app, state) = create_test_app();
+        let ta = create_test_app();
 
         // Create a task first
         let task = crate::models::Task::new("test task".to_string());
         let task_id = task.task_id.clone();
-        state.task_store.create(task).await.unwrap();
+        ta.state.task_store.create(task).await.unwrap();
 
         let request = Request::get(format!("/api/tasks/{}", task_id))
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -154,24 +167,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_task_by_id_not_found() {
-        let (app, _) = create_test_app();
+        let ta = create_test_app();
 
         let request = Request::get("/api/tasks/nonexistent")
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn test_patch_task_updates_context() {
-        let (app, state) = create_test_app();
+        let ta = create_test_app();
 
         // Create a task first
         let task = crate::models::Task::new("original context".to_string());
         let task_id = task.task_id.clone();
-        state.task_store.create(task).await.unwrap();
+        ta.state.task_store.create(task).await.unwrap();
 
         let request = Request::patch(format!("/api/tasks/{}", task_id))
             .header("Content-Type", "application/json")
@@ -179,7 +192,7 @@ mod tests {
                 json!({"context": "updated context"}).to_string(),
             ))
             .unwrap();
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -192,7 +205,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_patch_task_not_found() {
-        let (app, _) = create_test_app();
+        let ta = create_test_app();
 
         let request = Request::patch("/api/tasks/nonexistent")
             .header("Content-Type", "application/json")
@@ -200,40 +213,40 @@ mod tests {
                 json!({"context": "updated context"}).to_string(),
             ))
             .unwrap();
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn test_delete_task_success() {
-        let (app, state) = create_test_app();
+        let ta = create_test_app();
 
         // Create a task first
         let task = crate::models::Task::new("task to delete".to_string());
         let task_id = task.task_id.clone();
-        state.task_store.create(task).await.unwrap();
+        ta.state.task_store.create(task).await.unwrap();
 
         let request = Request::delete(format!("/api/tasks/{}", task_id))
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
         // Verify it's deleted
-        let exists = state.task_store.exists(&task_id).await.unwrap();
+        let exists = ta.state.task_store.exists(&task_id).await.unwrap();
         assert!(!exists);
     }
 
     #[tokio::test]
     async fn test_delete_task_not_found() {
-        let (app, _) = create_test_app();
+        let ta = create_test_app();
 
         let request = Request::delete("/api/tasks/nonexistent")
             .body(Body::empty())
             .unwrap();
-        let response = app.oneshot(request).await.unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }

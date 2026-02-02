@@ -29,9 +29,10 @@ impl AppState {
     ///
     /// ```ignore
     /// let config = Config::default();
-    /// let task_store = Arc::new(InMemoryTaskStore::new());
-    /// let photo_store = Arc::new(InMemoryPhotoStore::new());
-    /// let state = AppState::new(config, task_store);
+    /// let storage_path = PathBuf::from(&config.storage.path);
+    /// let task_store = Arc::new(InMemoryTaskStore::new(storage_path.clone()));
+    /// let photo_store = Arc::new(InMemoryPhotoStore::new(storage_path));
+    /// let state = AppState::new(config, task_store, photo_store);
     /// ```
     pub fn new(config: Config, task_store: Arc<dyn TaskStore>, photo_store: Arc<dyn PhotoStore>) -> Self {
         Self { config, task_store, photo_store }

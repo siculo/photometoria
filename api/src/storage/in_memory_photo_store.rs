@@ -2,12 +2,15 @@
 //!
 //! This module provides a thread-safe in-memory implementation of the PhotoStore trait
 //! using DashMap for concurrent access without global locks.
+//!
+//! Photo binary data is stored on the filesystem, while metadata is kept in memory.
 
 use async_trait::async_trait;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use crate::models::Photo;
 
@@ -19,16 +22,20 @@ use super::{PhotoStore, PhotoStoreError, PhotoStoreResult};
 
 /// In-memory implementation of PhotoStore using DashMap for thread-safe concurrent access.
 ///
-/// This implementation stores photos in memory using DashMap, which provides excellent
-/// concurrent read/write performance through internal sharding.
+/// This implementation stores photo metadata in memory using DashMap, while binary
+/// image data is stored on the filesystem.
 ///
 /// ## Characteristics
 ///
 /// - **Thread-safe**: Supports concurrent access from multiple Tokio tasks
 /// - **Lock-free reads**: Get operations don't acquire locks
 /// - **Fine-grained locking**: Writes lock only the specific shard
-/// - **No persistence**: Data is lost when the server restarts
+/// - **Partial persistence**: Metadata lost on restart, but files remain on disk
 /// - **Flat structure**: All photos in a single map, filtered by task_id when needed
+///
+/// ## File Storage
+///
+/// Binary data is stored at: `{storage_path}/tasks/{task_id}/{photo_id}`
 ///
 /// ## Use Cases
 ///
@@ -38,23 +45,25 @@ use super::{PhotoStore, PhotoStoreError, PhotoStoreResult};
 pub struct InMemoryPhotoStore {
     /// Photo metadata storage
     photos: Arc<DashMap<String, Photo>>,
-    /// Binary image data storage (photo_id -> bytes)
-    data: Arc<DashMap<String, Vec<u8>>>,
+    /// Base path for file storage
+    storage_path: PathBuf,
 }
 
 impl InMemoryPhotoStore {
     /// Creates a new empty in-memory photo store.
-    pub fn new() -> Self {
+    ///
+    /// # Arguments
+    /// * `storage_path` - Base path for storing photo files
+    pub fn new(storage_path: PathBuf) -> Self {
         Self {
             photos: Arc::new(DashMap::new()),
-            data: Arc::new(DashMap::new()),
+            storage_path,
         }
     }
-}
 
-impl Default for InMemoryPhotoStore {
-    fn default() -> Self {
-        Self::new()
+    /// Returns the file path for a photo's binary data.
+    fn photo_path(&self, task_id: &str, photo_id: &str) -> PathBuf {
+        self.storage_path.join("tasks").join(task_id).join(photo_id)
     }
 }
 
@@ -110,8 +119,16 @@ impl PhotoStore for InMemoryPhotoStore {
 
         match self.photos.remove(photo_id) {
             Some((_, photo)) => {
-                // Also delete associated binary data
-                self.data.remove(photo_id);
+                // Also delete the file from disk
+                let file_path = self.photo_path(&photo.task_id, photo_id);
+                if file_path.exists() {
+                    if let Err(e) = tokio::fs::remove_file(&file_path).await {
+                        error!("Failed to remove photo file {:?}: {}", file_path, e);
+                        // Log but don't fail - metadata is already removed
+                    } else {
+                        debug!("Removed photo file: {:?}", file_path);
+                    }
+                }
                 info!(
                     "Photo deleted successfully: {} (task: {}, filename: '{}')",
                     photo_id, photo.task_id, photo.filename
@@ -135,9 +152,10 @@ impl PhotoStore for InMemoryPhotoStore {
 
         let count = photo_ids.len();
 
+        // Remove metadata only - files are deleted by TaskStore::delete()
+        // when it removes the entire task directory
         for photo_id in &photo_ids {
             self.photos.remove(photo_id);
-            self.data.remove(photo_id);
         }
 
         info!("Deleted {} photos for task {}", count, task_id);
@@ -190,33 +208,59 @@ impl PhotoStore for InMemoryPhotoStore {
     async fn save_data(&self, photo_id: &str, data: &[u8]) -> PhotoStoreResult<()> {
         debug!("Saving {} bytes for photo: {}", data.len(), photo_id);
 
-        // Verify photo metadata exists
-        if !self.photos.contains_key(photo_id) {
-            return Err(PhotoStoreError::NotFound(photo_id.to_string()));
-        }
+        // Get photo metadata to find task_id
+        let photo = self.photos.get(photo_id).ok_or_else(|| {
+            PhotoStoreError::NotFound(photo_id.to_string())
+        })?;
+        let task_id = photo.task_id.clone();
+        drop(photo); // Release the lock
 
-        self.data.insert(photo_id.to_string(), data.to_vec());
-        info!("Saved {} bytes for photo: {}", data.len(), photo_id);
+        let file_path = self.photo_path(&task_id, photo_id);
+        tokio::fs::write(&file_path, data).await.map_err(|e| {
+            error!("Failed to write photo file {:?}: {}", file_path, e);
+            PhotoStoreError::StorageError(format!("Failed to write file: {}", e))
+        })?;
+
+        info!("Saved {} bytes for photo: {} at {:?}", data.len(), photo_id, file_path);
         Ok(())
     }
 
     async fn load_data(&self, photo_id: &str) -> PhotoStoreResult<Vec<u8>> {
         debug!("Loading data for photo: {}", photo_id);
 
-        match self.data.get(photo_id) {
-            Some(data) => {
-                debug!("Loaded {} bytes for photo: {}", data.len(), photo_id);
-                Ok(data.clone())
-            }
-            None => Err(PhotoStoreError::NotFound(photo_id.to_string())),
-        }
+        // Get photo metadata to find task_id
+        let photo = self.photos.get(photo_id).ok_or_else(|| {
+            PhotoStoreError::NotFound(photo_id.to_string())
+        })?;
+        let task_id = photo.task_id.clone();
+        drop(photo); // Release the lock
+
+        let file_path = self.photo_path(&task_id, photo_id);
+        let data = tokio::fs::read(&file_path).await.map_err(|e| {
+            error!("Failed to read photo file {:?}: {}", file_path, e);
+            PhotoStoreError::NotFound(photo_id.to_string())
+        })?;
+
+        debug!("Loaded {} bytes for photo: {}", data.len(), photo_id);
+        Ok(data)
     }
 
     async fn delete_data(&self, photo_id: &str) -> PhotoStoreResult<()> {
         debug!("Deleting data for photo: {}", photo_id);
 
-        // Remove data if it exists, don't error if it doesn't
-        self.data.remove(photo_id);
+        // Get photo metadata to find task_id (if it exists)
+        if let Some(photo) = self.photos.get(photo_id) {
+            let task_id = photo.task_id.clone();
+            drop(photo); // Release the lock
+
+            let file_path = self.photo_path(&task_id, photo_id);
+            if file_path.exists() {
+                if let Err(e) = tokio::fs::remove_file(&file_path).await {
+                    error!("Failed to remove photo file {:?}: {}", file_path, e);
+                    // Don't fail - best effort deletion
+                }
+            }
+        }
         Ok(())
     }
 }
@@ -228,10 +272,28 @@ impl PhotoStore for InMemoryPhotoStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
-    // Helper function to create a fresh store
-    fn create_store() -> InMemoryPhotoStore {
-        InMemoryPhotoStore::new()
+    // Helper struct to keep temp dir alive during test
+    struct TestStore {
+        store: InMemoryPhotoStore,
+        _temp_dir: TempDir,
+    }
+
+    // Helper function to create a fresh store with temp directory
+    fn create_store() -> TestStore {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let store = InMemoryPhotoStore::new(temp_dir.path().to_path_buf());
+        TestStore {
+            store,
+            _temp_dir: temp_dir,
+        }
+    }
+
+    // Helper to create task directory (normally done by TaskStore)
+    async fn create_task_dir(ts: &TestStore, task_id: &str) {
+        let task_dir = ts.store.storage_path.join("tasks").join(task_id);
+        tokio::fs::create_dir_all(&task_dir).await.expect("Failed to create task dir");
     }
 
     // Helper function to create a test photo
@@ -241,10 +303,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_photo() {
-        let store = create_store();
+        let ts = create_store();
         let photo = create_test_photo("task_123", "test.jpg", 1_000_000);
 
-        let result = store.create(photo.clone()).await;
+        let result = ts.store.create(photo.clone()).await;
 
         assert!(result.is_ok());
         let created = result.unwrap();
@@ -253,20 +315,20 @@ mod tests {
         assert_eq!(created.filename, photo.filename);
 
         // Verify it exists in the store
-        let exists = store.exists(&photo.photo_id).await.unwrap();
+        let exists = ts.store.exists(&photo.photo_id).await.unwrap();
         assert!(exists);
     }
 
     #[tokio::test]
     async fn test_create_duplicate_fails() {
-        let store = create_store();
+        let ts = create_store();
         let photo = create_test_photo("task_123", "test.jpg", 1_000_000);
 
         // First creation should succeed
-        store.create(photo.clone()).await.unwrap();
+        ts.store.create(photo.clone()).await.unwrap();
 
         // Second creation with same ID should fail
-        let result = store.create(photo.clone()).await;
+        let result = ts.store.create(photo.clone()).await;
 
         assert!(result.is_err());
         match result {
@@ -279,12 +341,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_existing_photo() {
-        let store = create_store();
+        let ts = create_store();
         let photo = create_test_photo("task_123", "vacation.jpg", 5_000_000);
 
-        store.create(photo.clone()).await.unwrap();
+        ts.store.create(photo.clone()).await.unwrap();
 
-        let result = store.get(&photo.photo_id).await.unwrap();
+        let result = ts.store.get(&photo.photo_id).await.unwrap();
 
         assert!(result.is_some());
         let retrieved = result.unwrap();
@@ -296,63 +358,71 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_nonexistent_photo() {
-        let store = create_store();
+        let ts = create_store();
 
-        let result = store.get("nonexistent_id").await.unwrap();
+        let result = ts.store.get("nonexistent_id").await.unwrap();
 
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn test_list_by_task() {
-        let store = create_store();
+        let ts = create_store();
 
         // Create photos for two different tasks
         let photo1 = create_test_photo("task_A", "photo1.jpg", 1_000_000);
         let photo2 = create_test_photo("task_A", "photo2.jpg", 2_000_000);
         let photo3 = create_test_photo("task_B", "photo3.jpg", 3_000_000);
 
-        store.create(photo1.clone()).await.unwrap();
-        store.create(photo2.clone()).await.unwrap();
-        store.create(photo3.clone()).await.unwrap();
+        ts.store.create(photo1.clone()).await.unwrap();
+        ts.store.create(photo2.clone()).await.unwrap();
+        ts.store.create(photo3.clone()).await.unwrap();
 
         // List photos for task_A
-        let photos_a = store.list_by_task("task_A").await.unwrap();
+        let photos_a = ts.store.list_by_task("task_A").await.unwrap();
         assert_eq!(photos_a.len(), 2);
         assert!(photos_a.iter().all(|p| p.task_id == "task_A"));
 
         // List photos for task_B
-        let photos_b = store.list_by_task("task_B").await.unwrap();
+        let photos_b = ts.store.list_by_task("task_B").await.unwrap();
         assert_eq!(photos_b.len(), 1);
         assert_eq!(photos_b[0].task_id, "task_B");
 
         // List photos for nonexistent task
-        let photos_c = store.list_by_task("task_C").await.unwrap();
+        let photos_c = ts.store.list_by_task("task_C").await.unwrap();
         assert!(photos_c.is_empty());
     }
 
     #[tokio::test]
     async fn test_delete_photo() {
-        let store = create_store();
+        let ts = create_store();
+        create_task_dir(&ts, "task_123").await;
         let photo = create_test_photo("task_123", "test.jpg", 1_000_000);
 
-        store.create(photo.clone()).await.unwrap();
+        ts.store.create(photo.clone()).await.unwrap();
+        // Save data so we can verify it's deleted too
+        ts.store.save_data(&photo.photo_id, &[1, 2, 3]).await.unwrap();
+        let file_path = ts.store.photo_path("task_123", &photo.photo_id);
+        assert!(file_path.exists());
 
         // Delete the photo
-        let result = store.delete(&photo.photo_id).await;
+        let result = ts.store.delete(&photo.photo_id).await;
 
         assert!(result.is_ok());
 
         // Verify it no longer exists
-        let retrieved = store.get(&photo.photo_id).await.unwrap();
+        let retrieved = ts.store.get(&photo.photo_id).await.unwrap();
         assert!(retrieved.is_none());
+
+        // Verify file was removed
+        assert!(!file_path.exists());
     }
 
     #[tokio::test]
     async fn test_delete_nonexistent_fails() {
-        let store = create_store();
+        let ts = create_store();
 
-        let result = store.delete("nonexistent_id").await;
+        let result = ts.store.delete("nonexistent_id").await;
 
         assert!(result.is_err());
         match result {
@@ -365,36 +435,36 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_by_task() {
-        let store = create_store();
+        let ts = create_store();
 
         // Create photos for two different tasks
         let photo1 = create_test_photo("task_A", "photo1.jpg", 1_000_000);
         let photo2 = create_test_photo("task_A", "photo2.jpg", 2_000_000);
         let photo3 = create_test_photo("task_B", "photo3.jpg", 3_000_000);
 
-        store.create(photo1).await.unwrap();
-        store.create(photo2).await.unwrap();
-        store.create(photo3.clone()).await.unwrap();
+        ts.store.create(photo1).await.unwrap();
+        ts.store.create(photo2).await.unwrap();
+        ts.store.create(photo3.clone()).await.unwrap();
 
         // Delete all photos for task_A
-        let deleted = store.delete_by_task("task_A").await.unwrap();
+        let deleted = ts.store.delete_by_task("task_A").await.unwrap();
         assert_eq!(deleted, 2);
 
         // Verify task_A photos are gone
-        let photos_a = store.list_by_task("task_A").await.unwrap();
+        let photos_a = ts.store.list_by_task("task_A").await.unwrap();
         assert!(photos_a.is_empty());
 
         // Verify task_B photo still exists
-        let photos_b = store.list_by_task("task_B").await.unwrap();
+        let photos_b = ts.store.list_by_task("task_B").await.unwrap();
         assert_eq!(photos_b.len(), 1);
     }
 
     #[tokio::test]
     async fn test_count_by_task() {
-        let store = create_store();
+        let ts = create_store();
 
         // Empty task should have count 0
-        let count = store.count_by_task("task_A").await.unwrap();
+        let count = ts.store.count_by_task("task_A").await.unwrap();
         assert_eq!(count, 0);
 
         // Add photos
@@ -402,25 +472,25 @@ mod tests {
         let photo2 = create_test_photo("task_A", "photo2.jpg", 2_000_000);
         let photo3 = create_test_photo("task_B", "photo3.jpg", 3_000_000);
 
-        store.create(photo1).await.unwrap();
-        store.create(photo2).await.unwrap();
-        store.create(photo3).await.unwrap();
+        ts.store.create(photo1).await.unwrap();
+        ts.store.create(photo2).await.unwrap();
+        ts.store.create(photo3).await.unwrap();
 
         // Count for task_A
-        let count = store.count_by_task("task_A").await.unwrap();
+        let count = ts.store.count_by_task("task_A").await.unwrap();
         assert_eq!(count, 2);
 
         // Count for task_B
-        let count = store.count_by_task("task_B").await.unwrap();
+        let count = ts.store.count_by_task("task_B").await.unwrap();
         assert_eq!(count, 1);
     }
 
     #[tokio::test]
     async fn test_total_size_by_task() {
-        let store = create_store();
+        let ts = create_store();
 
         // Empty task should have size 0
-        let size = store.total_size_by_task("task_A").await.unwrap();
+        let size = ts.store.total_size_by_task("task_A").await.unwrap();
         assert_eq!(size, 0);
 
         // Add photos with known sizes
@@ -428,37 +498,37 @@ mod tests {
         let photo2 = create_test_photo("task_A", "photo2.jpg", 2_500_000);
         let photo3 = create_test_photo("task_B", "photo3.jpg", 3_000_000);
 
-        store.create(photo1).await.unwrap();
-        store.create(photo2).await.unwrap();
-        store.create(photo3).await.unwrap();
+        ts.store.create(photo1).await.unwrap();
+        ts.store.create(photo2).await.unwrap();
+        ts.store.create(photo3).await.unwrap();
 
         // Total size for task_A
-        let size = store.total_size_by_task("task_A").await.unwrap();
+        let size = ts.store.total_size_by_task("task_A").await.unwrap();
         assert_eq!(size, 3_500_000);
 
         // Total size for task_B
-        let size = store.total_size_by_task("task_B").await.unwrap();
+        let size = ts.store.total_size_by_task("task_B").await.unwrap();
         assert_eq!(size, 3_000_000);
     }
 
     #[tokio::test]
     async fn test_exists() {
-        let store = create_store();
+        let ts = create_store();
         let photo = create_test_photo("task_123", "test.jpg", 1_000_000);
 
         // Should not exist initially
-        let exists = store.exists(&photo.photo_id).await.unwrap();
+        let exists = ts.store.exists(&photo.photo_id).await.unwrap();
         assert!(!exists);
 
         // Create the photo
-        store.create(photo.clone()).await.unwrap();
+        ts.store.create(photo.clone()).await.unwrap();
 
         // Should exist now
-        let exists = store.exists(&photo.photo_id).await.unwrap();
+        let exists = ts.store.exists(&photo.photo_id).await.unwrap();
         assert!(exists);
 
         // Random ID should not exist
-        let exists = store.exists("random_id").await.unwrap();
+        let exists = ts.store.exists("random_id").await.unwrap();
         assert!(!exists);
     }
 
@@ -468,28 +538,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_save_and_load_data() {
-        let store = create_store();
+        let ts = create_store();
+        create_task_dir(&ts, "task_123").await;
         let photo = create_test_photo("task_123", "test.jpg", 1_000);
 
         // Create the photo first
-        store.create(photo.clone()).await.unwrap();
+        ts.store.create(photo.clone()).await.unwrap();
 
         // Save some data
         let test_data = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10];
-        store.save_data(&photo.photo_id, &test_data).await.unwrap();
+        ts.store.save_data(&photo.photo_id, &test_data).await.unwrap();
+
+        // Verify file exists on disk
+        let file_path = ts.store.photo_path("task_123", &photo.photo_id);
+        assert!(file_path.exists());
 
         // Load the data back
-        let loaded = store.load_data(&photo.photo_id).await.unwrap();
+        let loaded = ts.store.load_data(&photo.photo_id).await.unwrap();
         assert_eq!(loaded, test_data);
     }
 
     #[tokio::test]
     async fn test_save_data_requires_photo_metadata() {
-        let store = create_store();
+        let ts = create_store();
 
         // Try to save data without creating photo metadata first
         let test_data = vec![0xFF, 0xD8, 0xFF, 0xE0];
-        let result = store.save_data("nonexistent", &test_data).await;
+        let result = ts.store.save_data("nonexistent", &test_data).await;
 
         assert!(result.is_err());
         match result {
@@ -500,14 +575,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_nonexistent_data() {
-        let store = create_store();
+        let ts = create_store();
+        create_task_dir(&ts, "task_123").await;
         let photo = create_test_photo("task_123", "test.jpg", 1_000);
 
         // Create photo metadata but don't save data
-        store.create(photo.clone()).await.unwrap();
+        ts.store.create(photo.clone()).await.unwrap();
 
-        // Try to load data
-        let result = store.load_data(&photo.photo_id).await;
+        // Try to load data (file doesn't exist)
+        let result = ts.store.load_data(&photo.photo_id).await;
 
         assert!(result.is_err());
         match result {
@@ -518,49 +594,29 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_also_removes_data() {
-        let store = create_store();
+        let ts = create_store();
+        create_task_dir(&ts, "task_123").await;
         let photo = create_test_photo("task_123", "test.jpg", 1_000);
 
         // Create photo and save data
-        store.create(photo.clone()).await.unwrap();
+        ts.store.create(photo.clone()).await.unwrap();
         let test_data = vec![0xFF, 0xD8, 0xFF, 0xE0];
-        store.save_data(&photo.photo_id, &test_data).await.unwrap();
+        ts.store.save_data(&photo.photo_id, &test_data).await.unwrap();
 
         // Delete the photo
-        store.delete(&photo.photo_id).await.unwrap();
+        ts.store.delete(&photo.photo_id).await.unwrap();
 
-        // Data should also be gone
-        let result = store.load_data(&photo.photo_id).await;
+        // Metadata should be gone, so load_data will fail with NotFound
+        let result = ts.store.load_data(&photo.photo_id).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
-    async fn test_delete_by_task_also_removes_data() {
-        let store = create_store();
-
-        // Create photos with data
-        let photo1 = create_test_photo("task_A", "photo1.jpg", 1_000);
-        let photo2 = create_test_photo("task_A", "photo2.jpg", 2_000);
-
-        store.create(photo1.clone()).await.unwrap();
-        store.create(photo2.clone()).await.unwrap();
-        store.save_data(&photo1.photo_id, &[1, 2, 3]).await.unwrap();
-        store.save_data(&photo2.photo_id, &[4, 5, 6]).await.unwrap();
-
-        // Delete all photos for task_A
-        store.delete_by_task("task_A").await.unwrap();
-
-        // Data for both photos should be gone
-        assert!(store.load_data(&photo1.photo_id).await.is_err());
-        assert!(store.load_data(&photo2.photo_id).await.is_err());
-    }
-
-    #[tokio::test]
     async fn test_delete_data_idempotent() {
-        let store = create_store();
+        let ts = create_store();
 
         // Delete data that doesn't exist should not error
-        let result = store.delete_data("nonexistent").await;
+        let result = ts.store.delete_data("nonexistent").await;
         assert!(result.is_ok());
     }
 }

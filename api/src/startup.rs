@@ -1,10 +1,11 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::signal;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::app_state::AppState;
-use crate::config::{Config, ServerConfig};
+use crate::config::Config;
 use crate::storage::{InMemoryPhotoStore, InMemoryTaskStore, PhotoStore, TaskStore};
 
 /// Initializes the application state with all required dependencies.
@@ -12,10 +13,13 @@ use crate::storage::{InMemoryPhotoStore, InMemoryTaskStore, PhotoStore, TaskStor
 /// Creates the task store and wraps it in the application state struct
 /// that will be shared across all request handlers.
 pub fn init_app_state(config: Config) -> AppState {
-    let task_store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new());
+    let storage_path = PathBuf::from(&config.storage.path);
+    tracing::info!("Using storage path: {:?}", storage_path);
+
+    let task_store: Arc<dyn TaskStore> = Arc::new(InMemoryTaskStore::new(storage_path.clone()));
     tracing::info!("Initialized in-memory task store");
 
-    let photo_store: Arc<dyn PhotoStore> = Arc::new(InMemoryPhotoStore::new());
+    let photo_store: Arc<dyn PhotoStore> = Arc::new(InMemoryPhotoStore::new(storage_path));
     tracing::info!("Initialized in-memory photo store");
 
     AppState::new(config, task_store, photo_store)
