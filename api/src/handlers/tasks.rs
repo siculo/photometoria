@@ -39,17 +39,27 @@ pub async fn list_tasks(
 ) -> Result<Json<Vec<TaskSummary>>, StatusCode> {
     match state.task_store.list().await {
         Ok(tasks) => {
-            let summaries: Vec<TaskSummary> = tasks
-                .into_iter()
-                .map(|task| TaskSummary {
+            let mut summaries = Vec::with_capacity(tasks.len());
+            for task in tasks {
+                let photo_count = state
+                    .photo_store
+                    .count_by_task(&task.task_id)
+                    .await
+                    .unwrap_or(0);
+                let storage_used = state
+                    .photo_store
+                    .total_size_by_task(&task.task_id)
+                    .await
+                    .unwrap_or(0);
+                summaries.push(TaskSummary {
                     task_id: task.task_id,
                     context: task.context,
-                    photo_count: 0,       // PhotoStore not implemented yet
-                    storage_used_mb: 0.0, // PhotoStore not implemented yet
+                    photo_count,
+                    storage_used,
                     created_at: task.created_at,
                     job_count: 0, // JobStore not implemented yet
-                })
-                .collect();
+                });
+            }
             Ok(Json(summaries))
         }
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
@@ -69,8 +79,8 @@ pub async fn get_task(
                 task_id: task.task_id,
                 context: task.context,
                 created_at: task.created_at,
-                photo_count: 0,       // PhotoStore not implemented yet
-                storage_used_mb: 0.0, // PhotoStore not implemented yet
+                photo_count: state.photo_store.count_by_task(&task_id).await.unwrap(),
+                storage_used: state.photo_store.total_size_by_task(&task_id).await.unwrap(),
             };
             Ok(Json(detail))
         }
@@ -124,8 +134,10 @@ mod tests {
     use super::*;
     use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore};
     use std::sync::Arc;
-    use crate::config::Config;
+    use chrono::Utc;
+    use crate::config::{ByteSize, Config};
     use tempfile::TempDir;
+    use crate::models::Photo;
 
     struct TestState {
         state: AppState,
@@ -193,7 +205,7 @@ mod tests {
         // Check that photo_count, storage_used_mb, job_count are 0
         for summary in &summaries {
             assert_eq!(summary.photo_count, 0);
-            assert_eq!(summary.storage_used_mb, 0.0);
+            assert_eq!(summary.storage_used, 0);
             assert_eq!(summary.job_count, 0);
         }
     }
@@ -217,7 +229,7 @@ mod tests {
         assert_eq!(detail.task_id, created.task_id);
         assert_eq!(detail.context, "test task");
         assert_eq!(detail.photo_count, 0);
-        assert_eq!(detail.storage_used_mb, 0.0);
+        assert_eq!(detail.storage_used, 0);
     }
 
     #[tokio::test]
@@ -308,5 +320,95 @@ mod tests {
         let status = delete_task(State(ts.state.clone()), Path("nonexistent".to_string())).await;
 
         assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_task_photo_summary() {
+        let ts = create_test_state().await;
+        let request = CreateTaskRequest {
+            context: "vacation in San Francisco".to_string(),
+        };
+
+        let result = create_task(State(ts.state.clone()), Json(request)).await;
+
+        assert!(result.is_ok());
+
+        let task_id = result.unwrap().1.task_id.clone();
+
+        ts.state.photo_store.create(
+            Photo {
+                photo_id: "10001".to_string(),
+                task_id: task_id.clone(),
+                filename: "filename_1".to_string(),
+                size_bytes: 1570000,
+                uploaded_at: Utc::now(),
+            }
+        ).await.unwrap();
+        ts.state.photo_store.create(
+            Photo {
+                photo_id: "10002".to_string(),
+                task_id: task_id.clone(),
+                filename: "filename_2".to_string(),
+                size_bytes: 2003800,
+                uploaded_at: Utc::now(),
+            }
+        ).await.unwrap();
+
+        let result = get_task(State(ts.state.clone()), Path(task_id.clone())).await.unwrap();
+
+        assert_eq!(result.photo_count, 2);
+        assert_eq!(result.storage_used, 1570000 + 2003800);
+    }
+
+    #[tokio::test]
+    async fn test_list_tasks_photo_summary() {
+        let ts = create_test_state().await;
+
+        // Create two tasks
+        let (_, Json(task1)) = create_task(
+            State(ts.state.clone()),
+            Json(CreateTaskRequest { context: "task 1".to_string() }),
+        ).await.unwrap();
+        let (_, Json(task2)) = create_task(
+            State(ts.state.clone()),
+            Json(CreateTaskRequest { context: "task 2".to_string() }),
+        ).await.unwrap();
+
+        // Add photos to task 1
+        ts.state.photo_store.create(Photo {
+            photo_id: "photo_1".to_string(),
+            task_id: task1.task_id.clone(),
+            filename: "photo1.jpg".to_string(),
+            size_bytes: 1000000,
+            uploaded_at: Utc::now(),
+        }).await.unwrap();
+        ts.state.photo_store.create(Photo {
+            photo_id: "photo_2".to_string(),
+            task_id: task1.task_id.clone(),
+            filename: "photo2.jpg".to_string(),
+            size_bytes: 2000000,
+            uploaded_at: Utc::now(),
+        }).await.unwrap();
+
+        // Add one photo to task 2
+        ts.state.photo_store.create(Photo {
+            photo_id: "photo_3".to_string(),
+            task_id: task2.task_id.clone(),
+            filename: "photo3.jpg".to_string(),
+            size_bytes: 500000,
+            uploaded_at: Utc::now(),
+        }).await.unwrap();
+
+        let Json(summaries) = list_tasks(State(ts.state.clone())).await.unwrap();
+
+        assert_eq!(summaries.len(), 2);
+
+        let summary1 = summaries.iter().find(|s| s.task_id == task1.task_id).unwrap();
+        assert_eq!(summary1.photo_count, 2);
+        assert_eq!(summary1.storage_used, 3000000);
+
+        let summary2 = summaries.iter().find(|s| s.task_id == task2.task_id).unwrap();
+        assert_eq!(summary2.photo_count, 1);
+        assert_eq!(summary2.storage_used, 500000);
     }
 }

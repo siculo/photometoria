@@ -123,7 +123,7 @@ pub struct TaskResponse {
 ///   "task_id": "task_abc",
 ///   "context": "vacation in SF",
 ///   "photo_count": 15,
-///   "storage_used_mb": 45.2,
+///   "storage_used": 243434374,
 ///   "created_at": "2024-01-15T10:30:00Z",
 ///   "job_count": 2
 /// }
@@ -139,8 +139,8 @@ pub struct TaskSummary {
     /// Number of photos uploaded to this task
     pub photo_count: usize,
 
-    /// Total storage used by photos in this task (MB)
-    pub storage_used_mb: f64,
+    /// Total storage used by photos in this task in bytes
+    pub storage_used: u64,
 
     /// Task creation timestamp (ISO 8601)
     pub created_at: DateTime<Utc>,
@@ -160,7 +160,7 @@ pub struct TaskSummary {
 ///   "context": "vacation in SF",
 ///   "created_at": "2024-01-15T10:30:00Z",
 ///   "photo_count": 15,
-///   "storage_used_mb": 45.2
+///   "storage_used": 42378436
 /// }
 /// ```
 ///
@@ -180,8 +180,8 @@ pub struct TaskDetail {
     /// Number of photos uploaded to this task
     pub photo_count: usize,
 
-    /// Total storage used by photos in this task (MB)
-    pub storage_used_mb: f64,
+    /// Total storage used by photos in this task in bytes
+    pub storage_used: u64,
     // TODO: Uncomment and use Vec<JobSummary> when job model is implemented
     // /// List of jobs associated with this task
     // pub jobs: Vec<JobSummary>,
