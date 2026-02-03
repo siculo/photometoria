@@ -22,43 +22,43 @@ This example demonstrates a typical workflow from task creation to cleanup:
 1. Client creates a task
    POST /api/tasks
    {context: "vacation in San Francisco"}
-   ← {task_id: "task_abc"}
+   ← {task_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}
 
 2. Client uploads photos (single or batch)
-   POST /api/tasks/task_abc/photos
+   POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/photos
    {files: [photo1.jpg, photo2.jpg, ...]}
-   ← {uploaded: [{photo_id: "p1", ...}, ...], failed: [], uploaded_size_bytes: ...}
+   ← {uploaded: [{photo_id: "f0e1d2c3-b4a5-6789-0fed-cba987654321", ...}, ...], failed: [], uploaded_size_bytes: ...}
 
 3. Client starts analysis job
-   POST /api/tasks/task_abc/jobs
+   POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/jobs
    {
      model: "qwen2-vl:8b",
      photo_ids: null  // null = all photos in task
    }
-   ← {job_id: "job_xyz", status: "queued"}
+   ← {job_id: "12345678-abcd-ef01-2345-6789abcdef01", status: "queued"}
 
 4. Client monitors via SSE
-   GET /api/jobs/job_xyz/stream
+   GET /api/jobs/12345678-abcd-ef01-2345-6789abcdef01/stream
    ← Real-time events as job progresses
 
 5. Client retrieves results
-   GET /api/jobs/job_xyz/results
+   GET /api/jobs/12345678-abcd-ef01-2345-6789abcdef01/results
    ← {results: [{photo_id, status, tags}, ...]}
 
 6. If some photos failed, retry them
-   POST /api/jobs/job_xyz/retry
-   ← {job_id: "job_new", ...}
+   POST /api/jobs/12345678-abcd-ef01-2345-6789abcdef01/retry
+   ← {job_id: "fedcba98-7654-3210-fedc-ba9876543210", ...}
 
 7. Or re-analyze with different model
-   POST /api/tasks/task_abc/jobs
+   POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/jobs
    {
      model: "llava:latest",
      photo_ids: null
    }
-   ← {job_id: "job_uvw"}
+   ← {job_id: "abcdef01-2345-6789-abcd-ef0123456789"}
 
 8. When done, cleanup
-   DELETE /api/tasks/task_abc
+   DELETE /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890
    → Deletes task, all photos, and all associated jobs
 ```
 
@@ -134,7 +134,7 @@ Creates a new task. Multiple tasks can be active simultaneously.
 
 ```json
 {
-  "task_id": "task_abc",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "context": "vacation in San Francisco, summer 2024",
   "created_at": "2024-01-15T10:30:00Z"
 }
@@ -150,10 +150,10 @@ Returns list of all tasks.
 {
   "tasks": [
     {
-      "task_id": "task_abc",
+      "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "context": "...",
       "photo_count": 15,
-      "storage_used_mb": 45.2,
+      "storage_used": 47395430,
       "created_at": "...",
       "job_count": 2
     }
@@ -169,14 +169,14 @@ Returns detailed information about a specific task, including all associated job
 
 ```json
 {
-  "task_id": "task_abc",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "context": "vacation in SF",
   "created_at": "2024-01-15T10:30:00Z",
   "photo_count": 15,
-  "storage_used_mb": 45.2,
+  "storage_used": 47395430,
   "jobs": [
     {
-      "job_id": "job_xyz",
+      "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
       "status": "completed",
       "model": "qwen2-vl:8b",
       "photo_count": 15,
@@ -184,7 +184,7 @@ Returns detailed information about a specific task, including all associated job
       "completed_at": "2024-01-15T10:45:00Z"
     },
     {
-      "job_id": "job_uvw",
+      "job_id": "abcdef01-2345-6789-abcd-ef0123456789",
       "status": "processing",
       "model": "llava",
       "photo_count": 15,
@@ -210,7 +210,7 @@ Updates the task context.
 
 ```json
 {
-  "task_id": "task_abc",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "context": "updated context information"
 }
 ```
@@ -256,13 +256,13 @@ The response always includes both `uploaded` (successful) and `failed` arrays.
   "uploaded": [
     {
       "client_id": "/Users/photos/IMG_001.jpg",
-      "photo_id": "p1",
+      "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
       "filename": "IMG_001.jpg",
       "size_bytes": 4200000
     },
     {
       "client_id": "/Users/photos/IMG_002.jpg",
-      "photo_id": "p2",
+      "photo_id": "a9b8c7d6-e5f4-3210-9876-543210fedcba",
       "filename": "IMG_002.jpg",
       "size_bytes": 3800000
     }
@@ -298,11 +298,11 @@ Returns list of photo IDs in the task.
 ```json
 {
   "photo_ids": [
-    "p1",
-    "p2",
-    "p3",
-    "p4",
-    "p5"
+    "f0e1d2c3-b4a5-6789-0fed-cba987654321",
+    "a9b8c7d6-e5f4-3210-9876-543210fedcba",
+    "11111111-2222-3333-4444-555555555555",
+    "66666666-7777-8888-9999-aaaaaaaaaaaa",
+    "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
   ],
   "count": 5
 }
@@ -316,8 +316,8 @@ Returns detailed information about a specific photo.
 
 ```json
 {
-  "photo_id": "p1",
-  "task_id": "task_abc",
+  "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "filename": "IMG_1234.jpg",
   "size_bytes": 4200000,
   "uploaded_at": "2024-01-15T10:32:00Z"
@@ -352,8 +352,8 @@ Creates and starts a new analysis job.
 
 ```json
 {
-  "job_id": "job_xyz",
-  "task_id": "task_abc",
+  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
   "photo_count": 15,
   "model": "qwen2-vl:8b",
@@ -376,9 +376,9 @@ Retries only the failed photos from a completed job, using the same model and en
 
 ```json
 {
-  "job_id": "job_new_123",
-  "parent_job_id": "job_xyz",
-  "task_id": "task_abc",
+  "job_id": "fedcba98-7654-3210-fedc-ba9876543210",
+  "parent_job_id": "12345678-abcd-ef01-2345-6789abcdef01",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
   "photo_count": 2,
   // only failed photos
@@ -403,8 +403,8 @@ Returns list of all jobs across all tasks.
 {
   "jobs": [
     {
-      "job_id": "job_xyz",
-      "task_id": "task_abc",
+      "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
+      "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "status": "completed",
       "model": "qwen2-vl:8b",
       "photo_count": 15,
@@ -423,8 +423,8 @@ Returns current state of a specific job.
 
 ```json
 {
-  "job_id": "job_xyz",
-  "task_id": "task_abc",
+  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "processing",
   "model": "qwen2-vl:8b",
   "photo_count": 15,
@@ -432,7 +432,7 @@ Returns current state of a specific job.
     "completed": 7,
     "failed": 1,
     "remaining": 7,
-    "current_photo_id": "p8"
+    "current_photo_id": "11111111-2222-3333-4444-555555555555"
   },
   "created_at": "2024-01-15T10:35:00Z"
 }
@@ -446,25 +446,25 @@ Returns analysis results. Available even for jobs in "processing" or "cancelled"
 
 ```json
 {
-  "job_id": "job_xyz",
-  "task_id": "task_abc",
+  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "completed",
   "model": "qwen2-vl:8b",
   "results": [
     {
-      "photo_id": "p1",
+      "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
       "status": "completed",
       "tags": "golden gate bridge, sunset, long exposure, red suspension cables",
       "processed_at": "2024-01-15T10:36:00Z"
     },
     {
-      "photo_id": "p2",
+      "photo_id": "a9b8c7d6-e5f4-3210-9876-543210fedcba",
       "status": "failed",
       "error": "ollama timeout",
       "tags": null
     },
     {
-      "photo_id": "p3",
+      "photo_id": "11111111-2222-3333-4444-555555555555",
       "status": "completed",
       "tags": "san francisco bay, sailboat, clear sky, afternoon light"
     }
@@ -488,7 +488,7 @@ Opens a Server-Sent Events (SSE) stream for real-time job updates.
 ```json
 {
   "event": "started",
-  "job_id": "job_xyz",
+  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "total_photos": 15
 }
 ```
@@ -498,7 +498,7 @@ Opens a Server-Sent Events (SSE) stream for real-time job updates.
 ```json
 {
   "event": "progress",
-  "photo_id": "p1",
+  "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
   "status": "completed",
   "progress": "1/15"
 }
@@ -509,7 +509,7 @@ Opens a Server-Sent Events (SSE) stream for real-time job updates.
 ```json
 {
   "event": "progress",
-  "photo_id": "p2",
+  "photo_id": "a9b8c7d6-e5f4-3210-9876-543210fedcba",
   "status": "failed",
   "error": "ollama timeout",
   "progress": "2/15"
@@ -521,7 +521,7 @@ Opens a Server-Sent Events (SSE) stream for real-time job updates.
 ```json
 {
   "event": "completed",
-  "job_id": "job_xyz",
+  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "total": 15,
   "succeeded": 13,
   "failed": 2
@@ -533,7 +533,7 @@ Opens a Server-Sent Events (SSE) stream for real-time job updates.
 ```json
 {
   "event": "cancelled",
-  "job_id": "job_xyz"
+  "job_id": "12345678-abcd-ef01-2345-6789abcdef01"
 }
 ```
 
@@ -555,7 +555,7 @@ Cancels and deletes a job.
 
 ```json
 {
-  "job_id": "job_xyz",
+  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "status": "cancelled"
 }
 ```
