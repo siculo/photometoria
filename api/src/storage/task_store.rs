@@ -6,6 +6,7 @@
 
 use async_trait::async_trait;
 use thiserror::Error;
+use uuid::Uuid;
 
 use crate::models::Task;
 
@@ -18,11 +19,11 @@ use crate::models::Task;
 pub enum TaskStoreError {
     /// The requested task was not found.
     #[error("Task not found: {0}")]
-    NotFound(String),
+    NotFound(Uuid),
 
     /// A task with the same ID already exists.
     #[error("Task already exists: {0}")]
-    AlreadyExists(String),
+    AlreadyExists(Uuid),
 
     /// A generic storage error occurred.
     #[error("Storage error: {0}")]
@@ -97,12 +98,12 @@ pub trait TaskStore: Send + Sync {
     ///
     /// # Example
     /// ```ignore
-    /// match store.get("task_123").await? {
+    /// match store.get(task_id).await? {
     ///     Some(task) => println!("Found: {:?}", task),
     ///     None => println!("Task not found"),
     /// }
     /// ```
-    async fn get(&self, task_id: &str) -> TaskStoreResult<Option<Task>>;
+    async fn get(&self, task_id: Uuid) -> TaskStoreResult<Option<Task>>;
 
     /// Lists all tasks in the store.
     ///
@@ -155,9 +156,9 @@ pub trait TaskStore: Send + Sync {
     ///
     /// # Example
     /// ```ignore
-    /// store.delete("task_123").await?;
+    /// store.delete(task_id).await?;
     /// ```
-    async fn delete(&self, task_id: &str) -> TaskStoreResult<()>;
+    async fn delete(&self, task_id: Uuid) -> TaskStoreResult<()>;
 
     /// Checks if a task exists.
     ///
@@ -175,12 +176,12 @@ pub trait TaskStore: Send + Sync {
     ///
     /// # Example
     /// ```ignore
-    /// if store.exists("task_123").await? {
+    /// if store.exists(task_id).await? {
     ///     println!("Task exists");
     /// }
     /// ```
     #[allow(dead_code)]
-    async fn exists(&self, task_id: &str) -> TaskStoreResult<bool>;
+    async fn exists(&self, task_id: Uuid) -> TaskStoreResult<bool>;
 
     /// Returns the total number of tasks in the store.
     ///

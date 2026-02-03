@@ -6,6 +6,7 @@
 
 use async_trait::async_trait;
 use thiserror::Error;
+use uuid::Uuid;
 
 use crate::models::Job;
 
@@ -18,11 +19,11 @@ use crate::models::Job;
 pub enum JobStoreError {
     /// The requested job was not found.
     #[error("Job not found: {0}")]
-    NotFound(String),
+    NotFound(Uuid),
 
     /// A job with the same ID already exists.
     #[error("Job already exists: {0}")]
-    AlreadyExists(String),
+    AlreadyExists(Uuid),
 
     /// A generic storage error occurred.
     #[error("Storage error: {0}")]
@@ -79,7 +80,7 @@ pub trait JobStore: Send + Sync {
     /// * `Ok(Some(Job))` - The job if found
     /// * `Ok(None)` - If no job with the given ID exists
     /// * `Err(StorageError)` - If a storage-level error occurs
-    async fn get(&self, job_id: &str) -> JobStoreResult<Option<Job>>;
+    async fn get(&self, job_id: Uuid) -> JobStoreResult<Option<Job>>;
 
     /// Lists all jobs in the store.
     ///
@@ -103,7 +104,7 @@ pub trait JobStore: Send + Sync {
     ///
     /// # Note
     /// Jobs are sorted by `created_at` (oldest first) for consistent ordering.
-    async fn list_by_task(&self, task_id: &str) -> JobStoreResult<Vec<Job>>;
+    async fn list_by_task(&self, task_id: Uuid) -> JobStoreResult<Vec<Job>>;
 
     /// Updates an existing job.
     ///
@@ -128,7 +129,7 @@ pub trait JobStore: Send + Sync {
     /// * `Ok(())` - Job successfully deleted
     /// * `Err(NotFound)` - If no job with the given ID exists
     /// * `Err(StorageError)` - If a storage-level error occurs
-    async fn delete(&self, job_id: &str) -> JobStoreResult<()>;
+    async fn delete(&self, job_id: Uuid) -> JobStoreResult<()>;
 
     /// Deletes all jobs belonging to a specific task.
     ///
@@ -141,7 +142,7 @@ pub trait JobStore: Send + Sync {
     ///
     /// # Note
     /// This is used when deleting a task to clean up all associated jobs.
-    async fn delete_by_task(&self, task_id: &str) -> JobStoreResult<usize>;
+    async fn delete_by_task(&self, task_id: Uuid) -> JobStoreResult<usize>;
 
     /// Checks if a job exists.
     ///
@@ -153,7 +154,7 @@ pub trait JobStore: Send + Sync {
     /// * `Ok(false)` - Job does not exist
     /// * `Err(StorageError)` - If a storage-level error occurs
     #[allow(dead_code)]
-    async fn exists(&self, job_id: &str) -> JobStoreResult<bool>;
+    async fn exists(&self, job_id: Uuid) -> JobStoreResult<bool>;
 
     /// Returns the count of jobs belonging to a specific task.
     ///
@@ -166,5 +167,5 @@ pub trait JobStore: Send + Sync {
     ///
     /// # Note
     /// This is used for TaskSummary.job_count.
-    async fn count_by_task(&self, task_id: &str) -> JobStoreResult<usize>;
+    async fn count_by_task(&self, task_id: Uuid) -> JobStoreResult<usize>;
 }

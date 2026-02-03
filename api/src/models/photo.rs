@@ -24,11 +24,11 @@ use uuid::Uuid;
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Photo {
-    /// Unique identifier (UUID as String)
-    pub photo_id: String,
+    /// Unique identifier (UUID)
+    pub photo_id: Uuid,
 
     /// Reference to the parent Task
-    pub task_id: String,
+    pub task_id: Uuid,
 
     /// Original filename from upload
     pub filename: String,
@@ -44,24 +44,24 @@ impl Photo {
     /// Creates a new Photo with generated UUID and current timestamp.
     ///
     /// # Arguments
-    /// * `task_id` - The ID of the parent Task
+    /// * `task_id` - The UUID of the parent Task
     /// * `filename` - Original filename from upload
     /// * `size_bytes` - File size in bytes
     ///
     /// # Example
     /// ```
     /// use photometoria_rest_api::models::Photo;
+    /// use uuid::Uuid;
     ///
     /// let photo = Photo::new(
-    ///     "task_123".to_string(),
+    ///     Uuid::new_v4(),
     ///     "IMG_1234.jpg".to_string(),
     ///     4_200_000,
     /// );
-    /// assert!(!photo.photo_id.is_empty());
     /// ```
-    pub fn new(task_id: String, filename: String, size_bytes: u64) -> Self {
+    pub fn new(task_id: Uuid, filename: String, size_bytes: u64) -> Self {
         Self {
-            photo_id: Uuid::new_v4().to_string(),
+            photo_id: Uuid::new_v4(),
             task_id,
             filename,
             size_bytes,
@@ -81,8 +81,8 @@ impl Photo {
 /// # Example JSON
 /// ```json
 /// {
-///   "photo_id": "p1",
-///   "task_id": "task_abc",
+///   "photo_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "task_id": "550e8400-e29b-41d4-a716-446655440001",
 ///   "filename": "IMG_1234.jpg",
 ///   "size_bytes": 4200000,
 ///   "uploaded_at": "2024-01-15T10:32:00Z"
@@ -91,10 +91,10 @@ impl Photo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhotoResponse {
     /// Unique photo identifier
-    pub photo_id: String,
+    pub photo_id: Uuid,
 
     /// Parent task identifier
-    pub task_id: String,
+    pub task_id: Uuid,
 
     /// Original filename
     pub filename: String,
@@ -113,7 +113,7 @@ pub struct PhotoResponse {
 /// # Example JSON
 /// ```json
 /// {
-///   "photo_id": "p1",
+///   "photo_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "filename": "IMG_1234.jpg",
 ///   "size_bytes": 4200000
 /// }
@@ -121,7 +121,7 @@ pub struct PhotoResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhotoSummary {
     /// Unique photo identifier
-    pub photo_id: String,
+    pub photo_id: Uuid,
 
     /// Original filename
     pub filename: String,
@@ -171,7 +171,7 @@ pub struct UploadedPhoto {
     pub client_id: String,
 
     /// Unique photo identifier
-    pub photo_id: String,
+    pub photo_id: Uuid,
 
     /// Original filename
     pub filename: String,
@@ -200,14 +200,14 @@ pub struct FailedUpload {
 /// # Example JSON
 /// ```json
 /// {
-///   "photo_ids": ["p1", "p2", "p3"],
-///   "count": 3
+///   "photo_ids": ["550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001"],
+///   "count": 2
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhotoListResponse {
     /// IDs of photos in the task
-    pub photo_ids: Vec<String>,
+    pub photo_ids: Vec<Uuid>,
 
     /// Total count of photos
     pub count: usize,
@@ -260,7 +260,7 @@ impl From<Photo> for PhotoSummary {
 impl From<&Photo> for PhotoSummary {
     fn from(photo: &Photo) -> Self {
         Self {
-            photo_id: photo.photo_id.clone(),
+            photo_id: photo.photo_id,
             filename: photo.filename.clone(),
             size_bytes: photo.size_bytes,
         }
@@ -277,26 +277,24 @@ mod tests {
 
     #[test]
     fn test_photo_new_generates_uuid() {
-        let photo = Photo::new("task_123".to_string(), "test.jpg".to_string(), 1_000_000);
-        assert!(!photo.photo_id.is_empty());
-        assert!(Uuid::parse_str(&photo.photo_id).is_ok());
+        let task_id = Uuid::new_v4();
+        let photo = Photo::new(task_id, "test.jpg".to_string(), 1_000_000);
+        assert!(!photo.photo_id.is_nil());
     }
 
     #[test]
     fn test_photo_new_sets_fields() {
-        let photo = Photo::new(
-            "task_123".to_string(),
-            "vacation.jpg".to_string(),
-            5_242_880,
-        );
-        assert_eq!(photo.task_id, "task_123");
+        let task_id = Uuid::new_v4();
+        let photo = Photo::new(task_id, "vacation.jpg".to_string(), 5_242_880);
+        assert_eq!(photo.task_id, task_id);
         assert_eq!(photo.filename, "vacation.jpg");
         assert_eq!(photo.size_bytes, 5_242_880);
     }
 
     #[test]
     fn test_photo_to_response_conversion() {
-        let photo = Photo::new("task_123".to_string(), "test.jpg".to_string(), 2_097_152);
+        let task_id = Uuid::new_v4();
+        let photo = Photo::new(task_id, "test.jpg".to_string(), 2_097_152);
         let response: PhotoResponse = photo.clone().into();
 
         assert_eq!(response.photo_id, photo.photo_id);
@@ -308,7 +306,8 @@ mod tests {
 
     #[test]
     fn test_photo_to_summary_conversion() {
-        let photo = Photo::new("task_123".to_string(), "test.jpg".to_string(), 1_048_576);
+        let task_id = Uuid::new_v4();
+        let photo = Photo::new(task_id, "test.jpg".to_string(), 1_048_576);
         let summary: PhotoSummary = photo.clone().into();
 
         assert_eq!(summary.photo_id, photo.photo_id);
@@ -318,7 +317,8 @@ mod tests {
 
     #[test]
     fn test_photo_serialization() {
-        let photo = Photo::new("task_123".to_string(), "test.jpg".to_string(), 1_000_000);
+        let task_id = Uuid::new_v4();
+        let photo = Photo::new(task_id, "test.jpg".to_string(), 1_000_000);
         let json = serde_json::to_string(&photo).unwrap();
 
         assert!(json.contains("photo_id"));
@@ -331,8 +331,8 @@ mod tests {
     #[test]
     fn test_photo_response_serialization() {
         let response = PhotoResponse {
-            photo_id: "p1".to_string(),
-            task_id: "task_123".to_string(),
+            photo_id: Uuid::new_v4(),
+            task_id: Uuid::new_v4(),
             filename: "test.jpg".to_string(),
             size_bytes: 4_200_000,
             uploaded_at: Utc::now(),
@@ -348,13 +348,13 @@ mod tests {
             uploaded: vec![
                 UploadedPhoto {
                     client_id: "/path/to/IMG_001.jpg".to_string(),
-                    photo_id: "p1".to_string(),
+                    photo_id: Uuid::new_v4(),
                     filename: "IMG_001.jpg".to_string(),
                     size_bytes: 4_200_000,
                 },
                 UploadedPhoto {
                     client_id: "/path/to/IMG_002.jpg".to_string(),
-                    photo_id: "p2".to_string(),
+                    photo_id: Uuid::new_v4(),
                     filename: "IMG_002.jpg".to_string(),
                     size_bytes: 4_300_000,
                 },

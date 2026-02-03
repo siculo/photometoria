@@ -8,6 +8,7 @@ use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use std::sync::Arc;
 use tracing::{debug, info};
+use uuid::Uuid;
 
 use crate::models::Job;
 
@@ -36,7 +37,7 @@ use super::{JobStore, JobStoreError, JobStoreResult};
 /// - Single-user scenarios
 /// - Prototyping before adding database persistence
 pub struct InMemoryJobStore {
-    jobs: Arc<DashMap<String, Job>>,
+    jobs: Arc<DashMap<Uuid, Job>>,
 }
 
 impl InMemoryJobStore {
@@ -61,11 +62,11 @@ impl Default for InMemoryJobStore {
 #[async_trait]
 impl JobStore for InMemoryJobStore {
     async fn create(&self, job: Job) -> JobStoreResult<Job> {
-        let job_id = job.job_id.clone();
+        let job_id = job.job_id;
 
         debug!("Attempting to create job: {}", job_id);
 
-        match self.jobs.entry(job_id.clone()) {
+        match self.jobs.entry(job_id) {
             Entry::Occupied(_) => Err(JobStoreError::AlreadyExists(job_id)),
             Entry::Vacant(entry) => {
                 entry.insert(job.clone());
@@ -81,10 +82,10 @@ impl JobStore for InMemoryJobStore {
         }
     }
 
-    async fn get(&self, job_id: &str) -> JobStoreResult<Option<Job>> {
+    async fn get(&self, job_id: Uuid) -> JobStoreResult<Option<Job>> {
         debug!("Retrieving job: {}", job_id);
 
-        Ok(self.jobs.get(job_id).map(|entry| entry.value().clone()))
+        Ok(self.jobs.get(&job_id).map(|entry| entry.value().clone()))
     }
 
     async fn list(&self) -> JobStoreResult<Vec<Job>> {
@@ -103,7 +104,7 @@ impl JobStore for InMemoryJobStore {
         Ok(jobs)
     }
 
-    async fn list_by_task(&self, task_id: &str) -> JobStoreResult<Vec<Job>> {
+    async fn list_by_task(&self, task_id: Uuid) -> JobStoreResult<Vec<Job>> {
         debug!("Listing jobs for task: {}", task_id);
 
         let mut jobs: Vec<Job> = self
@@ -121,7 +122,7 @@ impl JobStore for InMemoryJobStore {
     }
 
     async fn update(&self, job: Job) -> JobStoreResult<Job> {
-        let job_id = job.job_id.clone();
+        let job_id = job.job_id;
 
         debug!("Updating job: {}", job_id);
 
@@ -139,10 +140,10 @@ impl JobStore for InMemoryJobStore {
         }
     }
 
-    async fn delete(&self, job_id: &str) -> JobStoreResult<()> {
+    async fn delete(&self, job_id: Uuid) -> JobStoreResult<()> {
         debug!("Deleting job: {}", job_id);
 
-        match self.jobs.remove(job_id) {
+        match self.jobs.remove(&job_id) {
             Some((_, job)) => {
                 info!(
                     "Job deleted successfully: {} (task: {}, status: {})",
@@ -150,19 +151,19 @@ impl JobStore for InMemoryJobStore {
                 );
                 Ok(())
             }
-            None => Err(JobStoreError::NotFound(job_id.to_string())),
+            None => Err(JobStoreError::NotFound(job_id)),
         }
     }
 
-    async fn delete_by_task(&self, task_id: &str) -> JobStoreResult<usize> {
+    async fn delete_by_task(&self, task_id: Uuid) -> JobStoreResult<usize> {
         debug!("Deleting all jobs for task: {}", task_id);
 
         // Collect job_ids to delete (can't delete while iterating)
-        let job_ids: Vec<String> = self
+        let job_ids: Vec<Uuid> = self
             .jobs
             .iter()
             .filter(|entry| entry.value().task_id == task_id)
-            .map(|entry| entry.key().clone())
+            .map(|entry| *entry.key())
             .collect();
 
         let count = job_ids.len();
@@ -175,13 +176,13 @@ impl JobStore for InMemoryJobStore {
         Ok(count)
     }
 
-    async fn exists(&self, job_id: &str) -> JobStoreResult<bool> {
+    async fn exists(&self, job_id: Uuid) -> JobStoreResult<bool> {
         debug!("Checking if job exists: {}", job_id);
 
-        Ok(self.jobs.contains_key(job_id))
+        Ok(self.jobs.contains_key(&job_id))
     }
 
-    async fn count_by_task(&self, task_id: &str) -> JobStoreResult<usize> {
+    async fn count_by_task(&self, task_id: Uuid) -> JobStoreResult<usize> {
         debug!("Counting jobs for task: {}", task_id);
 
         let count = self
@@ -209,18 +210,16 @@ mod tests {
     }
 
     // Helper function to create a test job
-    fn create_test_job(task_id: &str, model: &str, photo_ids: Vec<&str>) -> Job {
-        Job::new(
-            task_id.to_string(),
-            model.to_string(),
-            photo_ids.into_iter().map(String::from).collect(),
-        )
+    fn create_test_job(task_id: Uuid, model: &str, photo_ids: Vec<Uuid>) -> Job {
+        Job::new(task_id, model.to_string(), photo_ids)
     }
 
     #[tokio::test]
     async fn test_create_job() {
         let store = create_store();
-        let job = create_test_job("task_123", "qwen2-vl:8b", vec!["p1", "p2"]);
+        let task_id = Uuid::new_v4();
+        let photo_ids = vec![Uuid::new_v4(), Uuid::new_v4()];
+        let job = create_test_job(task_id, "qwen2-vl:8b", photo_ids);
 
         let result = store.create(job.clone()).await;
 
@@ -232,14 +231,16 @@ mod tests {
         assert_eq!(created.status, JobStatus::Queued);
 
         // Verify it exists in the store
-        let exists = store.exists(&job.job_id).await.unwrap();
+        let exists = store.exists(job.job_id).await.unwrap();
         assert!(exists);
     }
 
     #[tokio::test]
     async fn test_create_duplicate_fails() {
         let store = create_store();
-        let job = create_test_job("task_123", "qwen2-vl:8b", vec!["p1"]);
+        let task_id = Uuid::new_v4();
+        let photo_ids = vec![Uuid::new_v4()];
+        let job = create_test_job(task_id, "qwen2-vl:8b", photo_ids);
 
         // First creation should succeed
         store.create(job.clone()).await.unwrap();
@@ -259,11 +260,13 @@ mod tests {
     #[tokio::test]
     async fn test_get_existing_job() {
         let store = create_store();
-        let job = create_test_job("task_123", "llava", vec!["p1", "p2", "p3"]);
+        let task_id = Uuid::new_v4();
+        let photo_ids = vec![Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
+        let job = create_test_job(task_id, "llava", photo_ids);
 
         store.create(job.clone()).await.unwrap();
 
-        let result = store.get(&job.job_id).await.unwrap();
+        let result = store.get(job.job_id).await.unwrap();
 
         assert!(result.is_some());
         let retrieved = result.unwrap();
@@ -277,7 +280,7 @@ mod tests {
     async fn test_get_nonexistent_job() {
         let store = create_store();
 
-        let result = store.get("nonexistent_id").await.unwrap();
+        let result = store.get(Uuid::new_v4()).await.unwrap();
 
         assert!(result.is_none());
     }
@@ -287,8 +290,10 @@ mod tests {
         let store = create_store();
 
         // Create jobs for different tasks
-        let job1 = create_test_job("task_A", "qwen2-vl:8b", vec!["p1"]);
-        let job2 = create_test_job("task_B", "llava", vec!["p2"]);
+        let task_a = Uuid::new_v4();
+        let task_b = Uuid::new_v4();
+        let job1 = create_test_job(task_a, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job2 = create_test_job(task_b, "llava", vec![Uuid::new_v4()]);
 
         store.create(job1.clone()).await.unwrap();
         store.create(job2.clone()).await.unwrap();
@@ -303,33 +308,38 @@ mod tests {
         let store = create_store();
 
         // Create jobs for two different tasks
-        let job1 = create_test_job("task_A", "qwen2-vl:8b", vec!["p1"]);
-        let job2 = create_test_job("task_A", "llava", vec!["p1"]);
-        let job3 = create_test_job("task_B", "qwen2-vl:8b", vec!["p2"]);
+        let task_a = Uuid::new_v4();
+        let task_b = Uuid::new_v4();
+        let task_c = Uuid::new_v4();
+        let photo_id = Uuid::new_v4();
+        let job1 = create_test_job(task_a, "qwen2-vl:8b", vec![photo_id]);
+        let job2 = create_test_job(task_a, "llava", vec![photo_id]);
+        let job3 = create_test_job(task_b, "qwen2-vl:8b", vec![Uuid::new_v4()]);
 
         store.create(job1).await.unwrap();
         store.create(job2).await.unwrap();
         store.create(job3).await.unwrap();
 
-        // List jobs for task_A
-        let jobs_a = store.list_by_task("task_A").await.unwrap();
+        // List jobs for task_a
+        let jobs_a = store.list_by_task(task_a).await.unwrap();
         assert_eq!(jobs_a.len(), 2);
-        assert!(jobs_a.iter().all(|j| j.task_id == "task_A"));
+        assert!(jobs_a.iter().all(|j| j.task_id == task_a));
 
-        // List jobs for task_B
-        let jobs_b = store.list_by_task("task_B").await.unwrap();
+        // List jobs for task_b
+        let jobs_b = store.list_by_task(task_b).await.unwrap();
         assert_eq!(jobs_b.len(), 1);
-        assert_eq!(jobs_b[0].task_id, "task_B");
+        assert_eq!(jobs_b[0].task_id, task_b);
 
         // List jobs for nonexistent task
-        let jobs_c = store.list_by_task("task_C").await.unwrap();
+        let jobs_c = store.list_by_task(task_c).await.unwrap();
         assert!(jobs_c.is_empty());
     }
 
     #[tokio::test]
     async fn test_update_job() {
         let store = create_store();
-        let mut job = create_test_job("task_123", "qwen2-vl:8b", vec!["p1"]);
+        let task_id = Uuid::new_v4();
+        let mut job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
 
         store.create(job.clone()).await.unwrap();
 
@@ -343,14 +353,15 @@ mod tests {
         assert!(updated.started_at.is_some());
 
         // Verify the change persisted
-        let retrieved = store.get(&job.job_id).await.unwrap().unwrap();
+        let retrieved = store.get(job.job_id).await.unwrap().unwrap();
         assert_eq!(retrieved.status, JobStatus::Processing);
     }
 
     #[tokio::test]
     async fn test_update_nonexistent_fails() {
         let store = create_store();
-        let job = create_test_job("task_123", "qwen2-vl:8b", vec!["p1"]);
+        let task_id = Uuid::new_v4();
+        let job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
 
         // Try to update without creating first
         let result = store.update(job.clone()).await;
@@ -367,17 +378,18 @@ mod tests {
     #[tokio::test]
     async fn test_delete_job() {
         let store = create_store();
-        let job = create_test_job("task_123", "qwen2-vl:8b", vec!["p1"]);
+        let task_id = Uuid::new_v4();
+        let job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
 
         store.create(job.clone()).await.unwrap();
 
         // Delete the job
-        let result = store.delete(&job.job_id).await;
+        let result = store.delete(job.job_id).await;
 
         assert!(result.is_ok());
 
         // Verify it no longer exists
-        let retrieved = store.get(&job.job_id).await.unwrap();
+        let retrieved = store.get(job.job_id).await.unwrap();
         assert!(retrieved.is_none());
     }
 
@@ -385,12 +397,13 @@ mod tests {
     async fn test_delete_nonexistent_fails() {
         let store = create_store();
 
-        let result = store.delete("nonexistent_id").await;
+        let nonexistent_id = Uuid::new_v4();
+        let result = store.delete(nonexistent_id).await;
 
         assert!(result.is_err());
         match result {
             Err(JobStoreError::NotFound(id)) => {
-                assert_eq!(id, "nonexistent_id");
+                assert_eq!(id, nonexistent_id);
             }
             _ => panic!("Expected NotFound error"),
         }
@@ -401,24 +414,27 @@ mod tests {
         let store = create_store();
 
         // Create jobs for two different tasks
-        let job1 = create_test_job("task_A", "qwen2-vl:8b", vec!["p1"]);
-        let job2 = create_test_job("task_A", "llava", vec!["p1"]);
-        let job3 = create_test_job("task_B", "qwen2-vl:8b", vec!["p2"]);
+        let task_a = Uuid::new_v4();
+        let task_b = Uuid::new_v4();
+        let photo_id = Uuid::new_v4();
+        let job1 = create_test_job(task_a, "qwen2-vl:8b", vec![photo_id]);
+        let job2 = create_test_job(task_a, "llava", vec![photo_id]);
+        let job3 = create_test_job(task_b, "qwen2-vl:8b", vec![Uuid::new_v4()]);
 
         store.create(job1).await.unwrap();
         store.create(job2).await.unwrap();
         store.create(job3).await.unwrap();
 
-        // Delete all jobs for task_A
-        let deleted = store.delete_by_task("task_A").await.unwrap();
+        // Delete all jobs for task_a
+        let deleted = store.delete_by_task(task_a).await.unwrap();
         assert_eq!(deleted, 2);
 
-        // Verify task_A jobs are gone
-        let jobs_a = store.list_by_task("task_A").await.unwrap();
+        // Verify task_a jobs are gone
+        let jobs_a = store.list_by_task(task_a).await.unwrap();
         assert!(jobs_a.is_empty());
 
-        // Verify task_B job still exists
-        let jobs_b = store.list_by_task("task_B").await.unwrap();
+        // Verify task_b job still exists
+        let jobs_b = store.list_by_task(task_b).await.unwrap();
         assert_eq!(jobs_b.len(), 1);
     }
 
@@ -426,70 +442,76 @@ mod tests {
     async fn test_count_by_task() {
         let store = create_store();
 
+        let task_a = Uuid::new_v4();
+        let task_b = Uuid::new_v4();
+
         // Empty task should have count 0
-        let count = store.count_by_task("task_A").await.unwrap();
+        let count = store.count_by_task(task_a).await.unwrap();
         assert_eq!(count, 0);
 
         // Add jobs
-        let job1 = create_test_job("task_A", "qwen2-vl:8b", vec!["p1"]);
-        let job2 = create_test_job("task_A", "llava", vec!["p1"]);
-        let job3 = create_test_job("task_B", "qwen2-vl:8b", vec!["p2"]);
+        let photo_id = Uuid::new_v4();
+        let job1 = create_test_job(task_a, "qwen2-vl:8b", vec![photo_id]);
+        let job2 = create_test_job(task_a, "llava", vec![photo_id]);
+        let job3 = create_test_job(task_b, "qwen2-vl:8b", vec![Uuid::new_v4()]);
 
         store.create(job1).await.unwrap();
         store.create(job2).await.unwrap();
         store.create(job3).await.unwrap();
 
-        // Count for task_A
-        let count = store.count_by_task("task_A").await.unwrap();
+        // Count for task_a
+        let count = store.count_by_task(task_a).await.unwrap();
         assert_eq!(count, 2);
 
-        // Count for task_B
-        let count = store.count_by_task("task_B").await.unwrap();
+        // Count for task_b
+        let count = store.count_by_task(task_b).await.unwrap();
         assert_eq!(count, 1);
     }
 
     #[tokio::test]
     async fn test_exists() {
         let store = create_store();
-        let job = create_test_job("task_123", "qwen2-vl:8b", vec!["p1"]);
+        let task_id = Uuid::new_v4();
+        let job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
 
         // Should not exist initially
-        let exists = store.exists(&job.job_id).await.unwrap();
+        let exists = store.exists(job.job_id).await.unwrap();
         assert!(!exists);
 
         // Create the job
         store.create(job.clone()).await.unwrap();
 
         // Should exist now
-        let exists = store.exists(&job.job_id).await.unwrap();
+        let exists = store.exists(job.job_id).await.unwrap();
         assert!(exists);
 
         // Random ID should not exist
-        let exists = store.exists("random_id").await.unwrap();
+        let exists = store.exists(Uuid::new_v4()).await.unwrap();
         assert!(!exists);
     }
 
     #[tokio::test]
     async fn test_job_lifecycle_through_store() {
         let store = create_store();
-        let mut job = create_test_job("task_123", "qwen2-vl:8b", vec!["p1", "p2"]);
+        let task_id = Uuid::new_v4();
+        let mut job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4(), Uuid::new_v4()]);
 
         // Create job (Queued)
         store.create(job.clone()).await.unwrap();
-        let retrieved = store.get(&job.job_id).await.unwrap().unwrap();
+        let retrieved = store.get(job.job_id).await.unwrap().unwrap();
         assert_eq!(retrieved.status, JobStatus::Queued);
 
         // Start job (Processing)
         job.start();
         store.update(job.clone()).await.unwrap();
-        let retrieved = store.get(&job.job_id).await.unwrap().unwrap();
+        let retrieved = store.get(job.job_id).await.unwrap().unwrap();
         assert_eq!(retrieved.status, JobStatus::Processing);
         assert!(retrieved.started_at.is_some());
 
         // Complete job
         job.complete();
         store.update(job.clone()).await.unwrap();
-        let retrieved = store.get(&job.job_id).await.unwrap().unwrap();
+        let retrieved = store.get(job.job_id).await.unwrap().unwrap();
         assert_eq!(retrieved.status, JobStatus::Completed);
         assert!(retrieved.completed_at.is_some());
         assert!(retrieved.is_finished());

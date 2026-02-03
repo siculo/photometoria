@@ -4,11 +4,12 @@
 //! with full persistence to the filesystem. Task metadata is stored as JSON files.
 
 use async_trait::async_trait;
-use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use dashmap::DashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
 use crate::models::Task;
 
@@ -49,7 +50,7 @@ use super::{TaskStore, TaskStoreError, TaskStoreResult};
 /// - On startup, all existing task.json files are loaded into memory
 /// - Deleting a task removes both the in-memory entry and the entire directory
 pub struct FileSystemTaskStore {
-    tasks: Arc<DashMap<String, Task>>,
+    tasks: Arc<DashMap<Uuid, Task>>,
     storage_path: PathBuf,
 }
 
@@ -71,12 +72,12 @@ impl FileSystemTaskStore {
     }
 
     /// Returns the directory path for a specific task.
-    fn task_dir(&self, task_id: &str) -> PathBuf {
-        self.storage_path.join("tasks").join(task_id)
+    fn task_dir(&self, task_id: Uuid) -> PathBuf {
+        self.storage_path.join("tasks").join(task_id.to_string())
     }
 
     /// Returns the path to the task's metadata file.
-    fn task_json_path(&self, task_id: &str) -> PathBuf {
+    fn task_json_path(&self, task_id: Uuid) -> PathBuf {
         self.task_dir(task_id).join("task.json")
     }
 
@@ -115,7 +116,7 @@ impl FileSystemTaskStore {
 
             match self.load_task_from_file(&task_json).await {
                 Ok(task) => {
-                    self.tasks.insert(task.task_id.clone(), task);
+                    self.tasks.insert(task.task_id, task);
                     loaded_count += 1;
                 }
                 Err(e) => {
@@ -144,7 +145,7 @@ impl FileSystemTaskStore {
 
     /// Saves a task's metadata to the filesystem.
     async fn save_task_to_file(&self, task: &Task) -> TaskStoreResult<()> {
-        let path = self.task_json_path(&task.task_id);
+        let path = self.task_json_path(task.task_id);
         let content = serde_json::to_string_pretty(task).map_err(|e| {
             TaskStoreError::StorageError(format!("Failed to serialize task: {}", e))
         })?;
@@ -166,16 +167,16 @@ impl FileSystemTaskStore {
 #[async_trait]
 impl TaskStore for FileSystemTaskStore {
     async fn create(&self, task: Task) -> TaskStoreResult<Task> {
-        let task_id = task.task_id.clone();
+        let task_id = task.task_id;
 
         debug!("Attempting to create task: {}", task_id);
 
         // Use entry API to atomically check and insert
-        match self.tasks.entry(task_id.clone()) {
+        match self.tasks.entry(task_id) {
             Entry::Occupied(_) => Err(TaskStoreError::AlreadyExists(task_id)),
             Entry::Vacant(entry) => {
                 // Create task directory on filesystem
-                let task_dir = self.task_dir(&task_id);
+                let task_dir = self.task_dir(task_id);
                 if let Err(e) = tokio::fs::create_dir_all(&task_dir).await {
                     error!("Failed to create task directory {:?}: {}", task_dir, e);
                     return Err(TaskStoreError::StorageError(format!(
@@ -198,11 +199,11 @@ impl TaskStore for FileSystemTaskStore {
         }
     }
 
-    async fn get(&self, task_id: &str) -> TaskStoreResult<Option<Task>> {
+    async fn get(&self, task_id: Uuid) -> TaskStoreResult<Option<Task>> {
         debug!("Retrieving task: {}", task_id);
 
         // Lock-free read with DashMap
-        Ok(self.tasks.get(task_id).map(|entry| entry.value().clone()))
+        Ok(self.tasks.get(&task_id).map(|entry| entry.value().clone()))
     }
 
     async fn list(&self) -> TaskStoreResult<Vec<Task>> {
@@ -223,7 +224,7 @@ impl TaskStore for FileSystemTaskStore {
     }
 
     async fn update(&self, task: Task) -> TaskStoreResult<Task> {
-        let task_id = task.task_id.clone();
+        let task_id = task.task_id;
 
         debug!("Updating task: {}", task_id);
 
@@ -252,11 +253,11 @@ impl TaskStore for FileSystemTaskStore {
         }
     }
 
-    async fn delete(&self, task_id: &str) -> TaskStoreResult<()> {
+    async fn delete(&self, task_id: Uuid) -> TaskStoreResult<()> {
         debug!("Deleting task: {}", task_id);
 
         // remove() returns Some((key, value)) if the entry existed
-        match self.tasks.remove(task_id) {
+        match self.tasks.remove(&task_id) {
             Some((_, task)) => {
                 // Remove task directory and all its contents (includes task.json and photos)
                 let task_dir = self.task_dir(task_id);
@@ -275,15 +276,15 @@ impl TaskStore for FileSystemTaskStore {
                 );
                 Ok(())
             }
-            None => Err(TaskStoreError::NotFound(task_id.to_string())),
+            None => Err(TaskStoreError::NotFound(task_id)),
         }
     }
 
-    async fn exists(&self, task_id: &str) -> TaskStoreResult<bool> {
+    async fn exists(&self, task_id: Uuid) -> TaskStoreResult<bool> {
         debug!("Checking if task exists: {}", task_id);
 
         // Lock-free existence check
-        Ok(self.tasks.contains_key(task_id))
+        Ok(self.tasks.contains_key(&task_id))
     }
 
     async fn count(&self) -> TaskStoreResult<usize> {
@@ -324,7 +325,7 @@ mod tests {
     // Helper function to create a test task with specific timestamp
     fn create_test_task_with_timestamp(context: &str, timestamp: DateTime<Utc>) -> Task {
         Task {
-            task_id: Uuid::new_v4().to_string(),
+            task_id: Uuid::new_v4(),
             context: context.to_string(),
             created_at: timestamp,
         }
@@ -348,14 +349,14 @@ mod tests {
         assert_eq!(created.context, task.context);
 
         // Verify it exists in the store
-        let exists = ts.store.exists(&task.task_id).await.unwrap();
+        let exists = ts.store.exists(task.task_id).await.unwrap();
         assert!(exists);
 
         // Verify directory was created
-        assert!(ts.store.task_dir(&task.task_id).exists());
+        assert!(ts.store.task_dir(task.task_id).exists());
 
         // Verify task.json was created
-        assert!(ts.store.task_json_path(&task.task_id).exists());
+        assert!(ts.store.task_json_path(task.task_id).exists());
     }
 
     #[tokio::test]
@@ -385,7 +386,7 @@ mod tests {
 
         ts.store.create(task.clone()).await.unwrap();
 
-        let result = ts.store.get(&task.task_id).await.unwrap();
+        let result = ts.store.get(task.task_id).await.unwrap();
 
         assert!(result.is_some());
         let retrieved = result.unwrap();
@@ -398,7 +399,7 @@ mod tests {
     async fn test_get_nonexistent_task() {
         let ts = create_store().await;
 
-        let result = ts.store.get("nonexistent_id").await.unwrap();
+        let result = ts.store.get(Uuid::new_v4()).await.unwrap();
 
         assert!(result.is_none());
     }
@@ -448,7 +449,7 @@ mod tests {
         assert_eq!(updated.context, "Updated context");
 
         // Verify the change persisted
-        let retrieved = ts.store.get(&task.task_id).await.unwrap().unwrap();
+        let retrieved = ts.store.get(task.task_id).await.unwrap().unwrap();
         assert_eq!(retrieved.context, "Updated context");
     }
 
@@ -475,16 +476,16 @@ mod tests {
         let task = create_test_task("vacation in SF");
 
         ts.store.create(task.clone()).await.unwrap();
-        let task_dir = ts.store.task_dir(&task.task_id);
+        let task_dir = ts.store.task_dir(task.task_id);
         assert!(task_dir.exists());
 
         // Delete the task
-        let result = ts.store.delete(&task.task_id).await;
+        let result = ts.store.delete(task.task_id).await;
 
         assert!(result.is_ok());
 
         // Verify it no longer exists
-        let retrieved = ts.store.get(&task.task_id).await.unwrap();
+        let retrieved = ts.store.get(task.task_id).await.unwrap();
         assert!(retrieved.is_none());
 
         // Verify directory was removed
@@ -495,12 +496,13 @@ mod tests {
     async fn test_delete_nonexistent_fails() {
         let ts = create_store().await;
 
-        let result = ts.store.delete("nonexistent_id").await;
+        let nonexistent_id = Uuid::new_v4();
+        let result = ts.store.delete(nonexistent_id).await;
 
         assert!(result.is_err());
         match result {
             Err(TaskStoreError::NotFound(id)) => {
-                assert_eq!(id, "nonexistent_id");
+                assert_eq!(id, nonexistent_id);
             }
             _ => panic!("Expected NotFound error"),
         }
@@ -512,18 +514,18 @@ mod tests {
         let task = create_test_task("vacation in SF");
 
         // Should not exist initially
-        let exists = ts.store.exists(&task.task_id).await.unwrap();
+        let exists = ts.store.exists(task.task_id).await.unwrap();
         assert!(!exists);
 
         // Create the task
         ts.store.create(task.clone()).await.unwrap();
 
         // Should exist now
-        let exists = ts.store.exists(&task.task_id).await.unwrap();
+        let exists = ts.store.exists(task.task_id).await.unwrap();
         assert!(exists);
 
         // Random ID should not exist
-        let exists = ts.store.exists("random_id").await.unwrap();
+        let exists = ts.store.exists(Uuid::new_v4()).await.unwrap();
         assert!(!exists);
     }
 
@@ -549,7 +551,7 @@ mod tests {
         assert_eq!(count, 3);
 
         // Delete one task
-        ts.store.delete(&task1.task_id).await.unwrap();
+        ts.store.delete(task1.task_id).await.unwrap();
 
         // Should have count 2
         let count = ts.store.count().await.unwrap();
@@ -568,8 +570,8 @@ mod tests {
         // Create store and add tasks
         let task1 = create_test_task("First task");
         let task2 = create_test_task("Second task");
-        let task1_id = task1.task_id.clone();
-        let task2_id = task2.task_id.clone();
+        let task1_id = task1.task_id;
+        let task2_id = task2.task_id;
 
         {
             let store = FileSystemTaskStore::new(storage_path.clone()).await;
@@ -583,10 +585,10 @@ mod tests {
 
         // Tasks should be loaded from filesystem
         assert_eq!(store.count().await.unwrap(), 2);
-        assert!(store.exists(&task1_id).await.unwrap());
-        assert!(store.exists(&task2_id).await.unwrap());
+        assert!(store.exists(task1_id).await.unwrap());
+        assert!(store.exists(task2_id).await.unwrap());
 
-        let loaded_task1 = store.get(&task1_id).await.unwrap().unwrap();
+        let loaded_task1 = store.get(task1_id).await.unwrap().unwrap();
         assert_eq!(loaded_task1.context, "First task");
     }
 
@@ -596,7 +598,7 @@ mod tests {
         let storage_path = temp_dir.path().to_path_buf();
 
         let task = create_test_task("Original context");
-        let task_id = task.task_id.clone();
+        let task_id = task.task_id;
 
         {
             let store = FileSystemTaskStore::new(storage_path.clone()).await;
@@ -610,7 +612,7 @@ mod tests {
 
         // Reload and verify update persisted
         let store = FileSystemTaskStore::new(storage_path).await;
-        let loaded = store.get(&task_id).await.unwrap().unwrap();
+        let loaded = store.get(task_id).await.unwrap().unwrap();
         assert_eq!(loaded.context, "Updated context");
     }
 
@@ -620,17 +622,17 @@ mod tests {
         let storage_path = temp_dir.path().to_path_buf();
 
         let task = create_test_task("Task to delete");
-        let task_id = task.task_id.clone();
+        let task_id = task.task_id;
 
         {
             let store = FileSystemTaskStore::new(storage_path.clone()).await;
             store.create(task).await.unwrap();
-            store.delete(&task_id).await.unwrap();
+            store.delete(task_id).await.unwrap();
         }
 
         // Reload and verify task is gone
         let store = FileSystemTaskStore::new(storage_path).await;
         assert_eq!(store.count().await.unwrap(), 0);
-        assert!(!store.exists(&task_id).await.unwrap());
+        assert!(!store.exists(task_id).await.unwrap());
     }
 }

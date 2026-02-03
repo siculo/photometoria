@@ -46,6 +46,7 @@ mod tests {
     use tempfile::TempDir;
     use tower::ServiceExt;
 
+    use uuid::Uuid;
     use crate::app_state::AppState;
     use crate::config::Config;
     use crate::models::{TaskDetail, TaskResponse, TaskSummary};
@@ -102,7 +103,7 @@ mod tests {
         let task_response: TaskResponse = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(task_response.context, "test context");
-        assert!(!task_response.task_id.is_empty());
+        assert!(!task_response.task_id.is_nil());
     }
 
     #[tokio::test]
@@ -168,8 +169,9 @@ mod tests {
     #[tokio::test]
     async fn test_get_task_by_id_not_found() {
         let ta = create_test_app().await;
+        let nonexistent_id = Uuid::new_v4();
 
-        let request = Request::get("/api/tasks/nonexistent")
+        let request = Request::get(format!("/api/tasks/{}", nonexistent_id))
             .body(Body::empty())
             .unwrap();
         let response = ta.router.oneshot(request).await.unwrap();
@@ -206,8 +208,9 @@ mod tests {
     #[tokio::test]
     async fn test_patch_task_not_found() {
         let ta = create_test_app().await;
+        let nonexistent_id = Uuid::new_v4();
 
-        let request = Request::patch("/api/tasks/nonexistent")
+        let request = Request::patch(format!("/api/tasks/{}", nonexistent_id))
             .header("Content-Type", "application/json")
             .body(Body::from(
                 json!({"context": "updated context"}).to_string(),
@@ -235,15 +238,16 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
         // Verify it's deleted
-        let exists = ta.state.task_store.exists(&task_id).await.unwrap();
+        let exists = ta.state.task_store.exists(task_id).await.unwrap();
         assert!(!exists);
     }
 
     #[tokio::test]
     async fn test_delete_task_not_found() {
         let ta = create_test_app().await;
+        let nonexistent_id = Uuid::new_v4();
 
-        let request = Request::delete("/api/tasks/nonexistent")
+        let request = Request::delete(format!("/api/tasks/{}", nonexistent_id))
             .body(Body::empty())
             .unwrap();
         let response = ta.router.oneshot(request).await.unwrap();

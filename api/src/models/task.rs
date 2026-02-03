@@ -28,8 +28,8 @@ use uuid::Uuid;
 /// Only one active task allowed at a time (returns error if another exists).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Task {
-    /// Unique identifier (UUID as String)
-    pub task_id: String,
+    /// Unique identifier (UUID)
+    pub task_id: Uuid,
 
     /// User-provided context information for AI analysis
     ///
@@ -54,11 +54,10 @@ impl Task {
     /// use photometoria_rest_api::models::Task;
     ///
     /// let task = Task::new("vacation in San Francisco".to_string());
-    /// assert!(!task.task_id.is_empty());
     /// ```
     pub fn new(context: String) -> Self {
         Self {
-            task_id: Uuid::new_v4().to_string(),
+            task_id: Uuid::new_v4(),
             context,
             created_at: Utc::now(),
         }
@@ -94,7 +93,7 @@ pub struct CreateTaskRequest {
 /// # Example JSON
 /// ```json
 /// {
-///   "task_id": "task_abc",
+///   "task_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "context": "vacation in San Francisco, summer 2024",
 ///   "created_at": "2024-01-15T10:30:00Z"
 /// }
@@ -102,7 +101,7 @@ pub struct CreateTaskRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskResponse {
     /// Unique task identifier
-    pub task_id: String,
+    pub task_id: Uuid,
 
     /// User-provided context information
     pub context: String,
@@ -120,7 +119,7 @@ pub struct TaskResponse {
 /// # Example JSON
 /// ```json
 /// {
-///   "task_id": "task_abc",
+///   "task_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "context": "vacation in SF",
 ///   "photo_count": 15,
 ///   "storage_used": 243434374,
@@ -131,7 +130,7 @@ pub struct TaskResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskSummary {
     /// Unique task identifier
-    pub task_id: String,
+    pub task_id: Uuid,
 
     /// User-provided context information
     pub context: String,
@@ -156,7 +155,7 @@ pub struct TaskSummary {
 /// # Example JSON
 /// ```json
 /// {
-///   "task_id": "task_abc",
+///   "task_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "context": "vacation in SF",
 ///   "created_at": "2024-01-15T10:30:00Z",
 ///   "photo_count": 15,
@@ -169,7 +168,7 @@ pub struct TaskSummary {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskDetail {
     /// Unique task identifier
-    pub task_id: String,
+    pub task_id: Uuid,
 
     /// User-provided context information
     pub context: String,
@@ -232,8 +231,8 @@ mod tests {
     #[test]
     fn test_task_new_generates_uuid() {
         let task = Task::new("test context".to_string());
-        assert!(!task.task_id.is_empty());
-        assert!(Uuid::parse_str(&task.task_id).is_ok());
+        // Uuid is always valid, just verify it's not nil
+        assert!(!task.task_id.is_nil());
     }
 
     #[test]

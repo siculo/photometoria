@@ -6,6 +6,7 @@
 
 use async_trait::async_trait;
 use thiserror::Error;
+use uuid::Uuid;
 
 use crate::models::Photo;
 
@@ -18,11 +19,11 @@ use crate::models::Photo;
 pub enum PhotoStoreError {
     /// The requested photo was not found.
     #[error("Photo not found: {0}")]
-    NotFound(String),
+    NotFound(Uuid),
 
     /// A photo with the same ID already exists.
     #[error("Photo already exists: {0}")]
-    AlreadyExists(String),
+    AlreadyExists(Uuid),
 
     /// A generic storage error occurred.
     #[error("Storage error: {0}")]
@@ -74,7 +75,7 @@ pub trait PhotoStore: Send + Sync {
     /// * `Ok(Some(Photo))` - The photo if found
     /// * `Ok(None)` - If no photo with the given ID exists
     /// * `Err(StorageError)` - If a storage-level error occurs
-    async fn get(&self, photo_id: &str) -> PhotoStoreResult<Option<Photo>>;
+    async fn get(&self, photo_id: Uuid) -> PhotoStoreResult<Option<Photo>>;
 
     /// Lists all photos belonging to a specific task.
     ///
@@ -87,7 +88,7 @@ pub trait PhotoStore: Send + Sync {
     ///
     /// # Note
     /// Photos are sorted by `uploaded_at` (oldest first) for consistent ordering.
-    async fn list_by_task(&self, task_id: &str) -> PhotoStoreResult<Vec<Photo>>;
+    async fn list_by_task(&self, task_id: Uuid) -> PhotoStoreResult<Vec<Photo>>;
 
     /// Deletes a photo from the store.
     ///
@@ -98,7 +99,7 @@ pub trait PhotoStore: Send + Sync {
     /// * `Ok(())` - Photo successfully deleted
     /// * `Err(NotFound)` - If no photo with the given ID exists
     /// * `Err(StorageError)` - If a storage-level error occurs
-    async fn delete(&self, photo_id: &str) -> PhotoStoreResult<()>;
+    async fn delete(&self, photo_id: Uuid) -> PhotoStoreResult<()>;
 
     /// Deletes all photos belonging to a specific task.
     ///
@@ -111,7 +112,7 @@ pub trait PhotoStore: Send + Sync {
     ///
     /// # Note
     /// This is used when deleting a task to clean up all associated photos.
-    async fn delete_by_task(&self, task_id: &str) -> PhotoStoreResult<usize>;
+    async fn delete_by_task(&self, task_id: Uuid) -> PhotoStoreResult<usize>;
 
     /// Returns the count of photos belonging to a specific task.
     ///
@@ -121,7 +122,7 @@ pub trait PhotoStore: Send + Sync {
     /// # Returns
     /// * `Ok(usize)` - The count of photos
     /// * `Err(StorageError)` - If a storage-level error occurs
-    async fn count_by_task(&self, task_id: &str) -> PhotoStoreResult<usize>;
+    async fn count_by_task(&self, task_id: Uuid) -> PhotoStoreResult<usize>;
 
     /// Returns the total size in bytes of all photos belonging to a specific task.
     ///
@@ -134,7 +135,7 @@ pub trait PhotoStore: Send + Sync {
     ///
     /// # Note
     /// This is used for TaskSummary.storage_used_bytes.
-    async fn total_size_by_task(&self, task_id: &str) -> PhotoStoreResult<u64>;
+    async fn total_size_by_task(&self, task_id: Uuid) -> PhotoStoreResult<u64>;
 
     /// Returns the total size in bytes of all photos across all tasks.
     /// 
@@ -153,7 +154,7 @@ pub trait PhotoStore: Send + Sync {
     /// * `Ok(false)` - Photo does not exist
     /// * `Err(StorageError)` - If a storage-level error occurs
     #[allow(dead_code)]
-    async fn exists(&self, photo_id: &str) -> PhotoStoreResult<bool>;
+    async fn exists(&self, photo_id: Uuid) -> PhotoStoreResult<bool>;
 
     // ========================================================================
     // Binary Data Operations
@@ -172,7 +173,7 @@ pub trait PhotoStore: Send + Sync {
     ///
     /// # Note
     /// The photo metadata must be created first using `create()`.
-    async fn save_data(&self, photo_id: &str, data: &[u8]) -> PhotoStoreResult<()>;
+    async fn save_data(&self, photo_id: Uuid, data: &[u8]) -> PhotoStoreResult<()>;
 
     /// Loads the raw image data for a photo.
     ///
@@ -184,7 +185,7 @@ pub trait PhotoStore: Send + Sync {
     /// * `Err(NotFound)` - If the photo or its data doesn't exist
     /// * `Err(StorageError)` - If a storage-level error occurs
     #[allow(dead_code)]
-    async fn load_data(&self, photo_id: &str) -> PhotoStoreResult<Vec<u8>>;
+    async fn load_data(&self, photo_id: Uuid) -> PhotoStoreResult<Vec<u8>>;
 
     /// Deletes the raw image data for a photo.
     ///
@@ -198,5 +199,5 @@ pub trait PhotoStore: Send + Sync {
     /// # Note
     /// This is called internally by `delete()` and `delete_by_task()`.
     /// It does not return an error if the data doesn't exist.
-    async fn delete_data(&self, photo_id: &str) -> PhotoStoreResult<()>;
+    async fn delete_data(&self, photo_id: Uuid) -> PhotoStoreResult<()>;
 }

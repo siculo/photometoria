@@ -63,11 +63,11 @@ impl std::fmt::Display for JobStatus {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
-    /// Unique identifier (UUID as String)
-    pub job_id: String,
+    /// Unique identifier (UUID)
+    pub job_id: Uuid,
 
     /// Reference to the parent Task
-    pub task_id: String,
+    pub task_id: Uuid,
 
     /// AI model to use for analysis (e.g., "qwen2-vl:8b", "llava")
     pub model: String,
@@ -76,7 +76,7 @@ pub struct Job {
     pub status: JobStatus,
 
     /// IDs of photos to process
-    pub photo_ids: Vec<String>,
+    pub photo_ids: Vec<Uuid>,
 
     /// Timestamp when the job was created (ISO 8601)
     pub created_at: DateTime<Utc>,
@@ -92,25 +92,25 @@ impl Job {
     /// Creates a new Job with generated UUID and current timestamp.
     ///
     /// # Arguments
-    /// * `task_id` - The ID of the parent Task
+    /// * `task_id` - The UUID of the parent Task
     /// * `model` - The AI model to use for analysis
-    /// * `photo_ids` - IDs of photos to process
+    /// * `photo_ids` - UUIDs of photos to process
     ///
     /// # Example
     /// ```
     /// use photometoria_rest_api::models::Job;
+    /// use uuid::Uuid;
     ///
     /// let job = Job::new(
-    ///     "task_123".to_string(),
+    ///     Uuid::new_v4(),
     ///     "qwen2-vl:8b".to_string(),
-    ///     vec!["p1".to_string(), "p2".to_string()],
+    ///     vec![Uuid::new_v4(), Uuid::new_v4()],
     /// );
-    /// assert!(!job.job_id.is_empty());
     /// assert_eq!(job.status.to_string(), "queued");
     /// ```
-    pub fn new(task_id: String, model: String, photo_ids: Vec<String>) -> Self {
+    pub fn new(task_id: Uuid, model: String, photo_ids: Vec<Uuid>) -> Self {
         Self {
-            job_id: Uuid::new_v4().to_string(),
+            job_id: Uuid::new_v4(),
             task_id,
             model,
             status: JobStatus::Queued,
@@ -182,7 +182,7 @@ pub struct CreateJobRequest {
     pub model: String,
 
     /// Photo IDs to process (None = all photos in task)
-    pub photo_ids: Option<Vec<String>>,
+    pub photo_ids: Option<Vec<Uuid>>,
 }
 
 /// Full response for job creation and detail endpoints.
@@ -194,8 +194,8 @@ pub struct CreateJobRequest {
 /// # Example JSON
 /// ```json
 /// {
-///   "job_id": "job_xyz",
-///   "task_id": "task_abc",
+///   "job_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "task_id": "550e8400-e29b-41d4-a716-446655440001",
 ///   "status": "queued",
 ///   "model": "qwen2-vl:8b",
 ///   "photo_count": 15,
@@ -207,10 +207,10 @@ pub struct CreateJobRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobResponse {
     /// Unique job identifier
-    pub job_id: String,
+    pub job_id: Uuid,
 
     /// Parent task identifier
-    pub task_id: String,
+    pub task_id: Uuid,
 
     /// Current status
     pub status: JobStatus,
@@ -242,7 +242,7 @@ pub struct JobResponse {
 /// # Example JSON
 /// ```json
 /// {
-///   "job_id": "job_xyz",
+///   "job_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "status": "completed",
 ///   "model": "qwen2-vl:8b",
 ///   "photo_count": 15,
@@ -253,7 +253,7 @@ pub struct JobResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobSummary {
     /// Unique job identifier
-    pub job_id: String,
+    pub job_id: Uuid,
 
     /// Current status
     pub status: JobStatus,
@@ -279,14 +279,14 @@ pub struct JobSummary {
 /// # Example JSON
 /// ```json
 /// {
-///   "job_id": "job_xyz",
+///   "job_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "status": "cancelled"
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobCancelledResponse {
     /// Job identifier
-    pub job_id: String,
+    pub job_id: Uuid,
 
     /// Status (always "cancelled")
     pub status: JobStatus,
@@ -314,8 +314,8 @@ impl From<Job> for JobResponse {
 impl From<&Job> for JobResponse {
     fn from(job: &Job) -> Self {
         Self {
-            job_id: job.job_id.clone(),
-            task_id: job.task_id.clone(),
+            job_id: job.job_id,
+            task_id: job.task_id,
             status: job.status,
             model: job.model.clone(),
             photo_count: job.photo_ids.len(),
@@ -342,7 +342,7 @@ impl From<Job> for JobSummary {
 impl From<&Job> for JobSummary {
     fn from(job: &Job) -> Self {
         Self {
-            job_id: job.job_id.clone(),
+            job_id: job.job_id,
             status: job.status,
             model: job.model.clone(),
             photo_count: job.photo_ids.len(),
@@ -362,25 +362,19 @@ mod tests {
 
     #[test]
     fn test_job_new_generates_uuid() {
-        let job = Job::new(
-            "task_123".to_string(),
-            "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string()],
-        );
-        assert!(!job.job_id.is_empty());
-        assert!(Uuid::parse_str(&job.job_id).is_ok());
+        let task_id = Uuid::new_v4();
+        let photo_id = Uuid::new_v4();
+        let job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![photo_id]);
+        assert!(!job.job_id.is_nil());
     }
 
     #[test]
     fn test_job_new_sets_fields() {
-        let photo_ids = vec!["p1".to_string(), "p2".to_string(), "p3".to_string()];
-        let job = Job::new(
-            "task_123".to_string(),
-            "llava".to_string(),
-            photo_ids.clone(),
-        );
+        let task_id = Uuid::new_v4();
+        let photo_ids = vec![Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
+        let job = Job::new(task_id, "llava".to_string(), photo_ids.clone());
 
-        assert_eq!(job.task_id, "task_123");
+        assert_eq!(job.task_id, task_id);
         assert_eq!(job.model, "llava");
         assert_eq!(job.status, JobStatus::Queued);
         assert_eq!(job.photo_ids, photo_ids);
@@ -390,21 +384,19 @@ mod tests {
 
     #[test]
     fn test_job_photo_count() {
+        let task_id = Uuid::new_v4();
         let job = Job::new(
-            "task_123".to_string(),
+            task_id,
             "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string(), "p2".to_string()],
+            vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         assert_eq!(job.photo_count(), 2);
     }
 
     #[test]
     fn test_job_lifecycle_start() {
-        let mut job = Job::new(
-            "task_123".to_string(),
-            "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string()],
-        );
+        let task_id = Uuid::new_v4();
+        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         assert_eq!(job.status, JobStatus::Queued);
         assert!(job.started_at.is_none());
@@ -417,11 +409,8 @@ mod tests {
 
     #[test]
     fn test_job_lifecycle_complete() {
-        let mut job = Job::new(
-            "task_123".to_string(),
-            "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string()],
-        );
+        let task_id = Uuid::new_v4();
+        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         job.start();
         job.complete();
@@ -433,11 +422,8 @@ mod tests {
 
     #[test]
     fn test_job_lifecycle_fail() {
-        let mut job = Job::new(
-            "task_123".to_string(),
-            "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string()],
-        );
+        let task_id = Uuid::new_v4();
+        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         job.start();
         job.fail();
@@ -448,11 +434,8 @@ mod tests {
 
     #[test]
     fn test_job_lifecycle_cancel() {
-        let mut job = Job::new(
-            "task_123".to_string(),
-            "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string()],
-        );
+        let task_id = Uuid::new_v4();
+        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         job.cancel();
 
@@ -462,11 +445,8 @@ mod tests {
 
     #[test]
     fn test_job_is_finished() {
-        let mut job = Job::new(
-            "task_123".to_string(),
-            "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string()],
-        );
+        let task_id = Uuid::new_v4();
+        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         assert!(!job.is_finished()); // Queued
         job.start();
@@ -513,10 +493,11 @@ mod tests {
 
     #[test]
     fn test_job_to_response_conversion() {
+        let task_id = Uuid::new_v4();
         let mut job = Job::new(
-            "task_123".to_string(),
+            task_id,
             "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string(), "p2".to_string()],
+            vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         job.start();
 
@@ -533,11 +514,8 @@ mod tests {
 
     #[test]
     fn test_job_to_summary_conversion() {
-        let job = Job::new(
-            "task_123".to_string(),
-            "llava".to_string(),
-            vec!["p1".to_string()],
-        );
+        let task_id = Uuid::new_v4();
+        let job = Job::new(task_id, "llava".to_string(), vec![Uuid::new_v4()]);
 
         let summary: JobSummary = job.clone().into();
 
@@ -558,23 +536,19 @@ mod tests {
 
     #[test]
     fn test_create_job_request_with_photo_ids() {
-        let json = r#"{"model":"llava","photo_ids":["p1","p2"]}"#;
-        let request: CreateJobRequest = serde_json::from_str(json).unwrap();
+        let id1 = Uuid::new_v4();
+        let id2 = Uuid::new_v4();
+        let json = format!(r#"{{"model":"llava","photo_ids":["{}","{}"]}}"#, id1, id2);
+        let request: CreateJobRequest = serde_json::from_str(&json).unwrap();
 
         assert_eq!(request.model, "llava");
-        assert_eq!(
-            request.photo_ids,
-            Some(vec!["p1".to_string(), "p2".to_string()])
-        );
+        assert_eq!(request.photo_ids, Some(vec![id1, id2]));
     }
 
     #[test]
     fn test_job_response_skips_none_timestamps() {
-        let job = Job::new(
-            "task_123".to_string(),
-            "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string()],
-        );
+        let task_id = Uuid::new_v4();
+        let job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
         let response: JobResponse = job.into();
         let json = serde_json::to_string(&response).unwrap();
 
@@ -585,11 +559,8 @@ mod tests {
 
     #[test]
     fn test_job_serialization() {
-        let job = Job::new(
-            "task_123".to_string(),
-            "qwen2-vl:8b".to_string(),
-            vec!["p1".to_string()],
-        );
+        let task_id = Uuid::new_v4();
+        let job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
         let json = serde_json::to_string(&job).unwrap();
 
         assert!(json.contains("job_id"));

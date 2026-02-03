@@ -7,6 +7,7 @@ use axum::{
     http::StatusCode,
 };
 use tracing::{debug, error, info, warn};
+use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::config::Config;
@@ -56,7 +57,7 @@ enum ProcessedField {
 /// Handler for POST /api/tasks/{task_id}/photos
 pub async fn upload_photos(
     State(state): State<AppState>,
-    Path(task_id): Path<String>,
+    Path(task_id): Path<Uuid>,
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<UploadPhotosResponse>), (StatusCode, Json<ErrorResponse>)> {
     debug!("Upload photos request for task_id={}", task_id);
@@ -64,7 +65,7 @@ pub async fn upload_photos(
     // Verify task exists
     let task_exists = state
         .task_store
-        .exists(&task_id)
+        .exists(task_id)
         .await
         .map_err(|_| UploadError::internal_error())
         .map_err(into_response)?;
@@ -77,7 +78,7 @@ pub async fn upload_photos(
     }
 
     let (uploaded, failed, uploaded_size_bytes) =
-        process_multipart(&state, &task_id, &mut multipart)
+        process_multipart(&state, task_id, &mut multipart)
             .await
             .map_err(into_response)?;
 
@@ -121,7 +122,7 @@ struct FileData {
 /// - One or more `files` fields with the actual image data
 ///
 /// The number of client_ids must match the number of files.
-async fn process_multipart(state: &AppState, task_id: &str, multipart: &mut Multipart) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), UploadError> {
+async fn process_multipart(state: &AppState, task_id: Uuid, multipart: &mut Multipart) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), UploadError> {
     let mut client_ids: Option<Vec<String>> = None;
     let mut files: Vec<FileData> = vec![];
 
@@ -254,7 +255,7 @@ async fn process_field(
     data: Bytes,
     filename: String,
     client_id: String,
-    task_id: &str,
+    task_id: Uuid,
     uploaded_count: usize,
     used_storage: u64,
     config: &Config,
@@ -268,14 +269,14 @@ async fn process_field(
     }
 
     // Create photo and save to store
-    let photo = Photo::new(task_id.to_string(), filename.clone(), data_size);
+    let photo = Photo::new(task_id, filename.clone(), data_size);
     match photo_store.create(photo.clone()).await {
         Ok(_) => {
             // Save actual image data
-            if let Err(e) = photo_store.save_data(&photo.photo_id, &data).await {
+            if let Err(e) = photo_store.save_data(photo.photo_id, &data).await {
                 error!("Failed to save image data for '{}': {:?}", filename, e);
                 // Try to clean up the metadata we just created
-                let _ = photo_store.delete(&photo.photo_id).await;
+                let _ = photo_store.delete(photo.photo_id).await;
                 return ProcessedField::Failed(FailedUpload {
                     client_id,
                     filename,
