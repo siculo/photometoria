@@ -13,6 +13,7 @@ use axum::{
     http::StatusCode,
 };
 use uuid::Uuid;
+use crate::handlers::app_error::AppError;
 
 /// Handler for POST /api/tasks
 ///
@@ -20,7 +21,7 @@ use uuid::Uuid;
 pub async fn create_task(
     State(state): State<AppState>,
     Json(request): Json<CreateTaskRequest>,
-) -> Result<(StatusCode, Json<TaskResponse>), StatusCode> {
+) -> Result<(StatusCode, Json<TaskResponse>), AppError> {
     let task = Task::new(request.context);
 
     match state.task_store.create(task).await {
@@ -28,8 +29,10 @@ pub async fn create_task(
             let response = TaskResponse::from(created_task);
             Ok((StatusCode::CREATED, Json(response)))
         }
-        Err(TaskStoreError::AlreadyExists(_)) => Err(StatusCode::CONFLICT),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(TaskStoreError::AlreadyExists(existing_task_id)) => {
+            Err(AppError::new(StatusCode::CONFLICT, "already_exists", format!("Task with id '{}' already exists", existing_task_id)))
+        }
+        Err(_) => Err(AppError::internal_error()),
     }
 }
 
@@ -38,7 +41,7 @@ pub async fn create_task(
 /// Lists all tasks with summary information.
 pub async fn list_tasks(
     State(state): State<AppState>,
-) -> Result<Json<Vec<TaskSummary>>, StatusCode> {
+) -> Result<Json<Vec<TaskSummary>>, AppError> {
     match state.task_store.list().await {
         Ok(tasks) => {
             let mut summaries = Vec::with_capacity(tasks.len());
@@ -49,7 +52,7 @@ pub async fn list_tasks(
             }
             Ok(Json(summaries))
         }
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(_) => Err(AppError::internal_error()),
     }
 }
 
@@ -79,7 +82,7 @@ async fn get_task_summary(photo_store: &Arc<dyn PhotoStore>, task: Task) -> Task
 pub async fn get_task(
     State(state): State<AppState>,
     Path(task_id): Path<Uuid>,
-) -> Result<Json<TaskDetail>, StatusCode> {
+) -> Result<Json<TaskDetail>, AppError> {
     match state.task_store.get(task_id).await {
         Ok(Some(task)) => {
             let detail = TaskDetail {
@@ -91,8 +94,8 @@ pub async fn get_task(
             };
             Ok(Json(detail))
         }
-        Ok(None) => Err(StatusCode::NOT_FOUND),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Ok(None) => Err(task_not_found_error(task_id)),
+        Err(_) => Err(AppError::internal_error()),
     }
 }
 
@@ -103,7 +106,7 @@ pub async fn update_task(
     State(state): State<AppState>,
     Path(task_id): Path<Uuid>,
     Json(request): Json<UpdateTaskRequest>,
-) -> Result<Json<TaskResponse>, StatusCode> {
+) -> Result<Json<TaskResponse>, AppError> {
     // First, get the existing task
     match state.task_store.get(task_id).await {
         Ok(Some(task)) => {
@@ -116,24 +119,28 @@ pub async fn update_task(
 
             match state.task_store.update(updated_task).await {
                 Ok(task) => Ok(Json(TaskResponse::from(task))),
-                Err(TaskStoreError::NotFound(_)) => Err(StatusCode::NOT_FOUND),
-                Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+                Err(TaskStoreError::NotFound(not_found_task_id)) => Err(task_not_found_error(not_found_task_id)),
+                Err(_) => Err(AppError::internal_error()),
             }
         }
-        Ok(None) => Err(StatusCode::NOT_FOUND),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR)
+        Ok(None) => Err(task_not_found_error(task_id)),
+        Err(_) => Err(AppError::internal_error()),
     }
 }
 
 /// Handler for DELETE /api/tasks/{task_id}
 ///
 /// Deletes a task and all associated data.
-pub async fn delete_task(State(state): State<AppState>, Path(task_id): Path<Uuid>) -> StatusCode {
+pub async fn delete_task(State(state): State<AppState>, Path(task_id): Path<Uuid>) -> Result<StatusCode, AppError> {
     match state.task_store.delete(task_id).await {
-        Ok(()) => StatusCode::NO_CONTENT,
-        Err(TaskStoreError::NotFound(_)) => StatusCode::NOT_FOUND,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        Ok(()) => Ok(StatusCode::NO_CONTENT),
+        Err(TaskStoreError::NotFound(not_found_task_id)) => Err(task_not_found_error(not_found_task_id)),
+        Err(_) => Err(AppError::internal_error()),
     }
+}
+
+fn task_not_found_error(task_id: Uuid) -> AppError {
+    AppError::not_found(format!("Task with id '{}' not found", task_id))
 }
 
 #[cfg(test)]
@@ -244,10 +251,12 @@ mod tests {
     async fn test_get_task_not_found() {
         let ts = create_test_state().await;
 
-        let result = get_task(State(ts.state.clone()), Path(Uuid::new_v4())).await;
+        let task_id = Uuid::new_v4();
+
+        let result = get_task(State(ts.state.clone()), Path(task_id)).await;
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
+        assert_eq!(result.unwrap_err(), task_not_found_error(task_id));
     }
 
     #[tokio::test]
@@ -284,18 +293,20 @@ mod tests {
     async fn test_update_task_not_found() {
         let ts = create_test_state().await;
 
+        let task_id = Uuid::new_v4();
+
         let update_request = UpdateTaskRequest {
             context: "updated context".to_string(),
         };
         let result = update_task(
             State(ts.state.clone()),
-            Path(Uuid::new_v4()),
+            Path(task_id),
             Json(update_request),
         )
         .await;
 
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), StatusCode::NOT_FOUND);
+        assert_eq!(result.unwrap_err(), task_not_found_error(task_id));
     }
 
     #[tokio::test]
@@ -311,23 +322,24 @@ mod tests {
             .unwrap();
 
         // Delete the task
-        let status = delete_task(State(ts.state.clone()), Path(created.task_id)).await;
+        let result = delete_task(State(ts.state.clone()), Path(created.task_id)).await;
 
-        assert_eq!(status, StatusCode::NO_CONTENT);
+        assert_eq!(result, Ok(StatusCode::NO_CONTENT));
 
         // Verify it's deleted
         let get_result = get_task(State(ts.state.clone()), Path(created.task_id)).await;
         assert!(get_result.is_err());
-        assert_eq!(get_result.unwrap_err(), StatusCode::NOT_FOUND);
+        assert_eq!(get_result.unwrap_err(), task_not_found_error(created.task_id));
     }
 
     #[tokio::test]
     async fn test_delete_task_not_found() {
         let ts = create_test_state().await;
+        let task_id = Uuid::new_v4();
 
-        let status = delete_task(State(ts.state.clone()), Path(Uuid::new_v4())).await;
+        let result = delete_task(State(ts.state.clone()), Path(task_id)).await;
 
-        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(result, Err(task_not_found_error(task_id)));
     }
 
     #[tokio::test]
