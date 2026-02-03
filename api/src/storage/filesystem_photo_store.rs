@@ -5,8 +5,8 @@
 //! and binary image data is stored as individual files.
 
 use async_trait::async_trait;
-use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use dashmap::DashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
@@ -181,6 +181,35 @@ impl FileSystemPhotoStore {
         debug!("Saved {} photos metadata to {:?}", photos.len(), path);
         Ok(())
     }
+
+    async fn delete_file_and_save_updated_photos(
+        &self,
+        photo_id: &str,
+        photo: &Photo,
+    ) -> Result<(), PhotoStoreError> {
+        // Also delete the file from disk
+        let file_path = self.photo_path(&photo.task_id, photo_id);
+        if file_path.exists() {
+            if let Err(e) = tokio::fs::remove_file(&file_path).await {
+                error!("Failed to remove photo file {:?}: {}", file_path, e);
+                // Log but don't fail - metadata is already removed
+            } else {
+                debug!("Removed photo file: {:?}", file_path);
+            }
+        }
+
+        // Save updated photos.json
+        if let Err(e) = self.save_photos_for_task(&photo.task_id).await {
+            warn!("Failed to update photos.json after delete: {}", e);
+            // Don't fail - the photo is already deleted from memory
+        }
+
+        info!(
+            "Photo deleted successfully: {} (task: {}, filename: '{}')",
+            photo_id, &photo.task_id, photo.filename
+        );
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -243,32 +272,7 @@ impl PhotoStore for FileSystemPhotoStore {
         debug!("Deleting photo: {}", photo_id);
 
         match self.photos.remove(photo_id) {
-            Some((_, photo)) => {
-                let task_id = photo.task_id.clone();
-
-                // Also delete the file from disk
-                let file_path = self.photo_path(&task_id, photo_id);
-                if file_path.exists() {
-                    if let Err(e) = tokio::fs::remove_file(&file_path).await {
-                        error!("Failed to remove photo file {:?}: {}", file_path, e);
-                        // Log but don't fail - metadata is already removed
-                    } else {
-                        debug!("Removed photo file: {:?}", file_path);
-                    }
-                }
-
-                // Save updated photos.json
-                if let Err(e) = self.save_photos_for_task(&task_id).await {
-                    warn!("Failed to update photos.json after delete: {}", e);
-                    // Don't fail - the photo is already deleted from memory
-                }
-
-                info!(
-                    "Photo deleted successfully: {} (task: {}, filename: '{}')",
-                    photo_id, photo.task_id, photo.filename
-                );
-                Ok(())
-            }
+            Some((_, photo)) => self.delete_file_and_save_updated_photos(photo_id, &photo).await,
             None => Err(PhotoStoreError::NotFound(photo_id.to_string())),
         }
     }
@@ -345,9 +349,10 @@ impl PhotoStore for FileSystemPhotoStore {
         debug!("Saving {} bytes for photo: {}", data.len(), photo_id);
 
         // Get photo metadata to find task_id
-        let photo = self.photos.get(photo_id).ok_or_else(|| {
-            PhotoStoreError::NotFound(photo_id.to_string())
-        })?;
+        let photo = self
+            .photos
+            .get(photo_id)
+            .ok_or_else(|| PhotoStoreError::NotFound(photo_id.to_string()))?;
         let task_id = photo.task_id.clone();
         drop(photo); // Release the lock
 
@@ -370,9 +375,10 @@ impl PhotoStore for FileSystemPhotoStore {
         debug!("Loading data for photo: {}", photo_id);
 
         // Get photo metadata to find task_id
-        let photo = self.photos.get(photo_id).ok_or_else(|| {
-            PhotoStoreError::NotFound(photo_id.to_string())
-        })?;
+        let photo = self
+            .photos
+            .get(photo_id)
+            .ok_or_else(|| PhotoStoreError::NotFound(photo_id.to_string()))?;
         let task_id = photo.task_id.clone();
         drop(photo); // Release the lock
 
