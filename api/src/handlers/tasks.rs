@@ -2,11 +2,12 @@
 //!
 //! This module contains handler functions for task-related endpoints.
 
+use std::sync::Arc;
 use crate::app_state::AppState;
 use crate::models::{
     CreateTaskRequest, Task, TaskDetail, TaskResponse, TaskSummary, UpdateTaskRequest,
 };
-use crate::storage::TaskStoreError;
+use crate::storage::{PhotoStore, TaskStoreError};
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
@@ -41,30 +42,35 @@ pub async fn list_tasks(
     match state.task_store.list().await {
         Ok(tasks) => {
             let mut summaries = Vec::with_capacity(tasks.len());
+            let photo_store = &state.photo_store;
             for task in tasks {
-                let photo_count = state
-                    .photo_store
-                    .count_by_task(task.task_id)
-                    .await
-                    .unwrap_or(0);
-                let storage_used = state
-                    .photo_store
-                    .total_size_by_task(task.task_id)
-                    .await
-                    .unwrap_or(0);
-                summaries.push(TaskSummary {
-                    task_id: task.task_id,
-                    context: task.context,
-                    photo_count,
-                    storage_used,
-                    created_at: task.created_at,
-                    job_count: 0, // JobStore not implemented yet
-                });
+                let summary = get_task_summary(photo_store, task).await;
+                summaries.push(summary);
             }
             Ok(Json(summaries))
         }
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }
+}
+
+async fn get_task_summary(photo_store: &Arc<dyn PhotoStore>, task: Task) -> TaskSummary {
+    let photo_count = photo_store
+        .count_by_task(task.task_id)
+        .await
+        .unwrap_or(0);
+    let storage_used = photo_store
+        .total_size_by_task(task.task_id)
+        .await
+        .unwrap_or(0);
+    let summary = TaskSummary {
+        task_id: task.task_id,
+        context: task.context,
+        photo_count,
+        storage_used,
+        created_at: task.created_at,
+        job_count: 0, // JobStore not implemented yet
+    };
+    summary
 }
 
 /// Handler for GET /api/tasks/{task_id}
@@ -99,23 +105,23 @@ pub async fn update_task(
     Json(request): Json<UpdateTaskRequest>,
 ) -> Result<Json<TaskResponse>, StatusCode> {
     // First, get the existing task
-    let existing_task = match state.task_store.get(task_id).await {
-        Ok(Some(task)) => task,
-        Ok(None) => return Err(StatusCode::NOT_FOUND),
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
-    };
+    match state.task_store.get(task_id).await {
+        Ok(Some(task)) => {
+            // Update the context while preserving other fields
+            let updated_task = Task {
+                task_id: task.task_id,
+                context: request.context,
+                created_at: task.created_at,
+            };
 
-    // Update the context while preserving other fields
-    let updated_task = Task {
-        task_id: existing_task.task_id,
-        context: request.context,
-        created_at: existing_task.created_at,
-    };
-
-    match state.task_store.update(updated_task).await {
-        Ok(task) => Ok(Json(TaskResponse::from(task))),
-        Err(TaskStoreError::NotFound(_)) => Err(StatusCode::NOT_FOUND),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+            match state.task_store.update(updated_task).await {
+                Ok(task) => Ok(Json(TaskResponse::from(task))),
+                Err(TaskStoreError::NotFound(_)) => Err(StatusCode::NOT_FOUND),
+                Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        }
+        Ok(None) => Err(StatusCode::NOT_FOUND),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
 
@@ -133,12 +139,12 @@ pub async fn delete_task(State(state): State<AppState>, Path(task_id): Path<Uuid
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore};
-    use std::sync::Arc;
-    use chrono::Utc;
-    use crate::config::{ByteSize, Config};
-    use tempfile::TempDir;
+    use crate::config::Config;
     use crate::models::Photo;
+    use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore};
+    use chrono::Utc;
+    use std::sync::Arc;
+    use tempfile::TempDir;
     use uuid::Uuid;
 
     struct TestState {
@@ -337,26 +343,32 @@ mod tests {
 
         let task_id = result.unwrap().1.task_id;
 
-        ts.state.photo_store.create(
-            Photo {
+        ts.state
+            .photo_store
+            .create(Photo {
                 photo_id: Uuid::new_v4(),
                 task_id,
                 filename: "filename_1".to_string(),
                 size_bytes: 1570000,
                 uploaded_at: Utc::now(),
-            }
-        ).await.unwrap();
-        ts.state.photo_store.create(
-            Photo {
+            })
+            .await
+            .unwrap();
+        ts.state
+            .photo_store
+            .create(Photo {
                 photo_id: Uuid::new_v4(),
                 task_id,
                 filename: "filename_2".to_string(),
                 size_bytes: 2003800,
                 uploaded_at: Utc::now(),
-            }
-        ).await.unwrap();
+            })
+            .await
+            .unwrap();
 
-        let result = get_task(State(ts.state.clone()), Path(task_id)).await.unwrap();
+        let result = get_task(State(ts.state.clone()), Path(task_id))
+            .await
+            .unwrap();
 
         assert_eq!(result.photo_count, 2);
         assert_eq!(result.storage_used, 1570000 + 2003800);
@@ -369,47 +381,73 @@ mod tests {
         // Create two tasks
         let (_, Json(task1)) = create_task(
             State(ts.state.clone()),
-            Json(CreateTaskRequest { context: "task 1".to_string() }),
-        ).await.unwrap();
+            Json(CreateTaskRequest {
+                context: "task 1".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
         let (_, Json(task2)) = create_task(
             State(ts.state.clone()),
-            Json(CreateTaskRequest { context: "task 2".to_string() }),
-        ).await.unwrap();
+            Json(CreateTaskRequest {
+                context: "task 2".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
 
         // Add photos to task 1
-        ts.state.photo_store.create(Photo {
-            photo_id: Uuid::new_v4(),
-            task_id: task1.task_id,
-            filename: "photo1.jpg".to_string(),
-            size_bytes: 1000000,
-            uploaded_at: Utc::now(),
-        }).await.unwrap();
-        ts.state.photo_store.create(Photo {
-            photo_id: Uuid::new_v4(),
-            task_id: task1.task_id,
-            filename: "photo2.jpg".to_string(),
-            size_bytes: 2000000,
-            uploaded_at: Utc::now(),
-        }).await.unwrap();
+        ts.state
+            .photo_store
+            .create(Photo {
+                photo_id: Uuid::new_v4(),
+                task_id: task1.task_id,
+                filename: "photo1.jpg".to_string(),
+                size_bytes: 1000000,
+                uploaded_at: Utc::now(),
+            })
+            .await
+            .unwrap();
+        ts.state
+            .photo_store
+            .create(Photo {
+                photo_id: Uuid::new_v4(),
+                task_id: task1.task_id,
+                filename: "photo2.jpg".to_string(),
+                size_bytes: 2000000,
+                uploaded_at: Utc::now(),
+            })
+            .await
+            .unwrap();
 
         // Add one photo to task 2
-        ts.state.photo_store.create(Photo {
-            photo_id: Uuid::new_v4(),
-            task_id: task2.task_id,
-            filename: "photo3.jpg".to_string(),
-            size_bytes: 500000,
-            uploaded_at: Utc::now(),
-        }).await.unwrap();
+        ts.state
+            .photo_store
+            .create(Photo {
+                photo_id: Uuid::new_v4(),
+                task_id: task2.task_id,
+                filename: "photo3.jpg".to_string(),
+                size_bytes: 500000,
+                uploaded_at: Utc::now(),
+            })
+            .await
+            .unwrap();
 
         let Json(summaries) = list_tasks(State(ts.state.clone())).await.unwrap();
 
         assert_eq!(summaries.len(), 2);
 
-        let summary1 = summaries.iter().find(|s| s.task_id == task1.task_id).unwrap();
+        let summary1 = summaries
+            .iter()
+            .find(|s| s.task_id == task1.task_id)
+            .unwrap();
         assert_eq!(summary1.photo_count, 2);
         assert_eq!(summary1.storage_used, 3000000);
 
-        let summary2 = summaries.iter().find(|s| s.task_id == task2.task_id).unwrap();
+        let summary2 = summaries
+            .iter()
+            .find(|s| s.task_id == task2.task_id)
+            .unwrap();
         assert_eq!(summary2.photo_count, 1);
         assert_eq!(summary2.storage_used, 500000);
     }
