@@ -1,8 +1,12 @@
-use axum::extract::rejection::PathRejection;
-use axum::http::{StatusCode};
-use axum::Json;
+use axum::extract::rejection::{JsonRejection, PathRejection};
+use axum::extract::{FromRequest, FromRequestParts, Path, Request};
+use axum::http::request::Parts;
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AppError {
@@ -36,6 +40,10 @@ impl AppError {
         Self::new(StatusCode::NOT_FOUND, "not_found", message)
     }
 
+    pub fn task_not_found(task_id: Uuid) -> Self {
+        Self::not_found(format!("Task with id '{}' not found", task_id))
+    }
+
     pub fn internal_error() -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -62,9 +70,54 @@ impl From<PathRejection> for AppError {
                 let message = inner.body_text();
                 Self::bad_request("missing_path_parameter", &message)
             }
-            _ => {
-                Self::bad_request("invalid_path", "Invalid path parameter")
-            }
+            _ => Self::bad_request("invalid_path", "Invalid path parameter"),
         }
+    }
+}
+
+impl From<JsonRejection> for AppError {
+    fn from(rejection: JsonRejection) -> Self {
+        let message = rejection.body_text();
+        Self::bad_request("invalid_json", message)
+    }
+}
+
+// ============================================================================
+// Custom Extractors
+// ============================================================================
+
+/// Custom Path extractor that returns AppError on rejection.
+pub struct AppPath<T>(pub T);
+
+impl<T, S> FromRequestParts<S> for AppPath<T>
+where
+    T: DeserializeOwned + Send,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        Path::<T>::from_request_parts(parts, state)
+            .await
+            .map(|Path(v)| AppPath(v))
+            .map_err(AppError::from)
+    }
+}
+
+/// Custom Json extractor that returns AppError on rejection.
+pub struct AppJson<T>(pub T);
+
+impl<T, S> FromRequest<S> for AppJson<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        Json::<T>::from_request(req, state)
+            .await
+            .map(|Json(v)| AppJson(v))
+            .map_err(AppError::from)
     }
 }

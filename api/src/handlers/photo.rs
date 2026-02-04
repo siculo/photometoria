@@ -1,52 +1,17 @@
 use std::sync::Arc;
 
 use axum::body::Bytes;
-use axum::extract::Multipart;
-use axum::{
-    extract::{Json, Path, State},
-    http::StatusCode,
-};
+use axum::extract::{Multipart, State};
+use axum::http::StatusCode;
+use axum::Json;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::config::Config;
-use crate::models::{ErrorResponse, FailedUpload, Photo, UploadPhotosResponse, UploadedPhoto};
+use crate::handlers::app_error::{AppError, AppPath};
+use crate::models::{FailedUpload, Photo, UploadPhotosResponse, UploadedPhoto};
 use crate::storage::PhotoStore;
-
-/// Upload error with status code and JSON body.
-struct UploadError {
-    status: StatusCode,
-    body: ErrorResponse,
-}
-
-impl UploadError {
-    fn new(status: StatusCode, error: &str, message: impl Into<String>) -> Self {
-        Self {
-            status,
-            body: ErrorResponse {
-                error: error.to_string(),
-                message: message.into(),
-            },
-        }
-    }
-
-    fn bad_request(error: &str, message: impl Into<String>) -> Self {
-        Self::new(StatusCode::BAD_REQUEST, error, message)
-    }
-
-    fn not_found(message: impl Into<String>) -> Self {
-        Self::new(StatusCode::NOT_FOUND, "not_found", message)
-    }
-
-    fn internal_error() -> Self {
-        Self::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "internal_error",
-            "An internal server error occurred",
-        )
-    }
-}
 
 /// Result of processing a single upload field.
 enum ProcessedField {
@@ -57,9 +22,9 @@ enum ProcessedField {
 /// Handler for POST /api/tasks/{task_id}/photos
 pub async fn upload_photos(
     State(state): State<AppState>,
-    Path(task_id): Path<Uuid>,
+    AppPath(task_id): AppPath<Uuid>,
     mut multipart: Multipart,
-) -> Result<(StatusCode, Json<UploadPhotosResponse>), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<(StatusCode, Json<UploadPhotosResponse>), AppError> {
     debug!("Upload photos request for task_id={}", task_id);
 
     // Verify task exists
@@ -67,20 +32,14 @@ pub async fn upload_photos(
         .task_store
         .exists(task_id)
         .await
-        .map_err(|_| UploadError::internal_error())
-        .map_err(into_response)?;
+        .map_err(|_| AppError::internal_error())?;
     if !task_exists {
         warn!("Task not found: {}", task_id);
-        return Err(into_response(UploadError::not_found(format!(
-            "Task '{}' not found",
-            task_id
-        ))));
+        return Err(AppError::task_not_found(task_id));
     }
 
     let (uploaded, failed, uploaded_size_bytes) =
-        process_multipart(&state, task_id, &mut multipart)
-            .await
-            .map_err(into_response)?;
+        process_multipart(&state, task_id, &mut multipart).await?;
 
     let status = if uploaded.is_empty() {
         StatusCode::OK
@@ -105,10 +64,6 @@ pub async fn upload_photos(
     Ok((status, Json(response)))
 }
 
-fn into_response(err: UploadError) -> (StatusCode, Json<ErrorResponse>) {
-    (err.status, Json(err.body))
-}
-
 /// Collected file data from multipart.
 struct FileData {
     filename: String,
@@ -122,7 +77,11 @@ struct FileData {
 /// - One or more `files` fields with the actual image data
 ///
 /// The number of client_ids must match the number of files.
-async fn process_multipart(state: &AppState, task_id: Uuid, multipart: &mut Multipart) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), UploadError> {
+async fn process_multipart(
+    state: &AppState,
+    task_id: Uuid,
+    multipart: &mut Multipart,
+) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), AppError> {
     let mut client_ids: Option<Vec<String>> = None;
     let mut files: Vec<FileData> = vec![];
 
@@ -133,7 +92,7 @@ async fn process_multipart(state: &AppState, task_id: Uuid, multipart: &mut Mult
             Ok(None) => break,
             Err(e) => {
                 error!("Error reading multipart field: {:?}", e);
-                return Err(UploadError::bad_request(
+                return Err(AppError::bad_request(
                     "invalid_multipart",
                     format!("Error reading multipart field: {}", e),
                 ));
@@ -146,7 +105,7 @@ async fn process_multipart(state: &AppState, task_id: Uuid, multipart: &mut Mult
             "client_ids" => {
                 let text = field.text().await.map_err(|e| {
                     error!("Error reading client_ids field: {:?}", e);
-                    UploadError::bad_request(
+                    AppError::bad_request(
                         "invalid_client_ids",
                         format!("Error reading client_ids field: {}", e),
                     )
@@ -154,7 +113,7 @@ async fn process_multipart(state: &AppState, task_id: Uuid, multipart: &mut Mult
 
                 let ids: Vec<String> = serde_json::from_str(&text).map_err(|e| {
                     error!("Error parsing client_ids JSON: {:?}", e);
-                    UploadError::bad_request(
+                    AppError::bad_request(
                         "invalid_client_ids",
                         format!("client_ids must be a JSON array of strings: {}", e),
                     )
@@ -167,7 +126,7 @@ async fn process_multipart(state: &AppState, task_id: Uuid, multipart: &mut Mult
                 let filename = field.file_name().unwrap_or_default().to_string();
                 let data = field.bytes().await.map_err(|e| {
                     error!("Error reading file bytes for '{}': {:?}", filename, e);
-                    UploadError::bad_request(
+                    AppError::bad_request(
                         "invalid_file",
                         format!("Error reading file '{}': {}", filename, e),
                     )
@@ -185,7 +144,7 @@ async fn process_multipart(state: &AppState, task_id: Uuid, multipart: &mut Mult
     // Validate: client_ids is required
     let client_ids = client_ids.ok_or_else(|| {
         error!("Missing required field: client_ids");
-        UploadError::bad_request(
+        AppError::bad_request(
             "missing_client_ids",
             "Missing required field: client_ids (JSON array of strings)",
         )
@@ -198,7 +157,7 @@ async fn process_multipart(state: &AppState, task_id: Uuid, multipart: &mut Mult
             client_ids.len(),
             files.len()
         );
-        return Err(UploadError::bad_request(
+        return Err(AppError::bad_request(
             "client_ids_mismatch",
             format!(
                 "Number of client_ids ({}) does not match number of files ({})",
@@ -213,7 +172,7 @@ async fn process_multipart(state: &AppState, task_id: Uuid, multipart: &mut Mult
         .photo_store
         .total_size()
         .await
-        .map_err(|_| UploadError::internal_error())?;
+        .map_err(|_| AppError::internal_error())?;
     let mut uploaded: Vec<UploadedPhoto> = vec![];
     let mut failed: Vec<FailedUpload> = vec![];
     let mut uploaded_size_bytes: u64 = 0;

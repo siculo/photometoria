@@ -213,24 +213,6 @@ pub struct PhotoListResponse {
     pub count: usize,
 }
 
-/// Standard error response format.
-///
-/// # Example JSON
-/// ```json
-/// {
-///   "error": "client_ids_mismatch",
-///   "message": "Number of client_ids (1) does not match number of files (2)"
-/// }
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ErrorResponse {
-    /// Error code (machine-readable)
-    pub error: String,
-
-    /// Human-readable error description
-    pub message: String,
-}
-
 // ============================================================================
 // Conversions from Entity to DTOs
 // ============================================================================
