@@ -3,6 +3,10 @@ name = "photometoria-rest-api"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "photometoria_rest_api"
+path = "src/lib.rs"
+
 [[bin]]
 name = "photometoria"
 path = "src/main.rs"
@@ -10,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0.100"
 async-trait = "0.1"
+base64 = "0.22"
 infer = "0.16"
 axum = { version = "0.8.8", features = ["multipart"] }
 chrono = { version = "0.4", features = ["serde"] }
@@ -28,3 +33,4 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 [dev-dependencies]
 http-body-util = "0.1"
 tempfile = "3"
+wiremock = "0.6"

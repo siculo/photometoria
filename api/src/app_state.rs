@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use crate::config::Config;
+use crate::services::ai::ProviderRegistry;
 use crate::storage::{PhotoStore, TaskStore};
 
 /// Application state shared across all request handlers.
@@ -15,15 +16,19 @@ pub struct AppState {
     pub task_store: Arc<dyn TaskStore>,
     /// Thread-safe reference to the photo storage backend.
     pub photo_store: Arc<dyn PhotoStore>,
+    /// Registry of AI providers for image analysis.
+    pub ai_providers: Arc<ProviderRegistry>,
 }
 
 impl AppState {
-    /// Creates a new AppState instance with the given task store.
+    /// Creates a new AppState instance with all required dependencies.
     ///
     /// # Arguments
     ///
-    /// * `config` - Current Server configuration
+    /// * `config` - Current server configuration
     /// * `task_store` - An Arc-wrapped implementation of TaskStore
+    /// * `photo_store` - An Arc-wrapped implementation of PhotoStore
+    /// * `ai_providers` - Registry of AI providers for image analysis
     ///
     /// # Example
     ///
@@ -32,9 +37,15 @@ impl AppState {
     /// let storage_path = PathBuf::from(&config.storage.path);
     /// let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
     /// let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path).await);
-    /// let state = AppState::new(config, task_store, photo_store);
+    /// let ai_providers = Arc::new(ProviderRegistry::from_config(&config.ai)?);
+    /// let state = AppState::new(config, task_store, photo_store, ai_providers);
     /// ```
-    pub fn new(config: Config, task_store: Arc<dyn TaskStore>, photo_store: Arc<dyn PhotoStore>) -> Self {
-        Self { config, task_store, photo_store }
+    pub fn new(
+        config: Config,
+        task_store: Arc<dyn TaskStore>,
+        photo_store: Arc<dyn PhotoStore>,
+        ai_providers: Arc<ProviderRegistry>,
+    ) -> Self {
+        Self { config, task_store, photo_store, ai_providers }
     }
 }

@@ -15,10 +15,6 @@ By default, the server looks for `config.toml` in the current working directory.
 host = "0.0.0.0"
 port = 8080
 
-[gpu]
-devices = [0, 1]      # GPU indices to use
-max_workers = 2        # Maximum concurrent jobs
-
 [storage]
 path = "/var/photometoria/storage"
 max_size = "100GB"
@@ -27,20 +23,27 @@ max_size = "100GB"
 max_photos_per_request = 100
 max_photo_size = "20MB"
 
-[ollama]
-base_url = "http://localhost:11434"
+[ai]
+default_provider = "ollama"
 
-[[models]]
-name = "qwen2-vl:8b"
+[ai.providers.ollama]
+type = "ollama"
+base_url = "http://localhost:11434"
+timeout_seconds = 120
+devices = []
+max_workers = 2
+
+[ai.providers.ollama.models.qwen2-vl]
 ollama_model = "qwen2-vl:8b"
 prompt_template = "Analyze this photo and provide comma-separated tags. Context: {context}"
 description = "Best quality, slower processing"
+supports_vision = true
 
-[[models]]
-name = "llava"
+[ai.providers.ollama.models.llava]
 ollama_model = "llava:latest"
 prompt_template = "List tags for this image, comma-separated. Context: {context}"
 description = "Faster, good for testing"
+supports_vision = true
 ```
 
 ## Configuration Sections
@@ -68,37 +71,6 @@ Server binding and network configuration.
 host = "0.0.0.0"
 port = 8080
 ```
-
-### [gpu]
-
-GPU resource configuration for worker pool.
-
-**Options:**
-
-- **devices** (array of integers, required)
-  - GPU device indices to use for AI processing
-  - Each device typically runs one worker
-  - Use `nvidia-smi` or similar to identify available GPUs
-  - Examples: `[0]` (single GPU), `[0, 1]` (two GPUs)
-
-- **max_workers** (integer, required)
-  - Maximum number of concurrent job executions
-  - Typically set to match number of GPUs (one worker per GPU)
-  - Must be ≥ 1
-  - Higher values may cause GPU memory issues
-
-**Example:**
-
-```toml
-[gpu]
-devices = [0, 1]
-max_workers = 2
-```
-
-**Notes:**
-- Each worker processes one job at a time
-- Jobs are queued when all workers are busy
-- More workers = more concurrent processing but higher GPU memory usage
 
 ### [storage]
 
@@ -168,144 +140,173 @@ max_photo_size = "20MB"
 - Clients should handle batch uploads appropriately
 - Large photos may slow down AI processing
 
-### [ollama]
+### [ai]
 
-Ollama service configuration.
+AI provider configuration. The system uses an abstraction layer that supports multiple AI providers.
 
 **Options:**
 
-- **base_url** (string, required)
-  - Base URL for the Ollama HTTP API
-  - Must include protocol (http/https)
-  - Default: `"http://localhost:11434"`
-  - Examples:
-    - Local: `"http://localhost:11434"`
-    - Remote: `"http://ollama-server:11434"`
+- **default_provider** (string, optional)
+  - Name of the default provider to use when none is specified
+  - Must match a key in `[ai.providers.*]`
+  - If only one provider is configured, it becomes the default automatically
 
 **Example:**
 
 ```toml
-[ollama]
-base_url = "http://localhost:11434"
+[ai]
+default_provider = "ollama"
 ```
 
-**Notes:**
-- Ollama must be running and accessible at this URL
-- Server will fail to start if Ollama is not reachable
-- Health check performed at startup
+### [ai.providers.{name}]
 
-### [[models]]
+Provider-specific configuration. Each provider is identified by a unique name (e.g., `ollama`).
 
-AI model definitions (array of tables).
-
-Each `[[models]]` block defines one supported model.
+#### Ollama Provider
 
 **Options:**
 
-- **name** (string, required)
-  - Model identifier used in API requests
-  - Must be unique across all model definitions
-  - Used in `POST /api/tasks/{task_id}/jobs` requests
+- **type** (string, required)
+  - Must be `"ollama"` for Ollama providers
+
+- **base_url** (string, optional)
+  - Base URL for the Ollama HTTP API
+  - Default: `"http://localhost:11434"`
+
+- **timeout_seconds** (integer, optional)
+  - Request timeout in seconds
+  - Default: `120`
+
+- **devices** (array of integers, optional)
+  - GPU device indices to use (empty = auto-detect)
+  - Default: `[]`
+
+- **max_workers** (integer, optional)
+  - Maximum number of concurrent workers
+  - Default: `2`
+
+**Example:**
+
+```toml
+[ai.providers.ollama]
+type = "ollama"
+base_url = "http://localhost:11434"
+timeout_seconds = 120
+devices = []
+max_workers = 2
+```
+
+### [ai.providers.{name}.models.{model_id}]
+
+Model configuration within a provider. Each model is identified by a unique ID.
+
+**Options:**
 
 - **ollama_model** (string, required)
   - Actual Ollama model name
-  - Must match a model available in Ollama
   - Examples: `"qwen2-vl:8b"`, `"llava:latest"`
 
-- **prompt_template** (string, required)
-  - Template for generating prompts sent to the model
-  - Supports `{context}` placeholder for user-provided context
-  - Should request comma-separated tag output
-  - Model-specific optimization recommended
+- **prompt_template** (string, optional)
+  - Template for generating prompts
+  - If not specified, uses the prompt from the API request
 
-- **description** (string, required)
-  - Human-readable description of the model
-  - Returned by `GET /api/models`
-  - Examples: "Best quality, slower", "Fast, good for testing"
+- **description** (string, optional)
+  - Human-readable description
+
+- **supports_vision** (boolean, optional)
+  - Whether this model supports image analysis
+  - Default: `true`
 
 **Example:**
 
 ```toml
-[[models]]
-name = "qwen2-vl:8b"
+[ai.providers.ollama.models.qwen2-vl]
 ollama_model = "qwen2-vl:8b"
-prompt_template = "Analyze this photo and provide comma-separated tags. Context: {context}"
+prompt_template = "Analyze this photo and provide comma-separated tags."
 description = "Best quality, slower processing"
+supports_vision = true
 
-[[models]]
-name = "llava"
+[ai.providers.ollama.models.llava]
 ollama_model = "llava:latest"
-prompt_template = "List tags for this image, comma-separated. Context: {context}"
+prompt_template = "List tags for this image, comma-separated."
 description = "Faster, good for testing"
+supports_vision = true
 ```
 
-**Notes:**
-- Multiple models can be defined
-- Only models installed in Ollama appear as "available"
-- Different models may require different prompt templates for optimal results
+## AI Provider System
 
-## Supported Models System
+### Architecture
+
+The AI provider system uses a registry pattern with trait-based abstraction:
+
+```
+┌─────────────────────────────────────────┐
+│            Configuration                │
+│  [ai.providers.ollama] → OllamaConfig   │
+├─────────────────────────────────────────┤
+│               Trait                     │
+│  AIProvider (list_models, analyze_image,│
+│              check_health)              │
+├─────────────────────────────────────────┤
+│           Implementation                │
+│  OllamaProvider → calls Ollama API      │
+├─────────────────────────────────────────┤
+│              Registry                   │
+│  HashMap<String, Arc<dyn AIProvider>>   │
+│  + default_provider                     │
+└─────────────────────────────────────────┘
+```
 
 ### How It Works
 
-The server maintains a list of supported models with their corresponding prompt templates:
+1. **Server reads provider configurations** from `[ai.providers.*]` at startup
+2. **Creates provider instances** and registers them in the ProviderRegistry
+3. **Sets the default provider** based on `[ai.default_provider]`
+4. **Handlers access providers** through the registry by name or via the default
 
-1. **Server reads model definitions** from configuration at startup
-2. **Queries Ollama** to check which models are actually installed
-3. **Only models that are both configured and installed** appear in `GET /api/models`
-4. **Job creation validates** that the requested model is available (returns 400 if not)
+### Adding a New Provider Instance
 
-### Benefits
+To add a new Ollama instance (e.g., remote server):
 
-- **Centralized prompt optimization** - Each model has its own optimized prompt template
-- **Validation at job creation** - Prevents jobs from failing due to unavailable models
-- **Easy to add new models** - No code changes required, just configuration
-- **Clear separation** - Distinguishes between supported vs. available models
+```toml
+[ai.providers.ollama-remote]
+type = "ollama"
+base_url = "http://gpu-server:11434"
+timeout_seconds = 180
+max_workers = 4
 
-### Adding New Models
+[ai.providers.ollama-remote.models.qwen2-vl]
+ollama_model = "qwen2-vl:8b"
+supports_vision = true
+```
 
-To add a new model:
+### Adding a Model to an Existing Provider
 
 1. **Install the model in Ollama:**
    ```bash
    ollama pull model-name:tag
    ```
 
-2. **Add a `[[models]]` block** to `config.toml`:
+2. **Add a model configuration:**
    ```toml
-   [[models]]
-   name = "my-new-model"
+   [ai.providers.ollama.models.my-model]
    ollama_model = "model-name:tag"
-   prompt_template = "Your optimized prompt here. Context: {context}"
-   description = "Model description for API clients"
+   prompt_template = "Your optimized prompt here."
+   description = "Model description"
+   supports_vision = true
    ```
 
-3. **Restart the server** - The new model will appear in `GET /api/models`
+3. **Restart the server**
 
-4. **Test the model** - Create a job using the new model name
+### Future Providers
 
-### Prompt Template Guidelines
+The abstraction layer is designed to support additional providers:
 
-When creating prompt templates:
+- **OpenAI** - Cloud-based, fast inference
+- **Anthropic** - Claude models with vision
+- **LocalAI** - OpenAI-compatible self-hosted
 
-- **Request comma-separated output** - The API expects this format
-- **Include context placeholder** - Use `{context}` where user context should be inserted
-- **Be specific** - Clear instructions produce better results
-- **Test with real photos** - Optimize based on actual output quality
-- **Model-specific tuning** - Different models respond differently to prompts
-
-**Example templates:**
-
-```toml
-# Detailed analysis
-prompt_template = "Analyze this photograph in detail and provide comma-separated descriptive tags. Include subjects, setting, mood, and technical aspects. Context: {context}"
-
-# Concise tagging
-prompt_template = "List short, comma-separated tags for this image. Context: {context}"
-
-# Specific focus
-prompt_template = "Identify landmarks, locations, and activities in this photo. Output as comma-separated tags. Context: {context}"
-```
+Each provider will have its own configuration section under `[ai.providers.*]`.
 
 ## Environment Variables
 

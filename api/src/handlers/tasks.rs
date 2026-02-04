@@ -148,6 +148,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::models::Photo;
+    use crate::services::ai::ProviderRegistry;
     use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore};
     use chrono::Utc;
     use std::sync::Arc;
@@ -165,8 +166,9 @@ mod tests {
         let config = Config::default();
         let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
         let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path).await);
+        let ai_providers = Arc::new(ProviderRegistry::new());
         TestState {
-            state: AppState::new(config, task_store, photo_store),
+            state: AppState::new(config, task_store, photo_store, ai_providers),
             _temp_dir: temp_dir,
         }
     }

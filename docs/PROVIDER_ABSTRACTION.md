@@ -1,178 +1,166 @@
 # AI Provider Abstraction Layer - Design Document
 
+## Status
+
+**Implemented** - Ollama provider complete (Issue #7)
+
 ## Overview
 
-This document describes the design for an abstraction layer that allows Photometoria to work with multiple AI vision providers, both local and cloud-based. The abstraction enables users to choose the provider that best fits their needs (privacy, cost, performance) without changing the core application logic.
+This document describes the abstraction layer that allows Photometoria to work with multiple AI vision providers. The implementation uses a trait-based design with a registry pattern.
 
-## Motivation
+## Current Implementation
 
-**Problems with tight coupling to a specific provider:**
-- Locked into one implementation (Ollama)
-- Cannot easily test alternatives
-- Difficult to support different use cases (hobbyist vs. enterprise)
-- Must manage AI infrastructure concerns within Photometoria
+### Architecture
 
-**Benefits of abstraction:**
-- **Separation of concerns**: Photometoria handles workflow, providers handle AI inference
-- **Flexibility**: Users choose their preferred provider
-- **Future-proof**: Easy to add new providers as they emerge
-- **Testability**: Mock providers for unit tests
-- **Graceful degradation**: Fallback to alternative providers
+```
+┌─────────────────────────────────────────┐
+│            Configuration                │
+│  [ai.providers.ollama] → OllamaConfig   │
+├─────────────────────────────────────────┤
+│               Trait                     │
+│  AIProvider (list_models, analyze_image,│
+│              check_health)              │
+├─────────────────────────────────────────┤
+│           Implementation                │
+│  OllamaProvider → calls Ollama API      │
+├─────────────────────────────────────────┤
+│              Registry                   │
+│  ProviderRegistry                       │
+│  HashMap<String, Arc<dyn AIProvider>>   │
+│  + default_provider                     │
+└─────────────────────────────────────────┘
+```
 
-## Design Principles
+### File Structure
 
-1. **Single Responsibility**: Photometoria manages photo workflows, providers manage AI inference
-2. **Open/Closed**: Easy to add new providers without modifying core logic
-3. **Dependency Inversion**: Depend on abstractions (trait), not concrete implementations
-4. **Configuration over Code**: Provider selection via configuration file
+```
+src/services/ai/
+├── mod.rs           # Module exports
+├── error.rs         # AIProviderError enum
+├── provider.rs      # AIProvider trait + types
+├── registry.rs      # ProviderRegistry
+└── ollama/
+    ├── mod.rs
+    ├── provider.rs  # OllamaProvider implementation
+    └── types.rs     # Ollama API types
+```
 
 ## Core Abstraction
 
-### VisionProvider Trait
+### AIProvider Trait
 
 ```rust
-// src/providers/mod.rs
+// src/services/ai/provider.rs
 
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+#[async_trait]
+pub trait AIProvider: Send + Sync {
+    /// Returns the unique name of this provider.
+    fn name(&self) -> &str;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VisionRequest {
-    pub image_data: Vec<u8>,          // Raw image bytes
-    pub prompt: String,               // Base prompt for tag generation
-    pub context: Option<String>,      // User-provided context hints
-    pub temperature: f32,             // Sampling temperature
-    pub max_tokens: u32,              // Maximum response length
+    /// Checks the health/availability of the provider.
+    async fn check_health(&self) -> AIProviderResult<HealthStatus>;
+
+    /// Lists available models from this provider.
+    async fn list_models(&self, vision_only: bool) -> AIProviderResult<Vec<ModelInfo>>;
+
+    /// Analyzes an image using the specified model.
+    async fn analyze_image(&self, request: AnalyzeImageRequest) -> AIProviderResult<AnalyzeImageResponse>;
+}
+```
+
+### Common Types
+
+```rust
+pub struct ModelInfo {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub supports_vision: bool,
+    pub provider: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VisionResponse {
-    pub tags: String,                 // Comma-separated tags
-    pub raw_response: Option<String>, // Full response for debugging
-    pub usage: Option<TokenUsage>,    // Token usage (for billing tracking)
+pub struct AnalyzeImageRequest {
+    pub model: String,
+    pub image_base64: String,
+    pub prompt: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalyzeImageResponse {
+    pub text: String,
+    pub model: String,
+    pub tokens_used: Option<TokenUsage>,
+}
+
 pub struct TokenUsage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
     pub total_tokens: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelInfo {
-    pub id: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub context_window: Option<u32>,
-    pub supports_vision: bool,
-}
-
-/// Main trait for AI vision providers
-#[async_trait]
-pub trait VisionProvider: Send + Sync {
-    /// Name of the provider (for logging/config)
-    fn name(&self) -> &str;
-    
-    /// Check if provider is available and healthy
-    async fn health_check(&self) -> Result<bool, ProviderError>;
-    
-    /// List available models from this provider
-    async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError>;
-    
-    /// Analyze image and generate tags
-    async fn analyze_image(
-        &self,
-        request: VisionRequest
-    ) -> Result<VisionResponse, ProviderError>;
-    
-    /// Estimate cost for a request (optional, for paid providers)
-    fn estimate_cost(&self, request: &VisionRequest) -> Option<f64> {
-        None // Default: no cost for local providers
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ProviderError {
-    #[error("Connection error: {0}")]
-    Connection(String),
-    
-    #[error("Authentication error: {0}")]
-    Auth(String),
-    
-    #[error("Invalid request: {0}")]
-    InvalidRequest(String),
-    
-    #[error("Model not found: {0}")]
-    ModelNotFound(String),
-    
-    #[error("Rate limit exceeded")]
-    RateLimit,
-    
-    #[error("Timeout: {0}")]
-    Timeout(String),
-    
-    #[error("Provider error: {0}")]
-    Other(String),
+pub struct HealthStatus {
+    pub healthy: bool,
+    pub message: Option<String>,
+    pub available_models: Option<usize>,
 }
 ```
 
+### Error Types
+
+```rust
+pub enum AIProviderError {
+    Unavailable { provider: String, message: String },
+    RequestFailed { provider: String, message: String },
+    InvalidResponse { provider: String, message: String },
+    ModelNotFound { provider: String, model: String },
+    VisionNotSupported { provider: String, model: String },
+    ConfigurationError { provider: String, message: String },
+    Timeout { provider: String, timeout_secs: u64 },
+    ImageError { message: String },
+}
+```
+
+## Design Principles
+
+1. **Single Responsibility**: Photometoria handles workflow, providers handle AI inference
+2. **Open/Closed**: Easy to add new providers without modifying core logic
+3. **Dependency Inversion**: Depend on abstractions (trait), not concrete implementations
+4. **Configuration over Code**: Provider selection via configuration file
+
 ## Provider Implementations
 
-### 1. Ollama Provider (Local)
+### 1. Ollama Provider (Local) - Implemented
 
 **Implementation:**
 
 ```rust
-// src/providers/ollama.rs
+// src/services/ai/ollama/provider.rs
 
 pub struct OllamaProvider {
+    name: String,
     base_url: String,
-    default_model: String,
+    timeout: Duration,
+    models: HashMap<String, OllamaModelConfig>,
     client: reqwest::Client,
 }
 
-impl OllamaProvider {
-    pub fn new(base_url: String, default_model: String) -> Self {
-        Self {
-            base_url,
-            default_model,
-            client: reqwest::Client::new(),
-        }
-    }
-}
-
 #[async_trait]
-impl VisionProvider for OllamaProvider {
+impl AIProvider for OllamaProvider {
     fn name(&self) -> &str {
-        "ollama"
+        &self.name
     }
-    
-    async fn health_check(&self) -> Result<bool, ProviderError> {
+
+    async fn check_health(&self) -> AIProviderResult<HealthStatus> {
         // GET {base_url}/api/tags
-        let response = self.client
-            .get(format!("{}/api/tags", self.base_url))
-            .send()
-            .await
-            .map_err(|e| ProviderError::Connection(e.to_string()))?;
-        
-        Ok(response.status().is_success())
+        // Returns HealthStatus with available model count
     }
-    
-    async fn list_models(&self) -> Result<Vec<ModelInfo>, ProviderError> {
-        // Parse Ollama's /api/tags response
-        // Filter for vision-capable models
-        // ...
+
+    async fn list_models(&self, vision_only: bool) -> AIProviderResult<Vec<ModelInfo>> {
+        // Returns configured models, optionally filtered by vision support
     }
-    
-    async fn analyze_image(
-        &self,
-        request: VisionRequest
-    ) -> Result<VisionResponse, ProviderError> {
+
+    async fn analyze_image(&self, request: AnalyzeImageRequest) -> AIProviderResult<AnalyzeImageResponse> {
         // POST {base_url}/api/generate
-        // Format: Ollama's generate API with image
-        // Parse response and extract tags
-        // ...
+        // Sends image as base64, returns generated text
     }
 }
 ```
@@ -180,16 +168,25 @@ impl VisionProvider for OllamaProvider {
 **Configuration:**
 
 ```toml
-[provider]
-type = "ollama"
+[ai]
+default_provider = "ollama"
 
-[provider.ollama]
+[ai.providers.ollama]
+type = "ollama"
 base_url = "http://localhost:11434"
-default_model = "qwen2-vl:8b"
-models = [
-    { name = "qwen2-vl:8b", description = "Best quality, slower" },
-    { name = "llava", description = "Faster, good for testing" }
-]
+timeout_seconds = 120
+devices = []
+max_workers = 2
+
+[ai.providers.ollama.models.qwen2-vl]
+ollama_model = "qwen2-vl:8b"
+description = "Best quality, slower"
+supports_vision = true
+
+[ai.providers.ollama.models.llava]
+ollama_model = "llava:latest"
+description = "Faster, good for testing"
+supports_vision = true
 ```
 
 **Characteristics:**
@@ -200,43 +197,41 @@ models = [
 - ⚠️ Requires local GPU
 - ⚠️ Moderate performance (1-2 min/photo)
 
-### 2. OpenAI Provider (Cloud)
+### 2. OpenAI Provider (Cloud) - Planned
 
 **Implementation:**
 
 ```rust
-// src/providers/openai.rs
+// src/services/ai/openai/provider.rs
 
 pub struct OpenAIProvider {
+    name: String,
     api_key: String,
     base_url: String,      // Allows LocalAI compatibility
-    default_model: String,
+    timeout: Duration,
+    models: HashMap<String, OpenAIModelConfig>,
     client: reqwest::Client,
 }
 
 #[async_trait]
-impl VisionProvider for OpenAIProvider {
+impl AIProvider for OpenAIProvider {
     fn name(&self) -> &str {
-        "openai"
+        &self.name
     }
-    
-    async fn analyze_image(
-        &self,
-        request: VisionRequest
-    ) -> Result<VisionResponse, ProviderError> {
+
+    async fn check_health(&self) -> AIProviderResult<HealthStatus> {
+        // GET {base_url}/v1/models
+        // Verify API key and connectivity
+    }
+
+    async fn list_models(&self, vision_only: bool) -> AIProviderResult<Vec<ModelInfo>> {
+        // Return configured models with vision support info
+    }
+
+    async fn analyze_image(&self, request: AnalyzeImageRequest) -> AIProviderResult<AnalyzeImageResponse> {
         // POST {base_url}/v1/chat/completions
         // Format: OpenAI's chat completions API with vision
         // Include base64-encoded image in messages
-        // ...
-    }
-    
-    fn estimate_cost(&self, request: &VisionRequest) -> Option<f64> {
-        // GPT-4 Vision pricing (approximate)
-        // Input: ~$0.01 per 1K tokens
-        // Output: ~$0.03 per 1K tokens
-        let estimated_tokens = (request.image_data.len() / 1024) as f64 * 0.5;
-        Some((estimated_tokens / 1000.0) * 0.01 + 
-             (request.max_tokens as f64 / 1000.0) * 0.03)
     }
 }
 ```
@@ -244,15 +239,22 @@ impl VisionProvider for OpenAIProvider {
 **Configuration:**
 
 ```toml
-[provider]
+[ai.providers.openai]
 type = "openai"
-
-[provider.openai]
 api_key = "${OPENAI_API_KEY}"  # From environment variable
 base_url = "https://api.openai.com/v1"
-default_model = "gpt-4o"
-models = ["gpt-4o", "gpt-4-vision-preview"]
+timeout_seconds = 60
 max_cost_per_photo = 0.05      # Safety limit
+
+[ai.providers.openai.models.gpt-4o]
+openai_model = "gpt-4o"
+description = "Best quality, fast"
+supports_vision = true
+
+[ai.providers.openai.models.gpt-4-vision]
+openai_model = "gpt-4-vision-preview"
+description = "Previous generation vision model"
+supports_vision = true
 ```
 
 **Characteristics:**
@@ -264,38 +266,31 @@ max_cost_per_photo = 0.05      # Safety limit
 - ❌ Privacy concerns (data sent to cloud)
 - ⚠️ Requires internet connection
 
-### 3. LocalAI Provider (Self-hosted OpenAI-compatible)
+### 3. LocalAI Provider (Self-hosted OpenAI-compatible) - Planned
 
 **Implementation:**
 
 ```rust
-// src/providers/localai.rs
+// src/services/ai/localai/provider.rs
 
 // LocalAI uses OpenAI-compatible API, so we can reuse OpenAIProvider!
+// Just configure with a different base_url and no API key
 pub type LocalAIProvider = OpenAIProvider;
-
-impl LocalAIProvider {
-    pub fn new_localai(base_url: String, model: String) -> Self {
-        Self {
-            api_key: String::new(), // No API key needed
-            base_url,
-            default_model: model,
-            client: reqwest::Client::new(),
-        }
-    }
-}
 ```
 
 **Configuration:**
 
 ```toml
-[provider]
-type = "localai"
-
-[provider.localai]
+[ai.providers.localai]
+type = "openai"  # Reuses OpenAI provider type
 base_url = "http://localhost:8080/v1"
-default_model = "llava-1.5-7b"
-models = ["llava-1.5-7b", "llava-1.6-mistral-7b"]
+api_key = ""  # No API key needed for LocalAI
+timeout_seconds = 120
+
+[ai.providers.localai.models.llava]
+openai_model = "llava-1.5-7b"
+description = "Local LLaVA model"
+supports_vision = true
 ```
 
 **Characteristics:**
@@ -306,40 +301,39 @@ models = ["llava-1.5-7b", "llava-1.6-mistral-7b"]
 - ⚠️ Moderate performance
 - ⚠️ Vision support depends on models available
 
-### 4. Anthropic Provider (Cloud)
+### 4. Anthropic Provider (Cloud) - Planned
 
 **Implementation:**
 
 ```rust
-// src/providers/anthropic.rs
+// src/services/ai/anthropic/provider.rs
 
 pub struct AnthropicProvider {
+    name: String,
     api_key: String,
-    default_model: String,
+    timeout: Duration,
+    models: HashMap<String, AnthropicModelConfig>,
     client: reqwest::Client,
 }
 
 #[async_trait]
-impl VisionProvider for AnthropicProvider {
+impl AIProvider for AnthropicProvider {
     fn name(&self) -> &str {
-        "anthropic"
+        &self.name
     }
-    
-    async fn analyze_image(
-        &self,
-        request: VisionRequest
-    ) -> Result<VisionResponse, ProviderError> {
+
+    async fn check_health(&self) -> AIProviderResult<HealthStatus> {
+        // Verify API key with a simple request
+    }
+
+    async fn list_models(&self, vision_only: bool) -> AIProviderResult<Vec<ModelInfo>> {
+        // Return configured models
+    }
+
+    async fn analyze_image(&self, request: AnalyzeImageRequest) -> AIProviderResult<AnalyzeImageResponse> {
         // POST https://api.anthropic.com/v1/messages
         // Format: Anthropic's messages API with vision
         // Include base64-encoded image in content blocks
-        // ...
-    }
-    
-    fn estimate_cost(&self, request: &VisionRequest) -> Option<f64> {
-        // Claude pricing
-        // Input: ~$0.003-0.015 per 1K tokens (model dependent)
-        // Output: ~$0.015-0.075 per 1K tokens
-        // ...
     }
 }
 ```
@@ -347,17 +341,21 @@ impl VisionProvider for AnthropicProvider {
 **Configuration:**
 
 ```toml
-[provider]
+[ai.providers.anthropic]
 type = "anthropic"
-
-[provider.anthropic]
 api_key = "${ANTHROPIC_API_KEY}"
-default_model = "claude-3-5-sonnet-20241022"
-models = [
-    "claude-3-5-sonnet-20241022",
-    "claude-3-opus-20240229"
-]
+timeout_seconds = 60
 max_cost_per_photo = 0.05
+
+[ai.providers.anthropic.models.claude-sonnet]
+anthropic_model = "claude-3-5-sonnet-20241022"
+description = "Best balance of speed and quality"
+supports_vision = true
+
+[ai.providers.anthropic.models.claude-opus]
+anthropic_model = "claude-3-opus-20240229"
+description = "Highest quality, slower"
+supports_vision = true
 ```
 
 **Characteristics:**
@@ -368,119 +366,123 @@ max_cost_per_photo = 0.05
 - ❌ Privacy concerns (cloud)
 - ⚠️ Requires internet connection
 
-### 5. Google Vertex AI Provider (Cloud)
+### 5. Google Vertex AI Provider (Cloud) - Planned
 
 **Implementation sketch:**
 
 ```rust
-// src/providers/google.rs
+// src/services/ai/google/provider.rs
 
 pub struct GoogleProvider {
+    name: String,
     project_id: String,
     location: String,
     credentials: GoogleCredentials,
-    default_model: String,
+    timeout: Duration,
+    models: HashMap<String, GoogleModelConfig>,
+    client: reqwest::Client,
 }
 
-// Implementation details for Google Cloud Vision API or Gemini
+#[async_trait]
+impl AIProvider for GoogleProvider {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn check_health(&self) -> AIProviderResult<HealthStatus> {
+        // Verify credentials and connectivity
+    }
+
+    async fn list_models(&self, vision_only: bool) -> AIProviderResult<Vec<ModelInfo>> {
+        // Return configured Gemini models
+    }
+
+    async fn analyze_image(&self, request: AnalyzeImageRequest) -> AIProviderResult<AnalyzeImageResponse> {
+        // POST to Vertex AI Gemini endpoint
+    }
+}
 ```
 
 **Configuration:**
 
 ```toml
-[provider]
+[ai.providers.google]
 type = "google"
-
-[provider.google]
 project_id = "my-project"
 location = "us-central1"
 credentials_path = "/path/to/service-account.json"
-default_model = "gemini-pro-vision"
+timeout_seconds = 60
+
+[ai.providers.google.models.gemini-pro]
+google_model = "gemini-pro-vision"
+description = "Google's Gemini Pro Vision model"
+supports_vision = true
 ```
 
-## Provider Factory
+## Provider Registry
+
+The `ProviderRegistry` manages multiple AI providers and provides a unified interface for accessing them.
 
 ```rust
-// src/providers/factory.rs
+// src/services/ai/registry.rs
 
-pub struct ProviderFactory;
+pub struct ProviderRegistry {
+    /// Map of provider name to provider instance.
+    providers: HashMap<String, Arc<dyn AIProvider>>,
 
-impl ProviderFactory {
-    /// Create a provider based on configuration
-    pub async fn create(config: &Config) -> Result<Box<dyn VisionProvider>, ProviderError> {
-        match config.provider.provider_type.as_str() {
-            "ollama" => {
-                let provider = OllamaProvider::new(
-                    config.provider.ollama.base_url.clone(),
-                    config.provider.ollama.default_model.clone(),
-                );
-                
-                // Verify provider is available
-                provider.health_check().await?;
-                
-                Ok(Box::new(provider))
-            }
-            
-            "openai" => {
-                let provider = OpenAIProvider::new(
-                    config.provider.openai.api_key.clone(),
-                    config.provider.openai.base_url.clone(),
-                    config.provider.openai.default_model.clone(),
-                );
-                Ok(Box::new(provider))
-            }
-            
-            "localai" => {
-                let provider = OpenAIProvider::new_localai(
-                    config.provider.localai.base_url.clone(),
-                    config.provider.localai.default_model.clone(),
-                );
-                Ok(Box::new(provider))
-            }
-            
-            "anthropic" => {
-                let provider = AnthropicProvider::new(
-                    config.provider.anthropic.api_key.clone(),
-                    config.provider.anthropic.default_model.clone(),
-                );
-                Ok(Box::new(provider))
-            }
-            
-            "google" => {
-                let provider = GoogleProvider::new(
-                    config.provider.google.project_id.clone(),
-                    config.provider.google.location.clone(),
-                    config.provider.google.credentials_path.clone(),
-                    config.provider.google.default_model.clone(),
-                );
-                Ok(Box::new(provider))
-            }
-            
-            _ => Err(ProviderError::InvalidRequest(
-                format!("Unknown provider type: {}", config.provider.provider_type)
-            ))
+    /// The name of the default provider (if configured).
+    default_provider_name: Option<String>,
+}
+
+impl ProviderRegistry {
+    /// Creates a registry from configuration.
+    pub fn from_config(config: &AIConfig) -> AIProviderResult<Self> {
+        let mut registry = Self::new();
+
+        // Register each configured provider
+        for (name, provider_config) in &config.providers {
+            let provider = match provider_config {
+                ProviderConfig::Ollama(ollama_config) => {
+                    create_ollama_provider(name.clone(), ollama_config)
+                }
+                // Future: ProviderConfig::OpenAI, ProviderConfig::Anthropic, etc.
+            };
+
+            registry.register(name.clone(), provider);
         }
+
+        // Set default provider
+        if let Some(default_name) = &config.default_provider {
+            registry.set_default(default_name)?;
+        } else if registry.len() == 1 {
+            // Auto-select if only one provider configured
+            let name = registry.provider_names()[0].to_string();
+            registry.set_default(&name)?;
+        }
+
+        Ok(registry)
     }
-    
-    /// Create provider with fallback chain
-    pub async fn create_with_fallback(
-        config: &Config
-    ) -> Result<Box<dyn VisionProvider>, ProviderError> {
-        let primary = Self::create(config).await?;
-        
-        // TODO: Implement fallback wrapper that tries multiple providers
-        Ok(primary)
-    }
+
+    /// Gets a provider by name.
+    pub fn get(&self, name: &str) -> AIProviderResult<Arc<dyn AIProvider>>;
+
+    /// Gets the default provider.
+    pub fn default_provider(&self) -> AIProviderResult<Arc<dyn AIProvider>>;
+
+    /// Returns all registered provider names.
+    pub fn provider_names(&self) -> Vec<&str>;
 }
 ```
 
 ## Integration with Worker Pool
 
+The Worker Pool (Issue #8) will use the `ProviderRegistry` to access AI providers.
+
 ```rust
-// src/services/worker.rs
+// src/services/worker.rs (planned)
 
 pub struct Worker {
-    provider: Arc<dyn VisionProvider>,
+    provider: Arc<dyn AIProvider>,
     // ... other fields
 }
 
@@ -490,37 +492,28 @@ impl Worker {
         photo: &Photo,
         context: &str,
     ) -> Result<PhotoResult, WorkerError> {
-        // Load image
+        // Load and encode image
         let image_data = tokio::fs::read(&photo.path).await?;
-        
+        let image_base64 = base64::engine::general_purpose::STANDARD.encode(&image_data);
+
         // Prepare request
-        let request = VisionRequest {
-            image_data,
-            prompt: "Generate comma-separated tags for this image.".to_string(),
-            context: Some(context.to_string()),
-            temperature: 0.3,
-            max_tokens: 200,
+        let request = AnalyzeImageRequest {
+            model: self.model_id.clone(),
+            image_base64,
+            prompt: format!("Context: {}\n\nGenerate comma-separated tags for this image.", context),
         };
-        
-        // Cost check for paid providers
-        if let Some(cost) = self.provider.estimate_cost(&request) {
-            if cost > self.max_cost_per_photo {
-                return Err(WorkerError::CostLimitExceeded(cost));
-            }
-            tracing::info!("Estimated cost: ${:.4}", cost);
-        }
-        
+
         // Call provider
         let response = self.provider
             .analyze_image(request)
             .await
             .map_err(WorkerError::ProviderError)?;
-        
+
         Ok(PhotoResult {
             photo_id: photo.photo_id.clone(),
             status: ResultStatus::Completed,
-            tags: Some(response.tags),
-            usage: response.usage,
+            tags: Some(parse_tags(&response.text)),
+            tokens_used: response.tokens_used,
             error: None,
             processed_at: Some(Utc::now()),
         })
@@ -539,57 +532,59 @@ port = 8080
 
 [storage]
 path = "/var/photometoria/storage"
-max_size_gb = 100
+max_size = "100GiB"
 
 [upload]
 max_photos_per_request = 50
-max_photo_size_mb = 20
+max_photo_size = "20MB"
 
-# Provider selection
-[provider]
-type = "ollama"  # Options: "ollama", "openai", "anthropic", "localai", "google"
+# AI Provider Configuration
+[ai]
+default_provider = "ollama"  # Which provider to use by default
 
-# Ollama configuration (local)
-[provider.ollama]
+# Ollama provider (local)
+[ai.providers.ollama]
+type = "ollama"
 base_url = "http://localhost:11434"
-default_model = "qwen2-vl:8b"
-models = [
-    { name = "qwen2-vl:8b", description = "Best quality, slower" },
-    { name = "llava", description = "Faster iteration" }
-]
+timeout_seconds = 120
+devices = []        # GPU device IDs (empty = auto-detect)
+max_workers = 2     # Concurrent workers for job processing
 
-# OpenAI configuration (cloud)
-[provider.openai]
-api_key = "${OPENAI_API_KEY}"
-base_url = "https://api.openai.com/v1"
-default_model = "gpt-4o"
-models = ["gpt-4o", "gpt-4-vision-preview"]
-max_cost_per_photo = 0.05
+[ai.providers.ollama.models.qwen2-vl]
+ollama_model = "qwen2-vl:8b"
+description = "Best quality, slower"
+supports_vision = true
+prompt_template = "Analyze this image and generate descriptive keywords..."
 
-# Anthropic configuration (cloud)
-[provider.anthropic]
-api_key = "${ANTHROPIC_API_KEY}"
-default_model = "claude-3-5-sonnet-20241022"
-models = ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"]
-max_cost_per_photo = 0.05
+[ai.providers.ollama.models.llava]
+ollama_model = "llava:latest"
+description = "Faster, good for testing"
+supports_vision = true
 
-# LocalAI configuration (self-hosted)
-[provider.localai]
-base_url = "http://localhost:8080/v1"
-default_model = "llava-1.5-7b"
-models = ["llava-1.5-7b"]
+# OpenAI provider (cloud) - example for future use
+# [ai.providers.openai]
+# type = "openai"
+# api_key = "${OPENAI_API_KEY}"
+# base_url = "https://api.openai.com/v1"
+# timeout_seconds = 60
+# max_cost_per_photo = 0.05
+#
+# [ai.providers.openai.models.gpt-4o]
+# openai_model = "gpt-4o"
+# description = "Best quality, fast"
+# supports_vision = true
 
-# Google Vertex AI configuration (cloud)
-[provider.google]
-project_id = "my-gcp-project"
-location = "us-central1"
-credentials_path = "/path/to/service-account.json"
-default_model = "gemini-pro-vision"
-max_cost_per_photo = 0.05
-
-# Worker pool configuration
-[gpu]
-max_workers = 2  # Based on available GPUs or desired concurrency
+# Anthropic provider (cloud) - example for future use
+# [ai.providers.anthropic]
+# type = "anthropic"
+# api_key = "${ANTHROPIC_API_KEY}"
+# timeout_seconds = 60
+# max_cost_per_photo = 0.05
+#
+# [ai.providers.anthropic.models.claude-sonnet]
+# anthropic_model = "claude-3-5-sonnet-20241022"
+# description = "Best balance of speed and quality"
+# supports_vision = true
 ```
 
 ### Environment Variables
@@ -612,24 +607,48 @@ export GOOGLE_APPLICATION_CREDENTIALS="/path/to/credentials.json"
 | **Anthropic** | Cloud | ❌ Poor | ❌ ~$0.01-0.02 | 🚀 Excellent | ✅ Easy | 🚀 Best | Best quality, understanding context |
 | **Google** | Cloud | ❌ Poor | ❌ ~$0.005-0.02 | 🚀 Excellent | ⚠️ GCP setup | ✅ Excellent | GCP users, cost-conscious |
 
-## Advanced Features
+## Advanced Features (Future)
 
 ### 1. Fallback Provider Chain
 
 ```rust
 pub struct FallbackProvider {
-    providers: Vec<Box<dyn VisionProvider>>,
+    providers: Vec<Arc<dyn AIProvider>>,
     max_retries: usize,
 }
 
 #[async_trait]
-impl VisionProvider for FallbackProvider {
-    async fn analyze_image(
-        &self,
-        request: VisionRequest
-    ) -> Result<VisionResponse, ProviderError> {
+impl AIProvider for FallbackProvider {
+    fn name(&self) -> &str {
+        "fallback"
+    }
+
+    async fn check_health(&self) -> AIProviderResult<HealthStatus> {
+        // Check if at least one provider is healthy
+        for provider in &self.providers {
+            if let Ok(status) = provider.check_health().await {
+                if status.healthy {
+                    return Ok(status);
+                }
+            }
+        }
+        Ok(HealthStatus { healthy: false, message: Some("All providers unhealthy".into()), available_models: None })
+    }
+
+    async fn list_models(&self, vision_only: bool) -> AIProviderResult<Vec<ModelInfo>> {
+        // Aggregate models from all providers
+        let mut all_models = Vec::new();
+        for provider in &self.providers {
+            if let Ok(models) = provider.list_models(vision_only).await {
+                all_models.extend(models);
+            }
+        }
+        Ok(all_models)
+    }
+
+    async fn analyze_image(&self, request: AnalyzeImageRequest) -> AIProviderResult<AnalyzeImageResponse> {
         let mut last_error = None;
-        
+
         for provider in &self.providers {
             match provider.analyze_image(request.clone()).await {
                 Ok(response) => return Ok(response),
@@ -643,9 +662,12 @@ impl VisionProvider for FallbackProvider {
                 }
             }
         }
-        
-        Err(last_error.unwrap_or_else(|| 
-            ProviderError::Other("All providers failed".to_string())
+
+        Err(last_error.unwrap_or_else(||
+            AIProviderError::Unavailable {
+                provider: "fallback".to_string(),
+                message: "All providers failed".to_string(),
+            }
         ))
     }
 }
@@ -654,10 +676,11 @@ impl VisionProvider for FallbackProvider {
 Configuration:
 
 ```toml
-[provider]
-type = "fallback"
+[ai]
+default_provider = "fallback"
 
-[provider.fallback]
+[ai.providers.fallback]
+type = "fallback"
 providers = ["ollama", "openai"]  # Try ollama first, fallback to openai
 ```
 
@@ -721,34 +744,49 @@ pub async fn compare_providers(
 ### 4. Mock Provider for Testing
 
 ```rust
-// src/providers/mock.rs
+// src/services/ai/mock/provider.rs (for testing)
 
 pub struct MockProvider {
-    responses: HashMap<String, VisionResponse>,
+    name: String,
+    responses: HashMap<String, AnalyzeImageResponse>,
     delay: Option<Duration>,
+    health_status: HealthStatus,
 }
 
 #[async_trait]
-impl VisionProvider for MockProvider {
+impl AIProvider for MockProvider {
     fn name(&self) -> &str {
-        "mock"
+        &self.name
     }
-    
-    async fn analyze_image(
-        &self,
-        request: VisionRequest
-    ) -> Result<VisionResponse, ProviderError> {
+
+    async fn check_health(&self) -> AIProviderResult<HealthStatus> {
+        Ok(self.health_status.clone())
+    }
+
+    async fn list_models(&self, _vision_only: bool) -> AIProviderResult<Vec<ModelInfo>> {
+        Ok(vec![ModelInfo {
+            id: "mock-model".to_string(),
+            name: "Mock Model".to_string(),
+            description: Some("For testing".to_string()),
+            supports_vision: true,
+            provider: self.name.clone(),
+        }])
+    }
+
+    async fn analyze_image(&self, request: AnalyzeImageRequest) -> AIProviderResult<AnalyzeImageResponse> {
         // Simulate delay
         if let Some(delay) = self.delay {
             tokio::time::sleep(delay).await;
         }
-        
-        // Return pre-configured response
-        let photo_hash = format!("{:x}", md5::compute(&request.image_data));
+
+        // Return pre-configured response or default
         self.responses
-            .get(&photo_hash)
+            .get(&request.model)
             .cloned()
-            .ok_or_else(|| ProviderError::Other("Photo not found in mock".to_string()))
+            .ok_or_else(|| AIProviderError::ModelNotFound {
+                provider: self.name.clone(),
+                model: request.model,
+            })
     }
 }
 ```
@@ -833,164 +871,180 @@ Results include usage information:
 
 ## Implementation Roadmap
 
-### Phase 1: Core Abstraction (Current)
+### Phase 1: Core Abstraction ✅ Complete
 **Goal:** Establish the provider abstraction layer
 
-**Tasks:**
-1. Define `VisionProvider` trait
-2. Implement `OllamaProvider` (migrate existing code)
-3. Update configuration system to support provider selection
-4. Implement `ProviderFactory`
-5. Update worker pool to use provider abstraction
-6. Add unit tests with mock provider
+**Completed:**
+1. ✅ Define `AIProvider` trait with `check_health`, `list_models`, `analyze_image`
+2. ✅ Implement `OllamaProvider` with full Ollama API integration
+3. ✅ Update configuration system with `[ai]` section
+4. ✅ Implement `ProviderRegistry` for managing multiple providers
+5. ✅ Add unit tests and integration tests with WireMock
+6. ✅ Integrate registry into `AppState`
 
-**Outcome:** Ollama works through abstraction layer, no functionality lost
+**Outcome:** Ollama works through abstraction layer, ready for additional providers
 
-### Phase 2: OpenAI-Compatible Providers (Next)
+### Phase 2: OpenAI-Compatible Providers (Planned)
 **Goal:** Support cloud and self-hosted OpenAI-compatible providers
 
 **Tasks:**
-1. Implement `OpenAIProvider`
-2. Add LocalAI configuration support (reuses OpenAIProvider)
-3. Add API key management (environment variables)
-4. Implement cost estimation and tracking
-5. Add safety limits (max cost per photo)
+1. Implement `OpenAIProvider` using chat completions API
+2. Add LocalAI support (reuses OpenAI provider with different base_url)
+3. Add API key management via environment variables
+4. Implement cost estimation (optional trait method)
+5. Add safety limits (max_cost_per_photo config)
 6. Update documentation with setup instructions
 
 **Outcome:** Users can choose Ollama (local) or OpenAI/LocalAI
 
-### Phase 3: Additional Cloud Providers
+### Phase 3: Additional Cloud Providers (Planned)
 **Goal:** Support major cloud vision APIs
 
 **Tasks:**
-1. Implement `AnthropicProvider`
-2. Implement `GoogleProvider` (optional)
+1. Implement `AnthropicProvider` using Messages API
+2. Implement `GoogleProvider` for Gemini (optional)
 3. Add provider comparison tooling
-4. Implement cost tracking dashboard
+4. Implement cost tracking
 5. Add budget controls (daily/monthly limits)
 
 **Outcome:** Full choice of providers for different use cases
 
-### Phase 4: Advanced Features
+### Phase 4: Advanced Features (Future)
 **Goal:** Production-ready features
 
 **Tasks:**
 1. Implement fallback provider chain
-2. Add A/B testing framework
-3. Implement retry with backoff for cloud providers
-4. Add caching layer (avoid re-analyzing same photos)
-5. Metrics and monitoring (success rate, latency, cost)
-6. Provider health monitoring
+2. Add retry with exponential backoff for cloud providers
+3. Add caching layer (avoid re-analyzing same photos)
+4. Metrics and monitoring (success rate, latency, cost)
+5. Provider health monitoring and auto-failover
 
 **Outcome:** Robust, production-ready system
 
 ## Migration Guide
 
-### From Current Ollama-only to Abstraction
+### From Design Document to Implementation
 
-**Before:**
-```rust
-// Direct Ollama calls
-let response = ollama_client
-    .generate(photo, prompt)
-    .await?;
-```
+The original design used a `ProviderFactory` pattern. The actual implementation uses a `ProviderRegistry` which provides more flexibility for managing multiple providers simultaneously.
 
-**After:**
-```rust
-// Provider abstraction
-let request = VisionRequest {
-    image_data: photo.data,
-    prompt,
-    context: Some(task.context),
-    temperature: 0.3,
-    max_tokens: 200,
-};
+**Design vs Implementation:**
 
-let response = provider
-    .analyze_image(request)
-    .await?;
-```
+| Design Document | Actual Implementation |
+|----------------|----------------------|
+| `VisionProvider` trait | `AIProvider` trait |
+| `VisionRequest` | `AnalyzeImageRequest` |
+| `VisionResponse` | `AnalyzeImageResponse` |
+| `ProviderFactory::create()` | `ProviderRegistry::from_config()` |
+| `Box<dyn VisionProvider>` | `Arc<dyn AIProvider>` |
+| `src/providers/` | `src/services/ai/` |
+| `[provider]` config | `[ai]` config |
 
-**Configuration:**
+**Configuration Migration:**
+
 ```toml
-# Old: implicit Ollama
-[ollama]
-base_url = "http://localhost:11434"
-
-# New: explicit provider selection
+# Old design (not implemented)
 [provider]
 type = "ollama"
 
 [provider.ollama]
 base_url = "http://localhost:11434"
 default_model = "qwen2-vl:8b"
+
+# Actual implementation
+[ai]
+default_provider = "ollama"
+
+[ai.providers.ollama]
+type = "ollama"
+base_url = "http://localhost:11434"
+timeout_seconds = 120
+
+[ai.providers.ollama.models.qwen2-vl]
+ollama_model = "qwen2-vl:8b"
+supports_vision = true
 ```
 
 ## Testing Strategy
 
 ### Unit Tests
 
+Unit tests are included in each module and use mock HTTP responses via WireMock.
+
 ```rust
+// src/services/ai/registry.rs - tests
 #[cfg(test)]
 mod tests {
     use super::*;
-    
-    #[tokio::test]
-    async fn test_mock_provider() {
-        let mut mock = MockProvider::new();
-        mock.add_response(
-            "test_photo.jpg",
-            VisionResponse {
-                tags: "sunset, beach".to_string(),
-                raw_response: None,
-                usage: None,
-            }
-        );
-        
-        let request = VisionRequest {
-            image_data: load_test_image("test_photo.jpg"),
-            prompt: "Generate tags".to_string(),
-            context: None,
-            temperature: 0.3,
-            max_tokens: 100,
-        };
-        
-        let response = mock.analyze_image(request).await.unwrap();
-        assert_eq!(response.tags, "sunset, beach");
+
+    #[test]
+    fn test_registry_from_config() {
+        let config = create_test_config();
+        let registry = ProviderRegistry::from_config(&config).unwrap();
+
+        assert_eq!(registry.len(), 1);
+        assert_eq!(registry.default_provider_name(), Some("ollama"));
+        assert!(registry.get("ollama").is_ok());
+    }
+
+    #[test]
+    fn test_registry_get_nonexistent() {
+        let registry = ProviderRegistry::new();
+        let result = registry.get("nonexistent");
+        assert!(result.is_err());
     }
 }
 ```
 
 ### Integration Tests
 
+Integration tests use WireMock to simulate Ollama API responses.
+
 ```rust
+// tests/ai_provider_tests.rs
+use wiremock::{MockServer, Mock, ResponseTemplate};
+use wiremock::matchers::{method, path};
+
 #[tokio::test]
-async fn test_ollama_provider_integration() {
-    // Requires Ollama running locally
-    let provider = OllamaProvider::new(
-        "http://localhost:11434".to_string(),
-        "llava".to_string(),
-    );
-    
-    // Health check
-    assert!(provider.health_check().await.unwrap());
-    
-    // List models
-    let models = provider.list_models().await.unwrap();
-    assert!(!models.is_empty());
-    
-    // Analyze image
-    let request = VisionRequest {
-        image_data: load_test_image("sample.jpg"),
-        prompt: "Generate tags for this image".to_string(),
-        context: Some("vacation photo".to_string()),
-        temperature: 0.3,
-        max_tokens: 200,
+async fn test_ollama_health_check() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/tags"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "models": [{"name": "llava:latest"}]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let provider = create_test_provider(&mock_server.uri());
+    let health = provider.check_health().await.unwrap();
+
+    assert!(health.healthy);
+    assert_eq!(health.available_models, Some(1));
+}
+
+#[tokio::test]
+async fn test_ollama_analyze_image() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/api/generate"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "response": "sunset, beach, ocean, waves",
+            "done": true
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let provider = create_test_provider(&mock_server.uri());
+    let request = AnalyzeImageRequest {
+        model: "test-model".to_string(),
+        image_base64: "dGVzdA==".to_string(), // "test" in base64
+        prompt: "Generate tags".to_string(),
     };
-    
+
     let response = provider.analyze_image(request).await.unwrap();
-    assert!(!response.tags.is_empty());
+    assert_eq!(response.text, "sunset, beach, ocean, waves");
 }
 ```
 
@@ -1041,13 +1095,13 @@ The provider abstraction layer enables Photometoria to:
 2. **Give users choice** between privacy (local), cost (free), and performance (cloud)
 3. **Stay future-proof** as new providers and models emerge
 4. **Maintain simplicity** while supporting advanced use cases
-5. **Enable testing** with mock providers
-6. **Track costs** and enforce budgets for paid providers
+5. **Enable testing** with mock providers and WireMock
+6. **Track costs** and enforce budgets for paid providers (planned)
 
 The abstraction follows software engineering best practices (SOLID principles) while remaining pragmatic and easy to implement incrementally.
 
-**Recommended starting point:** Phase 1 with Ollama, then add OpenAI support in Phase 2 based on user demand.
+**Current status:** Phase 1 complete with Ollama provider. The system is ready for additional providers to be added in Phase 2.
 
 ---
 
-*This design document should be reviewed and updated as implementation progresses and new providers emerge.*
+*Last updated: Issue #7 implementation complete.*

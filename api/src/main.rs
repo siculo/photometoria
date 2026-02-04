@@ -1,16 +1,10 @@
-mod app_state;
 mod cli;
-mod config;
-mod handlers;
-mod models;
-mod routes;
-mod services;
-mod startup;
-mod storage;
+
+use photometoria_rest_api::config::load_config;
+use photometoria_rest_api::routes;
+use photometoria_rest_api::startup::{init_app_state, init_tracing, shutdown_signal};
 
 use cli::parse_args;
-use config::load_config;
-use startup::{init_app_state, init_tracing, shutdown_signal};
 
 #[tokio::main]
 async fn main() {

@@ -6,17 +6,20 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 
 use crate::app_state::AppState;
 use crate::config::Config;
+use crate::services::ai::ProviderRegistry;
 use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, PhotoStore, TaskStore};
 
 /// Initializes the application state with all required dependencies.
 ///
-/// Creates the task store and wraps it in the application state struct
-/// that will be shared across all request handlers.
+/// Creates the storage backends and AI provider registry, then wraps them
+/// in the application state struct that will be shared across all request handlers.
 /// Loads existing data from the filesystem.
 ///
 /// # Errors
 ///
-/// Returns an error if the storage path cannot be created or is not writable.
+/// Returns an error if:
+/// - The storage path cannot be created or is not writable
+/// - AI provider configuration is invalid (e.g., invalid default provider)
 pub async fn init_app_state(config: Config) -> Result<AppState, String> {
     let storage_path = PathBuf::from(&config.storage.path);
     tracing::info!("Using storage path: {:?}", storage_path);
@@ -45,7 +48,21 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
     let photo_store: Arc<dyn PhotoStore> = Arc::new(FileSystemPhotoStore::new(storage_path).await);
     tracing::info!("Initialized filesystem photo store");
 
-    Ok(AppState::new(config, task_store, photo_store))
+    // Initialize AI provider registry
+    let ai_providers = Arc::new(
+        ProviderRegistry::from_config(&config.ai).map_err(|e| format!("Failed to initialize AI providers: {}", e))?
+    );
+    if ai_providers.is_empty() {
+        tracing::warn!("No AI providers configured");
+    } else {
+        tracing::info!(
+            "Initialized {} AI provider(s), default: {:?}",
+            ai_providers.len(),
+            ai_providers.default_provider_name()
+        );
+    }
+
+    Ok(AppState::new(config, task_store, photo_store, ai_providers))
 }
 
 /// Initializes the tracing subscriber with environment-aware defaults.

@@ -181,7 +181,10 @@ The codebase follows a clean modular structure:
 ```
 src/
 ├── main.rs              # Application entry point, server initialization
-├── config.rs            # Configuration loading and types
+├── lib.rs               # Library exports for integration tests
+├── config/              # Configuration loading and types
+│   ├── mod.rs
+│   └── byte_size.rs     # ByteSize parsing
 ├── routes/              # REST endpoint definitions (routing)
 │   ├── mod.rs
 │   ├── tasks.rs         # Task-related routes
@@ -196,7 +199,15 @@ src/
 │   └── system.rs
 ├── services/            # External integrations
 │   ├── mod.rs
-│   ├── ollama.rs        # Ollama HTTP API client
+│   ├── ai/              # AI provider abstraction layer
+│   │   ├── mod.rs       # Module exports
+│   │   ├── error.rs     # AIProviderError types
+│   │   ├── provider.rs  # AIProvider trait and common types
+│   │   ├── registry.rs  # ProviderRegistry for managing providers
+│   │   └── ollama/      # Ollama provider implementation
+│   │       ├── mod.rs
+│   │       ├── provider.rs  # OllamaProvider
+│   │       └── types.rs     # Ollama API types
 │   └── worker.rs        # Worker pool and job processing
 ├── storage/             # Abstraction layer for persistence
 │   ├── mod.rs
@@ -225,6 +236,36 @@ src/
 - `tracing` - Logging and tracing
 - `tower` - Middleware
 - `tower-http` - HTTP middleware (CORS, tracing, etc.)
+- `base64` - Image encoding for AI providers
+- `async-trait` - Async trait support
+
+### AI Provider Abstraction
+
+The system uses a provider abstraction layer (`services/ai/`) to support multiple AI backends:
+
+**Core Components:**
+
+- **`AIProvider` trait** - Common interface for all AI providers
+  - `check_health()` - Verify provider availability
+  - `list_models()` - Get available models
+  - `analyze_image()` - Perform image analysis
+
+- **`ProviderRegistry`** - Manages provider instances
+  - Stores providers by name
+  - Provides default provider access
+  - Created from configuration at startup
+
+- **`OllamaProvider`** - Ollama implementation
+  - Calls Ollama REST API (`/api/tags`, `/api/generate`)
+  - Supports vision models (llava, qwen2-vl, etc.)
+  - Configurable timeout and model mappings
+
+**Design Benefits:**
+
+- **Extensibility** - Add new providers without changing handlers
+- **Testability** - Mock providers for unit tests (WireMock for integration)
+- **Configuration-driven** - Provider selection via TOML
+- **Future-proof** - Ready for OpenAI, Anthropic, and other providers
 
 ## Implementation Strategy
 

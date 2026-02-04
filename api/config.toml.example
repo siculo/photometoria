@@ -35,5 +35,44 @@ max_size = "10GiB"
 
 [upload]
 max_photos_per_request = 100
-max_photo_size = 20MB
+max_photo_size = "20MB"
 # File maximum size with optional unit suffix.
+
+# AI Provider Configuration
+# -------------------------
+# Configure AI providers for image analysis and metadata generation.
+
+[ai]
+# The default provider to use when none is specified in API requests.
+default_provider = "ollama"
+
+# Ollama Provider Configuration
+# ----------------------------
+# Ollama is a local AI model runner that supports vision models.
+# See: https://ollama.ai
+
+[ai.providers.ollama]
+type = "ollama"
+base_url = "http://localhost:11434"
+timeout_seconds = 120
+# GPU devices to use (empty = auto-detect)
+devices = []
+# Maximum concurrent analysis workers
+max_workers = 2
+
+# Model Configurations
+# --------------------
+# Define the models available for this provider.
+# The key (e.g., "qwen2-vl") is used as the model ID in API requests.
+
+[ai.providers.ollama.models.qwen2-vl]
+ollama_model = "qwen2-vl:8b"
+prompt_template = "Analyze this photograph and generate relevant keywords for cataloging. Focus on: subjects, actions, settings, mood, colors, and photography style."
+description = "Best quality vision model, slower processing"
+supports_vision = true
+
+[ai.providers.ollama.models.llava]
+ollama_model = "llava:latest"
+prompt_template = "Describe the main subjects, setting, and mood of this photograph."
+description = "Fast vision model, good for development"
+supports_vision = true
