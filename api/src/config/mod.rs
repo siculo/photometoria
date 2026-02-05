@@ -57,7 +57,7 @@ impl Default for UploadConfig {
 }
 
 /// AI provider configuration section.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AIConfig {
     /// The default provider to use when none is specified.
     #[serde(default)]
@@ -66,6 +66,18 @@ pub struct AIConfig {
     /// Named provider configurations.
     #[serde(default)]
     pub providers: HashMap<String, ProviderConfig>,
+}
+
+impl Default for AIConfig {
+    fn default() -> Self {
+        let default_provider_name = "ollama";
+        let mut providers = HashMap::default();
+        providers.insert(default_provider_name.to_string(), ProviderConfig::Ollama(Default::default()));
+        Self {
+            default_provider: Some(default_provider_name.to_string()),
+            providers
+        }
+    }
 }
 
 /// Configuration for a single AI provider.
@@ -203,13 +215,12 @@ pub fn load_config(config_path: &Path) -> Result<Config, ConfigError> {
         path: path_str.clone(),
         source: e,
     })?;
-
     let config: Config = toml::from_str(&content).map_err(|e| ConfigError::ParseError {
         path: path_str.clone(),
         source: e,
     })?;
-
     tracing::info!("Loaded configuration from '{}'", path_str);
+
     Ok(config)
 }
 

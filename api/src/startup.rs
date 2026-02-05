@@ -56,10 +56,14 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
         tracing::warn!("No AI providers configured");
     } else {
         tracing::info!(
-            "Initialized {} AI provider(s), default: {:?}",
+            "Initialized {} AI provider{}",
             ai_providers.len(),
-            ai_providers.default_provider_name()
+            if ai_providers.len() == 1 { "" } else { "s" }
         );
+        match ai_providers.default_provider_name() {
+            Some(name) => tracing::info!("Default provider is '{}'", name),
+            None => tracing::info!("No default provider name")
+        };
     }
 
     Ok(AppState::new(config, task_store, photo_store, ai_providers))
