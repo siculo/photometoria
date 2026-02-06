@@ -3,9 +3,8 @@ use axum::{
     extract::DefaultBodyLimit,
     routing::{get, post},
 };
-
 use crate::app_state::AppState;
-use crate::handlers::photos::task_photos;
+use crate::handlers::photos::{delete_photo, get_photo, task_photos};
 use crate::handlers::upload_photos::upload_photos;
 use crate::handlers::tasks::{create_task, delete_task, get_task, list_tasks, update_task};
 
@@ -25,6 +24,10 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/tasks/{task_id}/photos",
             get(task_photos).post(upload_photos).layer(DefaultBodyLimit::max(max_upload_size)),
+        )
+        .route(
+            "/api/photos/{photo_id}",
+            get(get_photo).delete(delete_photo)
         )
         .with_state(state)
 }
@@ -344,6 +347,134 @@ mod tests {
         let ta = create_test_app().await;
 
         let request = Request::get("/api/tasks/not-a-uuid/photos")
+            .body(Body::empty())
+            .unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let error: crate::handlers::app_error::ErrorResponse = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(error.error, "invalid_path_parameter");
+    }
+
+    #[tokio::test]
+    async fn test_get_photo_by_id_found() {
+        let ta = create_test_app().await;
+
+        // Create task and photo
+        let task = crate::models::Task::new("test task".to_string());
+        let task_id = task.task_id;
+        ta.state.task_store.create(task).await.unwrap();
+
+        let photo = crate::models::Photo::new(task_id, "test.jpg".to_string(), 1_234_567);
+        let photo_id = photo.photo_id;
+        let uploaded_at = photo.uploaded_at;
+        ta.state.photo_store.create(photo).await.unwrap();
+
+        let request = Request::get(format!("/api/photos/{}", photo_id))
+            .body(Body::empty())
+            .unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let photo_response: crate::models::PhotoResponse = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(photo_response.photo_id, photo_id);
+        assert_eq!(photo_response.task_id, task_id);
+        assert_eq!(photo_response.filename, "test.jpg");
+        assert_eq!(photo_response.size_bytes, 1_234_567);
+        assert_eq!(photo_response.uploaded_at, uploaded_at);
+    }
+
+    #[tokio::test]
+    async fn test_get_photo_by_id_not_found() {
+        let ta = create_test_app().await;
+        let nonexistent_id = Uuid::new_v4();
+
+        let request = Request::get(format!("/api/photos/{}", nonexistent_id))
+            .body(Body::empty())
+            .unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let error: crate::handlers::app_error::ErrorResponse = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(error.error, "not_found");
+        assert!(error.message.contains(&nonexistent_id.to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_get_photo_invalid_uuid() {
+        let ta = create_test_app().await;
+
+        let request = Request::get("/api/photos/not-a-uuid")
+            .body(Body::empty())
+            .unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let error: crate::handlers::app_error::ErrorResponse = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(error.error, "invalid_path_parameter");
+    }
+
+    #[tokio::test]
+    async fn test_delete_photo_success() {
+        let ta = create_test_app().await;
+
+        // Create task and photo
+        let task = crate::models::Task::new("test task".to_string());
+        let task_id = task.task_id;
+        ta.state.task_store.create(task).await.unwrap();
+
+        let photo = crate::models::Photo::new(task_id, "to_delete.jpg".to_string(), 5000);
+        let photo_id = photo.photo_id;
+        ta.state.photo_store.create(photo).await.unwrap();
+
+        let request = Request::delete(format!("/api/photos/{}", photo_id))
+            .body(Body::empty())
+            .unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // Verify photo is deleted
+        let exists = ta.state.photo_store.exists(photo_id).await.unwrap();
+        assert!(!exists);
+    }
+
+    #[tokio::test]
+    async fn test_delete_photo_not_found() {
+        let ta = create_test_app().await;
+        let nonexistent_id = Uuid::new_v4();
+
+        let request = Request::delete(format!("/api/photos/{}", nonexistent_id))
+            .body(Body::empty())
+            .unwrap();
+        let response = ta.router.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let error: crate::handlers::app_error::ErrorResponse = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(error.error, "not_found");
+        assert!(error.message.contains(&nonexistent_id.to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_delete_photo_invalid_uuid() {
+        let ta = create_test_app().await;
+
+        let request = Request::delete("/api/photos/not-a-uuid")
             .body(Body::empty())
             .unwrap();
         let response = ta.router.oneshot(request).await.unwrap();

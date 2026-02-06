@@ -77,6 +77,20 @@ async fn get_task_summary(photo_store: &Arc<dyn PhotoStore>, task: Task) -> Task
     summary
 }
 
+/// Helper function to retrieve a task and handle errors.
+///
+/// Returns the task if found, or an appropriate AppError otherwise.
+pub(crate) async fn get_existing_task(
+    task_store: &Arc<dyn crate::storage::TaskStore>,
+    task_id: Uuid,
+) -> Result<Task, AppError> {
+    match task_store.get(task_id).await {
+        Ok(Some(task)) => Ok(task),
+        Ok(None) => Err(AppError::task_not_found(task_id)),
+        Err(e) => Err(AppError::internal_error(e.to_string())),
+    }
+}
+
 /// Handler for GET /api/tasks/{task_id}
 ///
 /// Retrieves detailed information about a specific task.
@@ -84,20 +98,15 @@ pub async fn get_task(
     State(state): State<AppState>,
     AppPath(task_id): AppPath<Uuid>,
 ) -> Result<Json<TaskDetail>, AppError> {
-    match state.task_store.get(task_id).await {
-        Ok(Some(task)) => {
-            let detail = TaskDetail {
-                task_id: task.task_id,
-                context: task.context,
-                created_at: task.created_at,
-                photo_count: state.photo_store.count_by_task(task_id).await.unwrap(),
-                storage_used: state.photo_store.total_size_by_task(task_id).await.unwrap(),
-            };
-            Ok(Json(detail))
-        }
-        Ok(None) => Err(AppError::task_not_found(task_id)),
-        Err(e) => Err(AppError::internal_error(e.to_string())),
-    }
+    let task = get_existing_task(&state.task_store, task_id).await?;
+    let detail = TaskDetail {
+        task_id: task.task_id,
+        context: task.context,
+        created_at: task.created_at,
+        photo_count: state.photo_store.count_by_task(task_id).await.unwrap(),
+        storage_used: state.photo_store.total_size_by_task(task_id).await.unwrap(),
+    };
+    Ok(Json(detail))
 }
 
 /// Handler for PATCH /api/tasks/{task_id}
@@ -109,22 +118,18 @@ pub async fn update_task(
     AppJson(request): AppJson<UpdateTaskRequest>,
 ) -> Result<Json<TaskResponse>, AppError> {
     // First, get the existing task
-    match state.task_store.get(task_id).await {
-        Ok(Some(task)) => {
-            // Update the context while preserving other fields
-            let updated_task = Task {
-                task_id: task.task_id,
-                context: request.context,
-                created_at: task.created_at,
-            };
+    let task = get_existing_task(&state.task_store, task_id).await?;
 
-            match state.task_store.update(updated_task).await {
-                Ok(task) => Ok(Json(TaskResponse::from(task))),
-                Err(TaskStoreError::NotFound(not_found_task_id)) => Err(AppError::task_not_found(not_found_task_id)),
-                Err(e) => Err(AppError::internal_error(e.to_string())),
-            }
-        }
-        Ok(None) => Err(AppError::task_not_found(task_id)),
+    // Update the context while preserving other fields
+    let updated_task = Task {
+        task_id: task.task_id,
+        context: request.context,
+        created_at: task.created_at,
+    };
+
+    match state.task_store.update(updated_task).await {
+        Ok(task) => Ok(Json(TaskResponse::from(task))),
+        Err(TaskStoreError::NotFound(not_found_task_id)) => Err(AppError::task_not_found(not_found_task_id)),
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }

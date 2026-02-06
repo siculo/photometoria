@@ -324,13 +324,18 @@ Returns detailed information about a specific photo.
 }
 ```
 
-### DELETE /api/tasks/{task_id}/photos/{photo_id}
+### DELETE /api/photos/{photo_id}
 
-Deletes a specific photo from the task.
+Deletes a specific photo.
+
+**Response:**
+
+- `204 No Content` - Photo successfully deleted
 
 **Errors:**
 
-- `409` - Cannot delete photo referenced by active jobs
+- `404` - Photo not found
+- `409` - Cannot delete photo referenced by active jobs (future implementation)
 
 ## Job Endpoints
 
