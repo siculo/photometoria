@@ -332,6 +332,65 @@
 					]
 				},
 				{
+					"name": "List Task Photos",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}", "photos"]
+						},
+						"description": "Returns the list of photo IDs belonging to a task.\n\nUses the task_id saved from creation or replace it manually."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "{{task_id}}", "photos"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"photo_ids\": [\n        \"f0e1d2c3-b4a5-6789-0fed-cba987654321\",\n        \"a9b8c7d6-e5f4-3210-9876-543210fedcba\",\n        \"11111111-2222-3333-4444-555555555555\"\n    ],\n    \"count\": 3\n}"
+						},
+						{
+							"name": "Task Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks/nonexistent/photos",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "nonexistent", "photos"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Task with id 'nonexistent' not found\"\n}"
+						}
+					]
+				},
+				{
 					"name": "Upload Photos",
 					"request": {
 						"method": "POST",

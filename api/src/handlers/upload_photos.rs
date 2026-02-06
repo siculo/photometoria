@@ -32,9 +32,8 @@ pub async fn upload_photos(
         .task_store
         .exists(task_id)
         .await
-        .map_err(|_| AppError::internal_error())?;
+        .map_err(|e| AppError::internal_error(e.to_string()))?;
     if !task_exists {
-        warn!("Task not found: {}", task_id);
         return Err(AppError::task_not_found(task_id));
     }
 
@@ -172,7 +171,7 @@ async fn process_multipart(
         .photo_store
         .total_size()
         .await
-        .map_err(|_| AppError::internal_error())?;
+        .map_err(|e| AppError::internal_error(e.to_string()))?;
     let mut uploaded: Vec<UploadedPhoto> = vec![];
     let mut failed: Vec<FailedUpload> = vec![];
     let mut uploaded_size_bytes: u64 = 0;

@@ -7,6 +7,7 @@ use axum::Json;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use tracing::{error, warn};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AppError {
@@ -22,7 +23,7 @@ pub struct ErrorResponse {
 }
 
 impl AppError {
-    pub fn new(status: StatusCode, error: impl Into<String>, message: impl Into<String>) -> Self {
+    fn new(status: StatusCode, error: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             status,
             body: ErrorResponse {
@@ -32,19 +33,32 @@ impl AppError {
         }
     }
 
+    pub fn conflict(error: impl Into<String>, message: impl Into<String>) -> Self {
+        let message = message.into();
+        warn!(message);
+        Self::new(StatusCode::CONFLICT, error, message)
+    }
+
     pub fn bad_request(error: impl Into<String>, message: impl Into<String>) -> Self {
-        AppError::new(StatusCode::BAD_REQUEST, error, message)
+        let message = message.into();
+        warn!(message);
+        Self::new(StatusCode::BAD_REQUEST, error, message)
     }
 
     pub fn not_found(message: impl Into<String>) -> Self {
+        let message = message.into();
+        warn!(message);
         Self::new(StatusCode::NOT_FOUND, "not_found", message)
     }
 
     pub fn task_not_found(task_id: Uuid) -> Self {
-        Self::not_found(format!("Task with id '{}' not found", task_id))
+        let message = format!("Task with id '{}' not found", task_id);
+        warn!(message);
+        Self::new(StatusCode::NOT_FOUND, "not_found", message)
     }
 
-    pub fn internal_error() -> Self {
+    pub fn internal_error(description: String) -> Self {
+        error!("An internal server error occurred: {}", description);
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "internal_error",

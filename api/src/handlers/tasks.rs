@@ -31,9 +31,9 @@ pub async fn create_task(
             Ok((StatusCode::CREATED, Json(response)))
         }
         Err(TaskStoreError::AlreadyExists(existing_task_id)) => {
-            Err(AppError::new(StatusCode::CONFLICT, "already_exists", format!("Task with id '{}' already exists", existing_task_id)))
+            Err(AppError::conflict("already_exists", format!("Task with id '{}' already exists", existing_task_id)))
         }
-        Err(_) => Err(AppError::internal_error()),
+        Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
@@ -53,7 +53,7 @@ pub async fn list_tasks(
             }
             Ok(Json(summaries))
         }
-        Err(_) => Err(AppError::internal_error()),
+        Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
@@ -96,7 +96,7 @@ pub async fn get_task(
             Ok(Json(detail))
         }
         Ok(None) => Err(AppError::task_not_found(task_id)),
-        Err(_) => Err(AppError::internal_error()),
+        Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
@@ -121,11 +121,11 @@ pub async fn update_task(
             match state.task_store.update(updated_task).await {
                 Ok(task) => Ok(Json(TaskResponse::from(task))),
                 Err(TaskStoreError::NotFound(not_found_task_id)) => Err(AppError::task_not_found(not_found_task_id)),
-                Err(_) => Err(AppError::internal_error()),
+                Err(e) => Err(AppError::internal_error(e.to_string())),
             }
         }
         Ok(None) => Err(AppError::task_not_found(task_id)),
-        Err(_) => Err(AppError::internal_error()),
+        Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
@@ -139,7 +139,7 @@ pub async fn delete_task(
     match state.task_store.delete(task_id).await {
         Ok(()) => Ok(StatusCode::NO_CONTENT),
         Err(TaskStoreError::NotFound(not_found_task_id)) => Err(AppError::task_not_found(not_found_task_id)),
-        Err(_) => Err(AppError::internal_error()),
+        Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
