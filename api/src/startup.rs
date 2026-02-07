@@ -7,7 +7,7 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 use crate::app_state::AppState;
 use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
-use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, PhotoStore, TaskStore};
+use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, InMemoryJobStore, JobStore, PhotoStore, TaskStore};
 
 /// Initializes the application state with all required dependencies.
 ///
@@ -48,6 +48,9 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
     let photo_store: Arc<dyn PhotoStore> = Arc::new(FileSystemPhotoStore::new(storage_path).await);
     tracing::info!("Initialized filesystem photo store");
 
+    let job_store: Arc<dyn JobStore> = Arc::new(InMemoryJobStore::new());
+    tracing::info!("Initialized in memory job store");
+
     // Initialize AI provider registry
     let ai_providers = Arc::new(
         ProviderRegistry::from_config(&config.ai).map_err(|e| format!("Failed to initialize AI providers: {}", e))?
@@ -66,7 +69,7 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
         };
     }
 
-    Ok(AppState::new(config, task_store, photo_store, ai_providers))
+    Ok(AppState::new(config, task_store, photo_store, job_store, ai_providers))
 }
 
 /// Initializes the tracing subscriber with environment-aware defaults.

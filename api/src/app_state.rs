@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
-use crate::storage::{PhotoStore, TaskStore};
+use crate::storage::{JobStore, PhotoStore, TaskStore};
 
 /// Application state shared across all request handlers.
 ///
@@ -16,6 +16,8 @@ pub struct AppState {
     pub task_store: Arc<dyn TaskStore>,
     /// Thread-safe reference to the photo storage backend.
     pub photo_store: Arc<dyn PhotoStore>,
+    /// Thread-safe reference to the job storage backend.
+    pub job_store: Arc<dyn JobStore>,
     /// Registry of AI providers for image analysis.
     pub ai_providers: Arc<ProviderRegistry>,
 }
@@ -44,8 +46,9 @@ impl AppState {
         config: Config,
         task_store: Arc<dyn TaskStore>,
         photo_store: Arc<dyn PhotoStore>,
+        job_store: Arc<dyn JobStore>,
         ai_providers: Arc<ProviderRegistry>,
     ) -> Self {
-        Self { config, task_store, photo_store, ai_providers }
+        Self { config, task_store, photo_store, ai_providers, job_store }
     }
 }

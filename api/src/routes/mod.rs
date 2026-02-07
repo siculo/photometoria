@@ -4,6 +4,7 @@ use axum::{
     routing::{get, post},
 };
 use crate::app_state::AppState;
+use crate::handlers::jobs::create_job;
 use crate::handlers::photos::{delete_photo, get_photo, task_photos};
 use crate::handlers::upload_photos::upload_photos;
 use crate::handlers::tasks::{create_task, delete_task, get_task, list_tasks, update_task};
@@ -28,6 +29,10 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/api/photos/{photo_id}",
             get(get_photo).delete(delete_photo)
+        )
+        .route(
+            "/api/tasks/{task_id}/jobs",
+            post(create_job)
         )
         .with_state(state)
 }
@@ -55,7 +60,7 @@ mod tests {
     use crate::config::Config;
     use crate::models::{TaskDetail, TaskResponse, TaskSummary};
     use crate::services::ai::ProviderRegistry;
-    use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, PhotoStore, TaskStore};
+    use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, InMemoryJobStore, PhotoStore, TaskStore};
 
     struct TestApp {
         router: Router,
@@ -69,8 +74,9 @@ mod tests {
         let config = Config::default();
         let task_store: Arc<dyn TaskStore> = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
         let photo_store: Arc<dyn PhotoStore> = Arc::new(FileSystemPhotoStore::new(storage_path).await);
+        let job_store = Arc::new(InMemoryJobStore::new());
         let ai_providers = Arc::new(ProviderRegistry::new());
-        let state = AppState::new(config, task_store, photo_store, ai_providers);
+        let state = AppState::new(config, task_store, photo_store, job_store, ai_providers);
         let router = create_router(state.clone());
         TestApp {
             router,

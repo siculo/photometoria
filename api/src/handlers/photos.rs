@@ -57,8 +57,7 @@ async fn get_existing_photo(
     photo_store: &Arc<dyn PhotoStore>,
     photo_id: Uuid,
 ) -> Result<Photo, AppError> {
-    let p = photo_store.get(photo_id).await;
-    match p {
+    match photo_store.get(photo_id).await {
         Ok(Some(photo)) => Ok(photo),
         Ok(None) => Err(AppError::not_found(format!("Photo with id {} not found", photo_id))),
         Err(e) => Err(AppError::internal_error(e.to_string()))
