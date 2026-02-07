@@ -151,33 +151,10 @@ pub async fn delete_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
+    use crate::handlers::test_utils::fixtures::create_test_state;
     use crate::models::Photo;
-    use crate::services::ai::ProviderRegistry;
-    use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, InMemoryJobStore};
     use chrono::Utc;
-    use std::sync::Arc;
-    use tempfile::TempDir;
     use uuid::Uuid;
-
-    struct TestState {
-        state: AppState,
-        _temp_dir: TempDir,
-    }
-
-    async fn create_test_state() -> TestState {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let storage_path = temp_dir.path().to_path_buf();
-        let config = Config::default();
-        let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path).await);
-        let ai_providers = Arc::new(ProviderRegistry::new());
-        let job_store = Arc::new(InMemoryJobStore::new());
-        TestState {
-            state: AppState::new(config, task_store, photo_store, job_store, ai_providers),
-            _temp_dir: temp_dir,
-        }
-    }
 
     #[tokio::test]
     async fn test_create_task_returns_task_response() {
