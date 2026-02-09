@@ -39,9 +39,10 @@ use super::{PhotoStore, PhotoStoreError, PhotoStoreResult};
 /// ```text
 /// {storage_path}/tasks/{task_id}/
 /// ├── photos.json      # metadata for all photos in this task
-/// ├── {photo_id_1}     # binary image data
-/// ├── {photo_id_2}     # binary image data
-/// └── ...
+/// └── imgs/            # binary image data
+///     ├── {photo_id_1}
+///     ├── {photo_id_2}
+///     └── ...
 /// ```
 ///
 /// ## Persistence Strategy
@@ -78,6 +79,7 @@ impl FileSystemPhotoStore {
         self.storage_path
             .join("tasks")
             .join(task_id.to_string())
+            .join("imgs")
             .join(photo_id.to_string())
     }
 
@@ -365,6 +367,20 @@ impl PhotoStore for FileSystemPhotoStore {
             .ok_or(PhotoStoreError::NotFound(photo_id))?;
         let task_id = photo.task_id;
         drop(photo); // Release the lock
+
+        // Ensure imgs directory exists
+        let imgs_dir = self
+            .storage_path
+            .join("tasks")
+            .join(task_id.to_string())
+            .join("imgs");
+        if let Err(e) = tokio::fs::create_dir_all(&imgs_dir).await {
+            error!("Failed to create imgs directory {:?}: {}", imgs_dir, e);
+            return Err(PhotoStoreError::StorageError(format!(
+                "Failed to create imgs directory: {}",
+                e
+            )));
+        }
 
         let file_path = self.photo_path(task_id, photo_id);
         tokio::fs::write(&file_path, data).await.map_err(|e| {
@@ -886,5 +902,43 @@ mod tests {
         let store = FileSystemPhotoStore::new(storage_path).await;
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
         assert!(!store.exists(photo_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_photos_stored_in_imgs_subdirectory() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_id = Uuid::new_v4();
+
+        // Create task directory
+        let task_dir = storage_path.join("tasks").join(task_id.to_string());
+        tokio::fs::create_dir_all(&task_dir).await.unwrap();
+
+        let photo = create_test_photo(task_id, "test.jpg", 1_000);
+        let photo_id = photo.photo_id;
+
+        let store = FileSystemPhotoStore::new(storage_path).await;
+        store.create(photo).await.unwrap();
+
+        // Save photo data
+        let test_data = vec![0xFF, 0xD8, 0xFF, 0xE0];
+        store.save_data(photo_id, &test_data).await.unwrap();
+
+        // Verify imgs/ subdirectory exists
+        let imgs_dir = task_dir.join("imgs");
+        assert!(imgs_dir.exists(), "imgs/ directory should exist");
+        assert!(imgs_dir.is_dir(), "imgs/ should be a directory");
+
+        // Verify photo file is in imgs/ subdirectory
+        let photo_file = imgs_dir.join(photo_id.to_string());
+        assert!(photo_file.exists(), "Photo file should exist in imgs/");
+        assert!(photo_file.is_file(), "Photo should be a file");
+
+        // Verify photo is NOT in task root directory
+        let wrong_path = task_dir.join(photo_id.to_string());
+        assert!(
+            !wrong_path.exists(),
+            "Photo should NOT be in task root directory"
+        );
     }
 }
