@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
 use crate::storage::{JobStore, PhotoStore, TaskStore};
+use std::sync::Arc;
 
 /// Application state shared across all request handlers.
 ///
@@ -49,6 +49,12 @@ impl AppState {
         job_store: Arc<dyn JobStore>,
         ai_providers: Arc<ProviderRegistry>,
     ) -> Self {
-        Self { config, task_store, photo_store, ai_providers, job_store }
+        Self {
+            config,
+            task_store,
+            photo_store,
+            ai_providers,
+            job_store,
+        }
     }
 }

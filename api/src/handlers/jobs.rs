@@ -2,12 +2,12 @@ use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
 use crate::handlers::tasks::get_existing_task;
 use crate::models::{CreateJobRequest, Job, JobResponse, Photo};
-use axum::extract::State;
+use crate::storage::JobStore;
 use axum::Json;
+use axum::extract::State;
 use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::storage::JobStore;
 
 pub async fn create_job(
     State(state): State<AppState>,
@@ -26,13 +26,23 @@ pub async fn create_job(
     }
 }
 
-fn job_photo_ids(task_id: Uuid, photos: Vec<Photo>, request_photo_ids: Option<Vec<Uuid>>) -> Result<Vec<Uuid>, AppError> {
+fn job_photo_ids(
+    task_id: Uuid,
+    photos: Vec<Photo>,
+    request_photo_ids: Option<Vec<Uuid>>,
+) -> Result<Vec<Uuid>, AppError> {
     let photo_ids = match request_photo_ids {
         Some(photo_ids) => {
             let task_photo_ids = photos.iter().map(|p| &p.photo_id).collect::<HashSet<_>>();
             for photo_id in photo_ids.clone() {
                 if !task_photo_ids.contains(&photo_id) {
-                    return Err(AppError::bad_request("invalid_parameter", format!("photo with photo_id '{}' does not exists in task '{}'", photo_id, task_id)));
+                    return Err(AppError::bad_request(
+                        "invalid_parameter",
+                        format!(
+                            "photo with photo_id '{}' does not exists in task '{}'",
+                            photo_id, task_id
+                        ),
+                    ));
                 }
             }
             photo_ids
@@ -42,10 +52,13 @@ fn job_photo_ids(task_id: Uuid, photos: Vec<Photo>, request_photo_ids: Option<Ve
     Ok(photo_ids)
 }
 
-async fn add_job_to_store(job_store: &Arc<dyn JobStore>, job: Job) -> Result<JobResponse, AppError> {
+async fn add_job_to_store(
+    job_store: &Arc<dyn JobStore>,
+    job: Job,
+) -> Result<JobResponse, AppError> {
     match job_store.create(job.clone()).await {
         Ok(job) => Ok(job.into()),
-        Err(e) => Err(AppError::internal_error(e.to_string()))
+        Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
@@ -93,7 +106,13 @@ mod tests {
         assert_eq!(job_response.status, JobStatus::Queued);
 
         // Verify the job was stored and contains all photos
-        let stored_job = ts.state.job_store.get(job_response.job_id).await.unwrap().unwrap();
+        let stored_job = ts
+            .state
+            .job_store
+            .get(job_response.job_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(stored_job.photo_ids.len(), 2);
         assert!(stored_job.photo_ids.contains(&photo1_id));
         assert!(stored_job.photo_ids.contains(&photo2_id));
@@ -133,7 +152,13 @@ mod tests {
         assert_eq!(job_response.photo_count, 2);
 
         // Verify the job contains only the specified photos
-        let stored_job = ts.state.job_store.get(job_response.job_id).await.unwrap().unwrap();
+        let stored_job = ts
+            .state
+            .job_store
+            .get(job_response.job_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(stored_job.photo_ids.len(), 2);
         assert!(stored_job.photo_ids.contains(&photo1_id));
         assert!(stored_job.photo_ids.contains(&photo2_id));
@@ -149,12 +174,22 @@ mod tests {
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(nonexistent_task_id), Json(request)).await;
+        let result = create_job(
+            State(ts.state.clone()),
+            AppPath(nonexistent_task_id),
+            Json(request),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert_eq!(error.body.error, "not_found");
-        assert!(error.body.message.contains(&nonexistent_task_id.to_string()));
+        assert!(
+            error
+                .body
+                .message
+                .contains(&nonexistent_task_id.to_string())
+        );
     }
 
     #[tokio::test]
@@ -209,7 +244,13 @@ mod tests {
         assert_eq!(job_response.photo_count, 0);
 
         // Verify the job has no photos
-        let stored_job = ts.state.job_store.get(job_response.job_id).await.unwrap().unwrap();
+        let stored_job = ts
+            .state
+            .job_store
+            .get(job_response.job_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert!(stored_job.photo_ids.is_empty());
     }
 }

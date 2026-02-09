@@ -27,4 +27,4 @@
 pub mod provider;
 pub mod types;
 
-pub use provider::{create_ollama_provider, OllamaProvider};
+pub use provider::{OllamaProvider, create_ollama_provider};

@@ -148,29 +148,24 @@ impl AIProvider for OllamaProvider {
     async fn list_models(&self, vision_only: bool) -> AIProviderResult<Vec<ModelInfo>> {
         let url = self.api_url("/api/tags");
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    AIProviderError::Timeout {
-                        provider: self.name.clone(),
-                        timeout_secs: self.timeout.as_secs(),
-                    }
-                } else if e.is_connect() {
-                    AIProviderError::Unavailable {
-                        provider: self.name.clone(),
-                        message: format!("Cannot connect to Ollama at {}", self.base_url),
-                    }
-                } else {
-                    AIProviderError::RequestFailed {
-                        provider: self.name.clone(),
-                        message: e.to_string(),
-                    }
+        let response = self.client.get(&url).send().await.map_err(|e| {
+            if e.is_timeout() {
+                AIProviderError::Timeout {
+                    provider: self.name.clone(),
+                    timeout_secs: self.timeout.as_secs(),
                 }
-            })?;
+            } else if e.is_connect() {
+                AIProviderError::Unavailable {
+                    provider: self.name.clone(),
+                    message: format!("Cannot connect to Ollama at {}", self.base_url),
+                }
+            } else {
+                AIProviderError::RequestFailed {
+                    provider: self.name.clone(),
+                    message: e.to_string(),
+                }
+            }
+        })?;
 
         if !response.status().is_success() {
             return Err(AIProviderError::RequestFailed {
@@ -180,10 +175,13 @@ impl AIProvider for OllamaProvider {
         }
 
         let tags_response: OllamaTagsResponse =
-            response.json().await.map_err(|e| AIProviderError::InvalidResponse {
-                provider: self.name.clone(),
-                message: format!("Failed to parse Ollama response: {}", e),
-            })?;
+            response
+                .json()
+                .await
+                .map_err(|e| AIProviderError::InvalidResponse {
+                    provider: self.name.clone(),
+                    message: format!("Failed to parse Ollama response: {}", e),
+                })?;
 
         let models: Vec<ModelInfo> = tags_response
             .models
@@ -194,7 +192,9 @@ impl AIProvider for OllamaProvider {
                     id: m.name.clone(),
                     name: m.name.clone(),
                     description: m.details.as_ref().and_then(|d| {
-                        d.parameter_size.as_ref().map(|ps| format!("{} parameters", ps))
+                        d.parameter_size
+                            .as_ref()
+                            .map(|ps| format!("{} parameters", ps))
                     }),
                     supports_vision,
                     provider: self.name.clone(),
@@ -273,10 +273,13 @@ impl AIProvider for OllamaProvider {
         }
 
         let ollama_response: OllamaGenerateResponse =
-            response.json().await.map_err(|e| AIProviderError::InvalidResponse {
-                provider: self.name.clone(),
-                message: format!("Failed to parse Ollama response: {}", e),
-            })?;
+            response
+                .json()
+                .await
+                .map_err(|e| AIProviderError::InvalidResponse {
+                    provider: self.name.clone(),
+                    message: format!("Failed to parse Ollama response: {}", e),
+                })?;
 
         // Build token usage if available
         let tokens_used = match (
@@ -318,12 +321,7 @@ mod tests {
 
     #[test]
     fn test_api_url() {
-        let provider = OllamaProvider::new(
-            "test",
-            "http://localhost:11434",
-            30,
-            HashMap::new(),
-        );
+        let provider = OllamaProvider::new("test", "http://localhost:11434", 30, HashMap::new());
 
         assert_eq!(
             provider.api_url("/api/tags"),

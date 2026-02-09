@@ -5,8 +5,8 @@
 //! and binary image data is stored as individual files.
 
 use async_trait::async_trait;
-use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
@@ -252,7 +252,10 @@ impl PhotoStore for FileSystemPhotoStore {
     async fn get(&self, photo_id: Uuid) -> PhotoStoreResult<Option<Photo>> {
         debug!("Retrieving photo: {}", photo_id);
 
-        Ok(self.photos.get(&photo_id).map(|entry| entry.value().clone()))
+        Ok(self
+            .photos
+            .get(&photo_id)
+            .map(|entry| entry.value().clone()))
     }
 
     async fn list_by_task(&self, task_id: Uuid) -> PhotoStoreResult<Vec<Photo>> {
@@ -276,7 +279,10 @@ impl PhotoStore for FileSystemPhotoStore {
         debug!("Deleting photo: {}", photo_id);
 
         match self.photos.remove(&photo_id) {
-            Some((_, photo)) => self.delete_file_and_save_updated_photos(photo_id, &photo).await,
+            Some((_, photo)) => {
+                self.delete_file_and_save_updated_photos(photo_id, &photo)
+                    .await
+            }
             None => Err(PhotoStoreError::NotFound(photo_id)),
         }
     }
@@ -443,7 +449,11 @@ mod tests {
 
     // Helper to create task directory (normally done by TaskStore)
     async fn create_task_dir(ts: &TestStore, task_id: Uuid) {
-        let task_dir = ts.store.storage_path.join("tasks").join(task_id.to_string());
+        let task_dir = ts
+            .store
+            .storage_path
+            .join("tasks")
+            .join(task_id.to_string());
         tokio::fs::create_dir_all(&task_dir)
             .await
             .expect("Failed to create task dir");
@@ -568,7 +578,10 @@ mod tests {
 
         ts.store.create(photo.clone()).await.unwrap();
         // Save data so we can verify it's deleted too
-        ts.store.save_data(photo.photo_id, &[1, 2, 3]).await.unwrap();
+        ts.store
+            .save_data(photo.photo_id, &[1, 2, 3])
+            .await
+            .unwrap();
         let file_path = ts.store.photo_path(task_id, photo.photo_id);
         assert!(file_path.exists());
 
@@ -730,7 +743,10 @@ mod tests {
 
         // Save some data
         let test_data = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10];
-        ts.store.save_data(photo.photo_id, &test_data).await.unwrap();
+        ts.store
+            .save_data(photo.photo_id, &test_data)
+            .await
+            .unwrap();
 
         // Verify file exists on disk
         let file_path = ts.store.photo_path(task_id, photo.photo_id);
@@ -787,7 +803,10 @@ mod tests {
         // Create photo and save data
         ts.store.create(photo.clone()).await.unwrap();
         let test_data = vec![0xFF, 0xD8, 0xFF, 0xE0];
-        ts.store.save_data(photo.photo_id, &test_data).await.unwrap();
+        ts.store
+            .save_data(photo.photo_id, &test_data)
+            .await
+            .unwrap();
 
         // Delete the photo
         ts.store.delete(photo.photo_id).await.unwrap();

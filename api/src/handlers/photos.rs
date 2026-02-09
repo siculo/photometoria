@@ -3,10 +3,10 @@ use crate::handlers::app_error::{AppError, AppPath};
 use crate::handlers::tasks::get_existing_task;
 use crate::models::{Photo, PhotoListResponse, PhotoResponse};
 use crate::storage::PhotoStore;
-use axum::extract::State;
 use axum::Json;
-use std::sync::Arc;
+use axum::extract::State;
 use axum::http::StatusCode;
+use std::sync::Arc;
 use uuid::Uuid;
 
 pub async fn task_photos(
@@ -32,7 +32,7 @@ pub async fn delete_photo(
     get_existing_photo(&state.photo_store, photo_id).await?;
     match state.photo_store.delete(photo_id).await {
         Ok(_) => Ok(StatusCode::NO_CONTENT),
-        Err(error) => Err(AppError::internal_error(error.to_string()))
+        Err(error) => Err(AppError::internal_error(error.to_string())),
     }
 }
 
@@ -59,8 +59,11 @@ async fn get_existing_photo(
 ) -> Result<Photo, AppError> {
     match photo_store.get(photo_id).await {
         Ok(Some(photo)) => Ok(photo),
-        Ok(None) => Err(AppError::not_found(format!("Photo with id {} not found", photo_id))),
-        Err(e) => Err(AppError::internal_error(e.to_string()))
+        Ok(None) => Err(AppError::not_found(format!(
+            "Photo with id {} not found",
+            photo_id
+        ))),
+        Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 

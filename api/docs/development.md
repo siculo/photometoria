@@ -162,7 +162,7 @@ async fn test_create_job_invalid_photo_id() {
 - ✅ Persistence (filesystem stores)
 - ✅ Concurrent access (in-memory stores)
 
-**Example**: `FileSystemTaskStore`, `InMemoryJobStore`
+**Example**: `FileSystemTaskStore`, `FileSystemJobStore`
 
 #### 3. Model Tests
 

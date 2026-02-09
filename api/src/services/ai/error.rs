@@ -9,51 +9,28 @@ pub type AIProviderResult<T> = Result<T, AIProviderError>;
 #[derive(Debug)]
 pub enum AIProviderError {
     /// Provider is not available or unreachable.
-    Unavailable {
-        provider: String,
-        message: String,
-    },
+    Unavailable { provider: String, message: String },
 
     /// Request to the provider failed.
-    RequestFailed {
-        provider: String,
-        message: String,
-    },
+    RequestFailed { provider: String, message: String },
 
     /// Provider returned an invalid response.
-    InvalidResponse {
-        provider: String,
-        message: String,
-    },
+    InvalidResponse { provider: String, message: String },
 
     /// The requested model was not found.
-    ModelNotFound {
-        provider: String,
-        model: String,
-    },
+    ModelNotFound { provider: String, model: String },
 
     /// The model does not support vision/image analysis.
-    VisionNotSupported {
-        provider: String,
-        model: String,
-    },
+    VisionNotSupported { provider: String, model: String },
 
     /// Configuration error for the provider.
-    ConfigurationError {
-        provider: String,
-        message: String,
-    },
+    ConfigurationError { provider: String, message: String },
 
     /// Request timed out.
-    Timeout {
-        provider: String,
-        timeout_secs: u64,
-    },
+    Timeout { provider: String, timeout_secs: u64 },
 
     /// Image encoding/decoding error.
-    ImageError {
-        message: String,
-    },
+    ImageError { message: String },
 }
 
 impl fmt::Display for AIProviderError {
@@ -63,7 +40,11 @@ impl fmt::Display for AIProviderError {
                 write!(f, "AI provider '{}' is unavailable: {}", provider, message)
             }
             Self::RequestFailed { provider, message } => {
-                write!(f, "Request to AI provider '{}' failed: {}", provider, message)
+                write!(
+                    f,
+                    "Request to AI provider '{}' failed: {}",
+                    provider, message
+                )
             }
             Self::InvalidResponse { provider, message } => {
                 write!(
@@ -93,7 +74,10 @@ impl fmt::Display for AIProviderError {
                     provider, message
                 )
             }
-            Self::Timeout { provider, timeout_secs } => {
+            Self::Timeout {
+                provider,
+                timeout_secs,
+            } => {
                 write!(
                     f,
                     "Request to AI provider '{}' timed out after {} seconds",

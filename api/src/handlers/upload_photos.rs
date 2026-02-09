@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use axum::Json;
 use axum::body::Bytes;
 use axum::extract::{Multipart, State};
 use axum::http::StatusCode;
-use axum::Json;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -223,7 +223,11 @@ async fn process_field(
 
     // Validate photo
     if let Some(reason) = validate_photo(&data, uploaded_count, used_storage, config) {
-        return ProcessedField::Failed(FailedUpload { client_id, filename, reason });
+        return ProcessedField::Failed(FailedUpload {
+            client_id,
+            filename,
+            reason,
+        });
     }
 
     // Create photo and save to store
@@ -313,7 +317,11 @@ mod tests {
         data
     }
 
-    fn create_test_config(max_photos: usize, max_photo_size_bytes: u64, max_storage_bytes: u64) -> Config {
+    fn create_test_config(
+        max_photos: usize,
+        max_photo_size_bytes: u64,
+        max_storage_bytes: u64,
+    ) -> Config {
         Config {
             upload: crate::config::UploadConfig {
                 max_photos_per_request: max_photos,

@@ -107,5 +107,8 @@ pub trait AIProvider: Send + Sync {
     /// # Arguments
     ///
     /// * `request` - The analysis request containing the model, image, and prompt.
-    async fn analyze_image(&self, request: AnalyzeImageRequest) -> AIProviderResult<AnalyzeImageResponse>;
+    async fn analyze_image(
+        &self,
+        request: AnalyzeImageRequest,
+    ) -> AIProviderResult<AnalyzeImageResponse>;
 }

@@ -8,7 +8,7 @@ pub mod fixtures {
     use crate::app_state::AppState;
     use crate::config::Config;
     use crate::services::ai::ProviderRegistry;
-    use crate::storage::{FileSystemPhotoStore, FileSystemTaskStore, InMemoryJobStore};
+    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore};
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -36,8 +36,8 @@ pub mod fixtures {
         let storage_path = temp_dir.path().to_path_buf();
         let config = Config::default();
         let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path).await);
-        let job_store = Arc::new(InMemoryJobStore::new());
+        let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path.clone()).await);
+        let job_store = Arc::new(FileSystemJobStore::new(storage_path).await);
         let ai_providers = Arc::new(ProviderRegistry::new());
         TestState {
             state: AppState::new(config, task_store, photo_store, job_store, ai_providers),

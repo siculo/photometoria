@@ -72,10 +72,13 @@ impl Default for AIConfig {
     fn default() -> Self {
         let default_provider_name = "ollama";
         let mut providers = HashMap::default();
-        providers.insert(default_provider_name.to_string(), ProviderConfig::Ollama(Default::default()));
+        providers.insert(
+            default_provider_name.to_string(),
+            ProviderConfig::Ollama(Default::default()),
+        );
         Self {
             default_provider: Some(default_provider_name.to_string()),
-            providers
+            providers,
         }
     }
 }

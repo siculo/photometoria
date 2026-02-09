@@ -202,11 +202,9 @@ async fn test_analyze_image_model_not_found() {
 
     Mock::given(method("POST"))
         .and(path("/api/generate"))
-        .respond_with(
-            ResponseTemplate::new(404).set_body_json(serde_json::json!({
-                "error": "model 'nonexistent' not found"
-            })),
-        )
+        .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+            "error": "model 'nonexistent' not found"
+        })))
         .mount(&mock_server)
         .await;
 

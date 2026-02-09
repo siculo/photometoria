@@ -4,8 +4,8 @@
 //! with full persistence to the filesystem. Task metadata is stored as JSON files.
 
 use async_trait::async_trait;
-use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
+use dashmap::mapref::entry::Entry;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
@@ -138,9 +138,8 @@ impl FileSystemTaskStore {
             TaskStoreError::StorageError(format!("Failed to read task file: {}", e))
         })?;
 
-        serde_json::from_str(&content).map_err(|e| {
-            TaskStoreError::StorageError(format!("Failed to parse task JSON: {}", e))
-        })
+        serde_json::from_str(&content)
+            .map_err(|e| TaskStoreError::StorageError(format!("Failed to parse task JSON: {}", e)))
     }
 
     /// Saves a task's metadata to the filesystem.

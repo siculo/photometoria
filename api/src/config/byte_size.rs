@@ -1,6 +1,6 @@
+use serde::{Deserialize, Deserializer};
 use std::fmt;
 use std::str::FromStr;
-use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ByteSize(pub u64);
@@ -89,7 +89,6 @@ fn parse_byte_size(s: &str) -> Result<ByteSize, String> {
         .map(ByteSize)
         .ok_or_else(|| "Byte size overflow".to_string())
 }
-
 
 impl ByteSize {
     pub fn as_bytes(&self) -> u64 {

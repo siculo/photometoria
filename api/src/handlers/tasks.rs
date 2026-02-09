@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
-use axum::Json;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
@@ -30,9 +30,10 @@ pub async fn create_task(
             let response = TaskResponse::from(created_task);
             Ok((StatusCode::CREATED, Json(response)))
         }
-        Err(TaskStoreError::AlreadyExists(existing_task_id)) => {
-            Err(AppError::conflict("already_exists", format!("Task with id '{}' already exists", existing_task_id)))
-        }
+        Err(TaskStoreError::AlreadyExists(existing_task_id)) => Err(AppError::conflict(
+            "already_exists",
+            format!("Task with id '{}' already exists", existing_task_id),
+        )),
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
@@ -40,9 +41,7 @@ pub async fn create_task(
 /// Handler for GET /api/tasks
 ///
 /// Lists all tasks with summary information.
-pub async fn list_tasks(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<TaskSummary>>, AppError> {
+pub async fn list_tasks(State(state): State<AppState>) -> Result<Json<Vec<TaskSummary>>, AppError> {
     match state.task_store.list().await {
         Ok(tasks) => {
             let mut summaries = Vec::with_capacity(tasks.len());
@@ -58,10 +57,7 @@ pub async fn list_tasks(
 }
 
 async fn get_task_summary(photo_store: &Arc<dyn PhotoStore>, task: Task) -> TaskSummary {
-    let photo_count = photo_store
-        .count_by_task(task.task_id)
-        .await
-        .unwrap_or(0);
+    let photo_count = photo_store.count_by_task(task.task_id).await.unwrap_or(0);
     let storage_used = photo_store
         .total_size_by_task(task.task_id)
         .await
@@ -129,7 +125,9 @@ pub async fn update_task(
 
     match state.task_store.update(updated_task).await {
         Ok(task) => Ok(Json(TaskResponse::from(task))),
-        Err(TaskStoreError::NotFound(not_found_task_id)) => Err(AppError::task_not_found(not_found_task_id)),
+        Err(TaskStoreError::NotFound(not_found_task_id)) => {
+            Err(AppError::task_not_found(not_found_task_id))
+        }
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
@@ -143,7 +141,9 @@ pub async fn delete_task(
 ) -> Result<StatusCode, AppError> {
     match state.task_store.delete(task_id).await {
         Ok(()) => Ok(StatusCode::NO_CONTENT),
-        Err(TaskStoreError::NotFound(not_found_task_id)) => Err(AppError::task_not_found(not_found_task_id)),
+        Err(TaskStoreError::NotFound(not_found_task_id)) => {
+            Err(AppError::task_not_found(not_found_task_id))
+        }
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
@@ -314,7 +314,10 @@ mod tests {
         // Verify it's deleted
         let get_result = get_task(State(ts.state.clone()), AppPath(created.task_id)).await;
         assert!(get_result.is_err());
-        assert_eq!(get_result.unwrap_err(), AppError::task_not_found(created.task_id));
+        assert_eq!(
+            get_result.unwrap_err(),
+            AppError::task_not_found(created.task_id)
+        );
     }
 
     #[tokio::test]
