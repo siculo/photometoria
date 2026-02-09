@@ -219,6 +219,19 @@ impl From<Task> for TaskResponse {
     }
 }
 
+impl From<&Task> for TaskResponse {
+    /// Converts a Task reference into a TaskResponse DTO.
+    ///
+    /// This is a simple 1:1 mapping of fields.
+    fn from(task: &Task) -> Self {
+        Self {
+            task_id: task.task_id,
+            context: task.context.clone(),
+            created_at: task.created_at,
+        }
+    }
+}
+
 // Note: TaskSummary and TaskDetail require additional data from PhotoStore
 // and JobStore, so they don't have a simple From<Task> implementation.
 // They will be constructed in the handler layer where all necessary data
@@ -245,7 +258,7 @@ mod tests {
     #[test]
     fn test_task_to_response_conversion() {
         let task = Task::new("test".to_string());
-        let response: TaskResponse = task.clone().into();
+        let response: TaskResponse = (&task).into();
 
         assert_eq!(response.task_id, task.task_id);
         assert_eq!(response.context, task.context);

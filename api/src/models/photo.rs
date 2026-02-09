@@ -229,6 +229,18 @@ impl From<Photo> for PhotoResponse {
     }
 }
 
+impl From<&Photo> for PhotoResponse {
+    fn from(photo: &Photo) -> Self {
+        Self {
+            photo_id: photo.photo_id,
+            task_id: photo.task_id,
+            filename: photo.filename.clone(),
+            size_bytes: photo.size_bytes,
+            uploaded_at: photo.uploaded_at,
+        }
+    }
+}
+
 impl From<Photo> for PhotoSummary {
     fn from(photo: Photo) -> Self {
         Self {
@@ -277,7 +289,7 @@ mod tests {
     fn test_photo_to_response_conversion() {
         let task_id = Uuid::new_v4();
         let photo = Photo::new(task_id, "test.jpg".to_string(), 2_097_152);
-        let response: PhotoResponse = photo.clone().into();
+        let response: PhotoResponse = (&photo).into();
 
         assert_eq!(response.photo_id, photo.photo_id);
         assert_eq!(response.task_id, photo.task_id);
@@ -290,7 +302,7 @@ mod tests {
     fn test_photo_to_summary_conversion() {
         let task_id = Uuid::new_v4();
         let photo = Photo::new(task_id, "test.jpg".to_string(), 1_048_576);
-        let summary: PhotoSummary = photo.clone().into();
+        let summary: PhotoSummary = (&photo).into();
 
         assert_eq!(summary.photo_id, photo.photo_id);
         assert_eq!(summary.filename, photo.filename);

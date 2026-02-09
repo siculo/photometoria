@@ -22,7 +22,7 @@ pub async fn get_photo(
     AppPath(photo_id): AppPath<Uuid>,
 ) -> Result<Json<PhotoResponse>, AppError> {
     let photo = get_existing_photo(&state.photo_store, photo_id).await?;
-    Ok(Json(photo.into()))
+    Ok(Json((&photo).into()))
 }
 
 pub async fn delete_photo(

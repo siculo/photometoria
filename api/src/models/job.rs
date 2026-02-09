@@ -78,6 +78,12 @@ pub struct Job {
     /// IDs of photos to process
     pub photo_ids: Vec<Uuid>,
 
+    /// IDs of photos to still not processed
+    pub queued_photo_ids: Vec<Uuid>,
+
+    /// IDs of photos that has been processed
+    pub processed_photo_ids: Vec<Uuid>,
+
     /// Timestamp when the job was created (ISO 8601)
     pub created_at: DateTime<Utc>,
 
@@ -109,12 +115,15 @@ impl Job {
     /// assert_eq!(job.status.to_string(), "queued");
     /// ```
     pub fn new(task_id: Uuid, model: String, photo_ids: Vec<Uuid>) -> Self {
+        let not_processed_photo_ids = photo_ids.clone();
         Self {
             job_id: Uuid::new_v4(),
             task_id,
             model,
             status: JobStatus::Queued,
             photo_ids,
+            queued_photo_ids: not_processed_photo_ids,
+            processed_photo_ids: Vec::new(),
             created_at: Utc::now(),
             started_at: None,
             completed_at: None,
@@ -124,6 +133,16 @@ impl Job {
     /// Returns the number of photos in this job.
     pub fn photo_count(&self) -> usize {
         self.photo_ids.len()
+    }
+
+    /// Returns the number of photos in this job to be processed.
+    pub fn queued_photo_count(&self) -> usize {
+        self.queued_photo_ids.len()
+    }
+
+    /// Returns the number of processed photos in this job.
+    pub fn processed_photo_count(&self) -> usize {
+        self.processed_photo_ids.len()
     }
 
     /// Marks the job as started (Processing).
@@ -264,6 +283,12 @@ pub struct JobSummary {
     /// Number of photos in this job
     pub photo_count: usize,
 
+    /// Number of photos in this job to be processed
+    pub queued_photo_count: usize,
+
+    /// Number of processed photos in this job
+    pub processed_photo_count: usize,
+
     /// Creation timestamp (ISO 8601)
     pub created_at: DateTime<Utc>,
 
@@ -329,10 +354,12 @@ impl From<&Job> for JobResponse {
 impl From<Job> for JobSummary {
     fn from(job: Job) -> Self {
         Self {
+            photo_count: job.photo_count(),
+            queued_photo_count: job.queued_photo_count(),
+            processed_photo_count: job.processed_photo_count(),
             job_id: job.job_id,
             status: job.status,
-            model: job.model,
-            photo_count: job.photo_ids.len(),
+            model: job.model.clone(),
             created_at: job.created_at,
             completed_at: job.completed_at,
         }
@@ -342,10 +369,12 @@ impl From<Job> for JobSummary {
 impl From<&Job> for JobSummary {
     fn from(job: &Job) -> Self {
         Self {
+            photo_count: job.photo_count(),
+            queued_photo_count: job.queued_photo_count(),
+            processed_photo_count: job.processed_photo_count(),
             job_id: job.job_id,
             status: job.status,
             model: job.model.clone(),
-            photo_count: job.photo_ids.len(),
             created_at: job.created_at,
             completed_at: job.completed_at,
         }
@@ -378,6 +407,8 @@ mod tests {
         assert_eq!(job.model, "llava");
         assert_eq!(job.status, JobStatus::Queued);
         assert_eq!(job.photo_ids, photo_ids);
+        assert_eq!(job.queued_photo_ids, photo_ids);
+        assert_eq!(job.processed_photo_ids, Vec::<Uuid>::new());
         assert!(job.started_at.is_none());
         assert!(job.completed_at.is_none());
     }
@@ -391,6 +422,8 @@ mod tests {
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         assert_eq!(job.photo_count(), 2);
+        assert_eq!(job.queued_photo_count(), 2);
+        assert_eq!(job.processed_photo_count(), 0);
     }
 
     #[test]
@@ -501,7 +534,7 @@ mod tests {
         );
         job.start();
 
-        let response: JobResponse = job.clone().into();
+        let response: JobResponse = (&job).into();
 
         assert_eq!(response.job_id, job.job_id);
         assert_eq!(response.task_id, job.task_id);
@@ -517,12 +550,14 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(task_id, "llava".to_string(), vec![Uuid::new_v4()]);
 
-        let summary: JobSummary = job.clone().into();
+        let summary: JobSummary = (&job).into();
 
         assert_eq!(summary.job_id, job.job_id);
         assert_eq!(summary.status, JobStatus::Queued);
         assert_eq!(summary.model, "llava");
         assert_eq!(summary.photo_count, 1);
+        assert_eq!(summary.queued_photo_count, 1);
+        assert_eq!(summary.processed_photo_count, 0);
     }
 
     #[test]
@@ -568,6 +603,8 @@ mod tests {
         assert!(json.contains("model"));
         assert!(json.contains("status"));
         assert!(json.contains("photo_ids"));
+        assert!(json.contains("queued_photo_ids"));
+        assert!(json.contains("processed_photo_ids"));
         assert!(json.contains("created_at"));
     }
 }
