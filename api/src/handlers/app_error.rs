@@ -57,6 +57,12 @@ impl AppError {
         Self::new(StatusCode::NOT_FOUND, "not_found", message)
     }
 
+    pub fn job_not_found(job_id: Uuid) -> Self {
+        let message = format!("Job with id '{}' not found", job_id);
+        warn!(message);
+        Self::new(StatusCode::NOT_FOUND, "not_found", message)
+    }
+
     pub fn internal_error(description: String) -> Self {
         error!("An internal server error occurred: {}", description);
         Self::new(

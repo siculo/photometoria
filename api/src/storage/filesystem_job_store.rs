@@ -91,7 +91,11 @@ impl FileSystemJobStore {
             }
 
             // Extract task_id from directory name
-            let task_id = match task_path.file_name().and_then(|n| n.to_str()).and_then(|s| s.parse::<Uuid>().ok()) {
+            let task_id = match task_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|s| s.parse::<Uuid>().ok())
+            {
                 Some(id) => id,
                 None => {
                     warn!("Skipping invalid task directory: {:?}", task_path);

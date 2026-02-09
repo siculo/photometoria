@@ -7,7 +7,46 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use uuid::Uuid;
+
+// ============================================================================
+// PhotoResult and Status
+// ============================================================================
+
+/// Status of an individual photo's AI analysis result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PhotoResultStatus {
+    /// Photo analysis completed successfully
+    Completed,
+    /// Photo analysis failed
+    Failed,
+}
+
+/// Result of AI analysis for a single photo.
+///
+/// Stored in Job.results HashMap, keyed by photo_id.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PhotoResult {
+    /// ID of the photo this result belongs to
+    pub photo_id: Uuid,
+
+    /// Status of the analysis (completed or failed)
+    pub status: PhotoResultStatus,
+
+    /// Generated tags/keywords (None if failed)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<String>,
+
+    /// Error message (None if completed successfully)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+
+    /// Timestamp when processing finished
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub processed_at: Option<DateTime<Utc>>,
+}
 
 // ============================================================================
 // Job Status Enum
@@ -92,6 +131,10 @@ pub struct Job {
 
     /// Timestamp when processing completed (None if not finished)
     pub completed_at: Option<DateTime<Utc>>,
+
+    /// AI analysis results for each photo (photo_id -> result)
+    #[serde(default)]
+    pub results: HashMap<Uuid, PhotoResult>,
 }
 
 impl Job {
@@ -127,6 +170,7 @@ impl Job {
             created_at: Utc::now(),
             started_at: None,
             completed_at: None,
+            results: HashMap::new(),
         }
     }
 
@@ -175,6 +219,49 @@ impl Job {
             self.status,
             JobStatus::Completed | JobStatus::Failed | JobStatus::Cancelled
         )
+    }
+
+    /// Calculates progress information from results (only valid when Processing).
+    ///
+    /// Returns None if the job is not in Processing status.
+    pub fn calculate_progress(&self) -> Option<JobProgress> {
+        if self.status != JobStatus::Processing {
+            return None;
+        }
+
+        let completed = self
+            .results
+            .values()
+            .filter(|r| r.status == PhotoResultStatus::Completed)
+            .count();
+
+        let failed = self
+            .results
+            .values()
+            .filter(|r| r.status == PhotoResultStatus::Failed)
+            .count();
+
+        let remaining = self.photo_ids.len() - (completed + failed);
+
+        let current_photo_id = self.queued_photo_ids.first().copied();
+
+        Some(JobProgress {
+            completed,
+            failed,
+            remaining,
+            current_photo_id,
+        })
+    }
+
+    /// Returns a list of photo IDs that failed processing.
+    ///
+    /// Used by retry endpoint to create a new job with only failed photos.
+    pub fn failed_photo_ids(&self) -> Vec<Uuid> {
+        self.results
+            .values()
+            .filter(|r| r.status == PhotoResultStatus::Failed)
+            .map(|r| r.photo_id)
+            .collect()
     }
 }
 
@@ -317,6 +404,195 @@ pub struct JobCancelledResponse {
     pub status: JobStatus,
 }
 
+/// Progress information for a processing job.
+///
+/// Included in JobDetailResponse when status is Processing.
+///
+/// # Example JSON
+/// ```json
+/// {
+///   "completed": 5,
+///   "failed": 1,
+///   "remaining": 9,
+///   "current_photo_id": "550e8400-e29b-41d4-a716-446655440003"
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobProgress {
+    /// Number of photos successfully processed
+    pub completed: usize,
+
+    /// Number of photos that failed processing
+    pub failed: usize,
+
+    /// Number of photos not yet processed
+    pub remaining: usize,
+
+    /// ID of the photo currently being processed (None if between photos)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_photo_id: Option<Uuid>,
+}
+
+/// Detailed response including progress (for GET /api/jobs/{job_id}).
+///
+/// Extends JobResponse with progress field (present only when Processing).
+///
+/// # Example JSON
+/// ```json
+/// {
+///   "job_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "task_id": "550e8400-e29b-41d4-a716-446655440001",
+///   "status": "processing",
+///   "model": "qwen2-vl:8b",
+///   "photo_count": 15,
+///   "created_at": "2024-01-15T10:35:00Z",
+///   "started_at": "2024-01-15T10:35:10Z",
+///   "progress": {
+///     "completed": 5,
+///     "failed": 1,
+///     "remaining": 9,
+///     "current_photo_id": "550e8400-e29b-41d4-a716-446655440003"
+///   }
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobDetailResponse {
+    /// Unique job identifier
+    pub job_id: Uuid,
+
+    /// Parent task identifier
+    pub task_id: Uuid,
+
+    /// Current status
+    pub status: JobStatus,
+
+    /// AI model used
+    pub model: String,
+
+    /// Number of photos to process
+    pub photo_count: usize,
+
+    /// Creation timestamp (ISO 8601)
+    pub created_at: DateTime<Utc>,
+
+    /// Processing start timestamp (ISO 8601), None if not started
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<DateTime<Utc>>,
+
+    /// Completion timestamp (ISO 8601), None if not finished
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
+
+    /// Progress information (only when status is Processing)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<JobProgress>,
+}
+
+/// Summary of results by status.
+///
+/// Used in JobResultsResponse.
+///
+/// # Example JSON
+/// ```json
+/// {
+///   "total": 15,
+///   "completed": 12,
+///   "failed": 3
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResultSummary {
+    /// Total number of photos in job
+    pub total: usize,
+
+    /// Number of successfully completed photos
+    pub completed: usize,
+
+    /// Number of failed photos
+    pub failed: usize,
+}
+
+/// Response for GET /api/jobs/{job_id}/results.
+///
+/// Returns AI analysis results for all processed photos.
+///
+/// # Example JSON
+/// ```json
+/// {
+///   "job_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "results": [
+///     {
+///       "photo_id": "550e8400-e29b-41d4-a716-446655440002",
+///       "status": "completed",
+///       "tags": "landscape, mountain, sunset",
+///       "processed_at": "2024-01-15T10:36:00Z"
+///     },
+///     {
+///       "photo_id": "550e8400-e29b-41d4-a716-446655440003",
+///       "status": "failed",
+///       "error": "Model timeout",
+///       "processed_at": "2024-01-15T10:37:00Z"
+///     }
+///   ],
+///   "summary": {
+///     "total": 15,
+///     "completed": 12,
+///     "failed": 3
+///   }
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobResultsResponse {
+    /// Job identifier
+    pub job_id: Uuid,
+
+    /// List of photo results
+    pub results: Vec<PhotoResult>,
+
+    /// Summary counts
+    pub summary: ResultSummary,
+}
+
+/// Response for POST /api/jobs/{job_id}/retry.
+///
+/// Creates a new job for failed photos, linking to the original job.
+///
+/// # Example JSON
+/// ```json
+/// {
+///   "job_id": "550e8400-e29b-41d4-a716-446655440010",
+///   "task_id": "550e8400-e29b-41d4-a716-446655440001",
+///   "status": "queued",
+///   "model": "qwen2-vl:8b",
+///   "photo_count": 3,
+///   "created_at": "2024-01-15T11:00:00Z",
+///   "parent_job_id": "550e8400-e29b-41d4-a716-446655440000"
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetryJobResponse {
+    /// New job identifier
+    pub job_id: Uuid,
+
+    /// Parent task identifier
+    pub task_id: Uuid,
+
+    /// Status (always "queued")
+    pub status: JobStatus,
+
+    /// AI model (same as original job)
+    pub model: String,
+
+    /// Number of failed photos being retried
+    pub photo_count: usize,
+
+    /// Creation timestamp (ISO 8601)
+    pub created_at: DateTime<Utc>,
+
+    /// ID of the original job being retried
+    pub parent_job_id: Uuid,
+}
+
 // ============================================================================
 // Conversions from Entity to DTOs
 // ============================================================================
@@ -377,6 +653,88 @@ impl From<&Job> for JobSummary {
             model: job.model.clone(),
             created_at: job.created_at,
             completed_at: job.completed_at,
+        }
+    }
+}
+
+impl From<Job> for JobDetailResponse {
+    fn from(job: Job) -> Self {
+        let progress = job.calculate_progress();
+        Self {
+            job_id: job.job_id,
+            task_id: job.task_id,
+            status: job.status,
+            model: job.model,
+            photo_count: job.photo_ids.len(),
+            created_at: job.created_at,
+            started_at: job.started_at,
+            completed_at: job.completed_at,
+            progress,
+        }
+    }
+}
+
+impl From<&Job> for JobDetailResponse {
+    fn from(job: &Job) -> Self {
+        let progress = job.calculate_progress();
+        Self {
+            job_id: job.job_id,
+            task_id: job.task_id,
+            status: job.status,
+            model: job.model.clone(),
+            photo_count: job.photo_ids.len(),
+            created_at: job.created_at,
+            started_at: job.started_at,
+            completed_at: job.completed_at,
+            progress,
+        }
+    }
+}
+
+impl From<Job> for JobResultsResponse {
+    fn from(job: Job) -> Self {
+        let results: Vec<PhotoResult> = job.results.values().cloned().collect();
+        let completed = results
+            .iter()
+            .filter(|r| r.status == PhotoResultStatus::Completed)
+            .count();
+        let failed = results
+            .iter()
+            .filter(|r| r.status == PhotoResultStatus::Failed)
+            .count();
+
+        Self {
+            job_id: job.job_id,
+            results,
+            summary: ResultSummary {
+                total: job.photo_ids.len(),
+                completed,
+                failed,
+            },
+        }
+    }
+}
+
+impl From<&Job> for JobResultsResponse {
+    fn from(job: &Job) -> Self {
+        let results: Vec<PhotoResult> = job.results.values().cloned().collect();
+        let completed = results
+            .iter()
+            .filter(|r| r.status == PhotoResultStatus::Completed)
+            .count();
+        let failed = results
+            .iter()
+            .filter(|r| r.status == PhotoResultStatus::Failed)
+            .count();
+
+        Self {
+            job_id: job.job_id,
+            results,
+            summary: ResultSummary {
+                total: job.photo_ids.len(),
+                completed,
+                failed,
+            },
         }
     }
 }
@@ -606,5 +964,291 @@ mod tests {
         assert!(json.contains("queued_photo_ids"));
         assert!(json.contains("processed_photo_ids"));
         assert!(json.contains("created_at"));
+    }
+
+    // ========================================================================
+    // Tests for PhotoResult and Progress
+    // ========================================================================
+
+    #[test]
+    fn test_job_new_initializes_empty_results() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        assert!(job.results.is_empty());
+    }
+
+    #[test]
+    fn test_calculate_progress_returns_none_when_not_processing() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "qwen2-vl:8b".to_string(),
+            vec![Uuid::new_v4(), Uuid::new_v4()],
+        );
+
+        // Should be None when Queued
+        assert!(job.calculate_progress().is_none());
+
+        let mut completed_job = job.clone();
+        completed_job.complete();
+        // Should be None when Completed
+        assert!(completed_job.calculate_progress().is_none());
+    }
+
+    #[test]
+    fn test_calculate_progress_when_processing() {
+        let task_id = Uuid::new_v4();
+        let photo1 = Uuid::new_v4();
+        let photo2 = Uuid::new_v4();
+        let photo3 = Uuid::new_v4();
+
+        let mut job = Job::new(
+            task_id,
+            "qwen2-vl:8b".to_string(),
+            vec![photo1, photo2, photo3],
+        );
+        job.start();
+
+        // Add some results
+        job.results.insert(
+            photo1,
+            PhotoResult {
+                photo_id: photo1,
+                status: PhotoResultStatus::Completed,
+                tags: Some("test".to_string()),
+                error: None,
+                processed_at: Some(Utc::now()),
+            },
+        );
+
+        job.results.insert(
+            photo2,
+            PhotoResult {
+                photo_id: photo2,
+                status: PhotoResultStatus::Failed,
+                tags: None,
+                error: Some("error".to_string()),
+                processed_at: Some(Utc::now()),
+            },
+        );
+
+        let progress = job.calculate_progress().unwrap();
+        assert_eq!(progress.completed, 1);
+        assert_eq!(progress.failed, 1);
+        assert_eq!(progress.remaining, 1);
+    }
+
+    #[test]
+    fn test_calculate_progress_current_photo_id() {
+        let task_id = Uuid::new_v4();
+        let photo1 = Uuid::new_v4();
+        let photo2 = Uuid::new_v4();
+
+        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![photo1, photo2]);
+        job.start();
+
+        let progress = job.calculate_progress().unwrap();
+        // First photo in queued_photo_ids should be current
+        assert_eq!(progress.current_photo_id, Some(photo1));
+    }
+
+    #[test]
+    fn test_failed_photo_ids_empty() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "qwen2-vl:8b".to_string(),
+            vec![Uuid::new_v4(), Uuid::new_v4()],
+        );
+
+        assert!(job.failed_photo_ids().is_empty());
+    }
+
+    #[test]
+    fn test_failed_photo_ids_returns_only_failed() {
+        let task_id = Uuid::new_v4();
+        let photo1 = Uuid::new_v4();
+        let photo2 = Uuid::new_v4();
+        let photo3 = Uuid::new_v4();
+
+        let mut job = Job::new(
+            task_id,
+            "qwen2-vl:8b".to_string(),
+            vec![photo1, photo2, photo3],
+        );
+
+        // Add mixed results
+        job.results.insert(
+            photo1,
+            PhotoResult {
+                photo_id: photo1,
+                status: PhotoResultStatus::Completed,
+                tags: Some("test".to_string()),
+                error: None,
+                processed_at: Some(Utc::now()),
+            },
+        );
+
+        job.results.insert(
+            photo2,
+            PhotoResult {
+                photo_id: photo2,
+                status: PhotoResultStatus::Failed,
+                tags: None,
+                error: Some("error".to_string()),
+                processed_at: Some(Utc::now()),
+            },
+        );
+
+        job.results.insert(
+            photo3,
+            PhotoResult {
+                photo_id: photo3,
+                status: PhotoResultStatus::Failed,
+                tags: None,
+                error: Some("another error".to_string()),
+                processed_at: Some(Utc::now()),
+            },
+        );
+
+        let failed_ids = job.failed_photo_ids();
+        assert_eq!(failed_ids.len(), 2);
+        assert!(failed_ids.contains(&photo2));
+        assert!(failed_ids.contains(&photo3));
+        assert!(!failed_ids.contains(&photo1));
+    }
+
+    #[test]
+    fn test_photo_result_status_serialization() {
+        assert_eq!(
+            serde_json::to_string(&PhotoResultStatus::Completed).unwrap(),
+            "\"completed\""
+        );
+        assert_eq!(
+            serde_json::to_string(&PhotoResultStatus::Failed).unwrap(),
+            "\"failed\""
+        );
+    }
+
+    #[test]
+    fn test_job_to_detail_response_conversion() {
+        let task_id = Uuid::new_v4();
+        let mut job = Job::new(
+            task_id,
+            "qwen2-vl:8b".to_string(),
+            vec![Uuid::new_v4(), Uuid::new_v4()],
+        );
+        job.start();
+
+        let response: JobDetailResponse = (&job).into();
+
+        assert_eq!(response.job_id, job.job_id);
+        assert_eq!(response.task_id, job.task_id);
+        assert_eq!(response.status, JobStatus::Processing);
+        assert_eq!(response.model, "qwen2-vl:8b");
+        assert_eq!(response.photo_count, 2);
+        assert!(response.started_at.is_some());
+        assert!(response.progress.is_some());
+    }
+
+    #[test]
+    fn test_job_to_detail_response_no_progress_when_queued() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "qwen2-vl:8b".to_string(),
+            vec![Uuid::new_v4(), Uuid::new_v4()],
+        );
+
+        let response: JobDetailResponse = job.into();
+
+        assert_eq!(response.status, JobStatus::Queued);
+        assert!(response.progress.is_none());
+    }
+
+    #[test]
+    fn test_job_to_results_response_conversion() {
+        let task_id = Uuid::new_v4();
+        let photo1 = Uuid::new_v4();
+        let photo2 = Uuid::new_v4();
+
+        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![photo1, photo2]);
+
+        job.results.insert(
+            photo1,
+            PhotoResult {
+                photo_id: photo1,
+                status: PhotoResultStatus::Completed,
+                tags: Some("test".to_string()),
+                error: None,
+                processed_at: Some(Utc::now()),
+            },
+        );
+
+        let response: JobResultsResponse = job.into();
+
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.summary.total, 2);
+        assert_eq!(response.summary.completed, 1);
+        assert_eq!(response.summary.failed, 0);
+    }
+
+    #[test]
+    fn test_job_to_results_response_with_failures() {
+        let task_id = Uuid::new_v4();
+        let photo1 = Uuid::new_v4();
+        let photo2 = Uuid::new_v4();
+        let photo3 = Uuid::new_v4();
+
+        let mut job = Job::new(
+            task_id,
+            "qwen2-vl:8b".to_string(),
+            vec![photo1, photo2, photo3],
+        );
+
+        job.results.insert(
+            photo1,
+            PhotoResult {
+                photo_id: photo1,
+                status: PhotoResultStatus::Completed,
+                tags: Some("test".to_string()),
+                error: None,
+                processed_at: Some(Utc::now()),
+            },
+        );
+
+        job.results.insert(
+            photo2,
+            PhotoResult {
+                photo_id: photo2,
+                status: PhotoResultStatus::Failed,
+                tags: None,
+                error: Some("error".to_string()),
+                processed_at: Some(Utc::now()),
+            },
+        );
+
+        let response: JobResultsResponse = job.into();
+
+        assert_eq!(response.results.len(), 2);
+        assert_eq!(response.summary.total, 3);
+        assert_eq!(response.summary.completed, 1);
+        assert_eq!(response.summary.failed, 1);
+    }
+
+    #[test]
+    fn test_photo_result_skips_none_fields() {
+        let result = PhotoResult {
+            photo_id: Uuid::new_v4(),
+            status: PhotoResultStatus::Failed,
+            tags: None,
+            error: Some("error".to_string()),
+            processed_at: None,
+        };
+
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(!json.contains("\"tags\""));
+        assert!(json.contains("\"error\""));
+        assert!(!json.contains("\"processed_at\""));
     }
 }

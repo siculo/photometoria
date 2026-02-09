@@ -1,5 +1,7 @@
 use crate::app_state::AppState;
-use crate::handlers::jobs::create_job;
+use crate::handlers::jobs::{
+    create_job, delete_job, get_job, get_job_results, list_jobs, retry_job,
+};
 use crate::handlers::photos::{delete_photo, get_photo, task_photos};
 use crate::handlers::tasks::{create_task, delete_task, get_task, list_tasks, update_task};
 use crate::handlers::upload_photos::upload_photos;
@@ -33,6 +35,10 @@ pub fn create_router(state: AppState) -> Router {
             get(get_photo).delete(delete_photo),
         )
         .route("/api/tasks/{task_id}/jobs", post(create_job))
+        .route("/api/jobs", get(list_jobs))
+        .route("/api/jobs/{job_id}", get(get_job).delete(delete_job))
+        .route("/api/jobs/{job_id}/results", get(get_job_results))
+        .route("/api/jobs/{job_id}/retry", post(retry_job))
         .with_state(state)
 }
 
