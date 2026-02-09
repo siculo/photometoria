@@ -185,6 +185,145 @@ max_workers = 2      # Maximum concurrent jobs (ready for worker pool)
 
 Jobs are processed sequentially without a worker pool. The `max_workers` and `devices` configuration is parsed but not yet used.
 
+---
+
+### Photo Selection Strategy (Planned)
+
+When implementing the worker pool, a key architectural decision is how workers select the next photo to process. This is especially important when multiple jobs use different AI models.
+
+#### The Challenge: Efficiency vs. Fairness
+
+With multiple jobs using different models and limited GPUs, there's a fundamental trade-off:
+
+**Sequential job execution:**
+- ✅ Minimal model swaps (one load per job)
+- ✅ Maximum efficiency (~6% overhead)
+- ❌ Poor fairness (jobs wait in queue until others complete)
+
+**Round-robin photo selection:**
+- ✅ Perfect fairness (all jobs progress simultaneously)
+- ❌ Excessive model swaps (one per photo if models differ)
+- ❌ Severe overhead (~77% in worst case)
+
+#### Proposed: Smart Priority-Based Selection
+
+A hybrid strategy that balances efficiency and fairness:
+
+**Algorithm:**
+
+1. Worker tracks current loaded model and counter of photos processed with it
+2. When selecting next photo:
+   - If `counter < threshold`: Prioritize photos requiring the current model
+   - If `counter >= threshold`: Accept any photo (allow model swap)
+3. Reset counter when model changes
+
+**Pseudo-code:**
+
+```rust
+fn select_next_photo(&mut self, threshold: usize) -> Option<Photo> {
+    let current_model = self.loaded_model;
+    let counter = self.model_counter;
+
+    // Below threshold: prefer same model (avoid swap)
+    if counter < threshold {
+        if let Some(photo) = find_photo_with_model(current_model) {
+            return Some(photo);
+        }
+    }
+
+    // Above threshold: accept any photo (allow model swap for fairness)
+    find_any_available_photo()
+}
+```
+
+#### Performance Analysis
+
+**Scenario:** 1 GPU, 2 jobs (50 photos each), different models (qwen2-vl, llava)
+
+| Strategy | Time | Overhead | First Result Job B | Fairness |
+|----------|------|----------|-------------------|----------|
+| Sequential (threshold=∞) | 320s | 20s (6%) | t=170s | Poor |
+| Smart (threshold=25) | 340s | 40s (12%) | t=95s | Good |
+| Smart (threshold=10) | 420s | 100s (24%) | t=50s | Excellent |
+| Round-robin (threshold=1) | 1300s | 1000s (77%) | t=23s | Perfect |
+
+**Key Insights:**
+
+- **Threshold=20-25**: Best balance for production use (~6-12% overhead, good fairness)
+- **Threshold=50+**: Equivalent to sequential job execution (maximum efficiency, poor fairness)
+- **Threshold=1-5**: Near round-robin behavior (poor efficiency, maximum fairness)
+
+#### Advantages
+
+**1. Configurable Trade-off:**
+- Tune threshold based on workload characteristics
+- High threshold for efficiency-critical workloads
+- Low threshold for user-facing interactive scenarios
+
+**2. Adaptive Behavior:**
+- If all jobs use same model: zero overhead (never swaps)
+- If one job finishes early: continues with remaining job without unnecessary swaps
+- Automatically optimal for homogeneous workloads
+
+**3. Better User Experience:**
+
+```
+Sequential execution:
+  Job A: ████████████████ (completes, then Job B starts)
+  Job B: ................ ████████████████
+
+Smart priority (threshold=10):
+  Job A: ███...███...███...███...███
+  Job B: ...███...███...███...███...███
+
+Both jobs show progress simultaneously via SSE updates!
+```
+
+**4. Model Locality:**
+- Exploits Ollama's keep-alive feature (models stay in VRAM for 5 minutes by default)
+- Processes multiple photos with same model before swapping
+- Minimizes expensive model load operations
+
+#### Implementation Considerations
+
+**Queue Structure:**
+
+```rust
+struct PhotoQueue {
+    // Photos organized by required model
+    photos_by_model: HashMap<ModelId, VecDeque<PhotoId>>,
+
+    // All pending photos (for threshold overflow)
+    all_photos: VecDeque<PhotoId>,
+
+    // Current model statistics
+    current_model: ModelId,
+    model_counter: usize,
+    threshold: usize,
+}
+```
+
+**Configuration:**
+
+```toml
+[worker_pool]
+photo_selection_threshold = 20  # Photos before accepting model swap
+```
+
+**Metrics to Track:**
+- Model swaps per job
+- Time spent on model loading vs. processing
+- Fairness metric (time to first result per job)
+
+#### Recommendation
+
+For initial implementation, use **threshold=20-25 photos**:
+- Overhead remains acceptable (6-12%)
+- All jobs begin processing within 1-2 minutes
+- Good balance for typical photography workloads (batch sizes 20-200 photos)
+
+The threshold can be exposed as a configuration option for users to tune based on their specific needs.
+
 ## Module Organization
 
 The codebase follows a clean modular structure:
@@ -373,11 +512,15 @@ All storage implementations must be `Send + Sync` and support concurrent access 
 **Planned Design:**
 
 - Tokio task per worker
-- Shared job queue (`Arc<Mutex<VecDeque<JobId>>>`)
-- Workers pull jobs and process photos sequentially
-- Semaphore pattern to limit concurrency
+- Photo queue with priority-based selection (see "Photo Selection Strategy" in Worker Pool section)
+- Semaphore pattern to limit concurrency based on available GPUs
+- Model-aware scheduling to minimize VRAM swaps
 
-**Planned Pseudo-flow:**
+**Two Implementation Approaches:**
+
+**Approach 1: Job-Level (Simple)**
+
+Workers pull complete jobs from queue:
 
 ```
 Worker loop:
@@ -391,13 +534,45 @@ Worker loop:
   5. Release permit
 ```
 
+*Pros:* Simple, minimal model swaps
+*Cons:* Poor fairness with multiple jobs
+
+**Approach 2: Photo-Level with Smart Selection (Recommended)**
+
+Workers pull individual photos using priority-based selection:
+
+```
+Worker loop:
+  1. Acquire semaphore permit (enforces max_workers limit)
+  2. Load AI model if needed (check current_model)
+  3. Loop:
+     a. Select next photo (smart priority: prefer same model, threshold-based)
+     b. If model changed: unload old, load new model
+     c. Call AI provider API
+     d. Save result incrementally
+     e. Send SSE update
+     f. Update model counter
+     g. If no more photos: break
+  4. Release permit
+```
+
+*Pros:* Excellent fairness, configurable efficiency
+*Cons:* More complex, some model swap overhead (controllable via threshold)
+
+See the **Photo Selection Strategy** section in Worker Pool for detailed analysis and threshold recommendations.
+
 **Implementation Notes:**
 
 When implementing the worker pool:
 - Use the existing `AIProvider` trait for provider abstraction
 - Leverage the `max_workers` and `devices` configuration from `OllamaProviderConfig`
+- Implement the smart photo selection strategy with configurable threshold (recommended: 20-25)
+- Track model swap metrics for monitoring and optimization
 - Consider GPU device assignment strategies (round-robin, load-based, etc.)
 - Implement graceful shutdown for worker tasks
+- Handle model loading failures gracefully (retry, skip, fail job)
+
+**Recommended:** Start with Approach 2 (photo-level with smart selection) as it provides better user experience and is more flexible for future enhancements.
 
 ### Photo Deduplication (Future)
 
