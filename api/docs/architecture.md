@@ -8,7 +8,7 @@ The Photometoria API is built using a modern async-first architecture with Rust 
 
 - Async-first design with Tokio runtime
 - Worker pool pattern for GPU resource management
-- In-memory storage with abstraction layers for future database integration
+- Filesystem-based storage with abstraction layers for future database integration
 - Modular structure: routes, handlers, services, models, storage
 - Trait-based abstractions for future-proofing
 
@@ -60,16 +60,18 @@ The initial version simplifies this to a single-level tagging system that produc
 
 ### Storage Strategy
 
-- **In-memory data structures** for jobs and metadata (fast access)
-- **Filesystem storage** for uploaded photos
+- **Filesystem-based storage** for all data (tasks, photos, jobs)
+- **JSON files** for metadata persistence
+- **Binary files** for photo storage
+- **FileSystemLayout** for centralized directory structure management
 - **Abstraction layer** designed for future evolution (database, object storage)
 
 ### Multi-Task Support
 
 - Multiple tasks can coexist simultaneously in the system
 - Each task maintains independent photo collections and job queues
-- Task isolation ensures no cross-task interference
-- Current limitation: In-memory storage is bound only by available RAM
+- Task isolation ensures no cross-task interference through separate filesystem directories
+- Current limitation: Filesystem storage is bound by available disk space
 - Future enhancement: Configurable limits on task count, storage per-task, and TTL-based cleanup
 
 ### Concurrency Model
@@ -276,18 +278,24 @@ The implementation uses abstraction to allow future evolution without major refa
 **TaskStore**
 
 - Interface: Trait-based abstraction (`TaskStore` trait)
-- Current: `InMemoryTaskStore` using `DashMap` for concurrent access
+- Current: `FileSystemTaskStore` with JSON-based persistence
 - Future: Database-backed (PostgreSQL, SQLite), Redis cache, or hybrid approaches
 
 **JobStore**
 
-- Current: In-memory `HashMap` with `RwLock`
+- Current: `FileSystemJobStore` with JSON files per job
 - Future: PostgreSQL, SQLite, or other database
 
 **PhotoStore**
 
-- Current: Filesystem with metadata in memory
+- Current: `FileSystemPhotoStore` with binary photo data and JSON metadata
 - Future: Object storage (S3, MinIO), database-backed metadata
+
+**FileSystemLayout**
+
+- Centralized directory structure management
+- Consistent path generation across all storage implementations
+- Directory structure: `{storage_path}/tasks/{task_id}/` with subdirectories for photos (`imgs/`) and jobs
 
 **TaskQueue**
 
@@ -299,35 +307,55 @@ The implementation uses abstraction to allow future evolution without major refa
 - Current: SSE with in-memory connection tracking
 - Future: WebSocket, or external pub/sub system
 
-### TaskStore Abstraction
+### Storage Abstraction
 
-The task storage layer uses a trait-based abstraction pattern to enable future evolution.
+The storage layer uses trait-based abstraction patterns to enable future evolution.
 
 **Design Pattern:**
 
-- `TaskStore` trait defines the storage interface (create, get, list, update, delete, exists, count)
+- `TaskStore`, `PhotoStore`, and `JobStore` traits define storage interfaces
 - Trait-based design allows multiple implementations without changing business logic
-- All methods are async and return `Result<T, TaskStoreError>` for proper error handling
+- All methods are async and return `Result<T, StoreError>` for proper error handling
 - Thread-safe operations (`Send + Sync` bounds) for concurrent access from multiple Tokio tasks
 
-**Current Implementation: InMemoryTaskStore**
+**Current Implementation: Filesystem-based**
 
-- Uses `DashMap` for thread-safe concurrent access (lock-free reads)
-- O(1) lookup performance by task_id
-- Data persists only for the lifetime of the server process
-- No built-in limits on task count (memory-bound only)
-- Suitable for development and single-user scenarios
+- **FileSystemTaskStore**: JSON file per task (`task.json`)
+- **FileSystemPhotoStore**: Binary photo data in `imgs/` subdirectory, metadata in `photos.json`
+- **FileSystemJobStore**: JSON file per job in `jobs/` subdirectory
+- **FileSystemLayout**: Centralized path generation and directory structure management
+- Data persists across server restarts
+- Uses Tokio's async file I/O for non-blocking operations
+- Concurrent access handled through async file locks
+- Suitable for single-server deployments
+
+**Directory Structure:**
+
+```text
+{storage_path}/
+└── tasks/
+    └── {task_id}/
+        ├── task.json          # Task metadata
+        ├── photos.json        # Photos metadata
+        ├── imgs/              # Photo binary data
+        │   ├── {photo_id_1}
+        │   └── {photo_id_2}
+        └── jobs/              # Job metadata
+            ├── {job_id_1}.json
+            └── {job_id_2}.json
+```
 
 **Future Implementations:**
 
-- **Database-backed**: PostgreSQL or SQLite for persistence across restarts
+- **Database-backed**: PostgreSQL or SQLite for better querying and indexing
+- **Object Storage**: S3, MinIO, or similar for photo storage
 - **Redis**: Distributed cache with TTL support for automatic cleanup
-- **Hybrid**: In-memory cache + database for read performance + persistence
+- **Hybrid**: Database metadata + object storage for photos
 - **Custom limits**: Quota enforcement, LRU eviction, per-user isolation
 
 **Thread Safety:**
 
-All TaskStore implementations must be `Send + Sync` and support concurrent access from multiple Tokio tasks without data races. The trait design ensures this contract is enforced at compile time.
+All storage implementations must be `Send + Sync` and support concurrent access from multiple Tokio tasks without data races. The trait design ensures this contract is enforced at compile time.
 
 ### Worker Pool Implementation
 
