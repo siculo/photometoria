@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::models::Job;
 
-use super::{JobStore, JobStoreError, JobStoreResult};
+use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult};
 
 // ============================================================================
 // FileSystemJobStore Implementation
@@ -33,29 +33,17 @@ use super::{JobStore, JobStoreError, JobStoreResult};
 /// - **Full persistence**: Job metadata survives server restarts
 /// - **Nested structure**: Jobs stored in task-specific subdirectories
 ///
-/// ## Directory Structure
-///
-/// ```text
-/// {storage_path}/
-/// └── tasks/
-///     └── {task_id}/
-///         ├── task.json
-///         ├── photos.json
-///         └── jobs/              # Jobs subdirectory
-///             ├── {job_id_1}.json
-///             ├── {job_id_2}.json
-///             └── ...
-/// ```
-///
 /// ## Persistence Strategy
 ///
 /// - Metadata is written to disk after each create/update operation
 /// - On startup, all existing job JSON files are loaded into memory
 /// - Deleting a job removes both the in-memory entry and the JSON file
 /// - Deleting a task automatically removes all job files in the task's jobs/ directory
+///
+/// For details on the filesystem layout, see [`FileSystemLayout`]
 pub struct FileSystemJobStore {
     jobs: Arc<DashMap<Uuid, Job>>,
-    storage_path: PathBuf,
+    layout: FileSystemLayout,
 }
 
 impl FileSystemJobStore {
@@ -69,28 +57,15 @@ impl FileSystemJobStore {
     pub async fn new(storage_path: PathBuf) -> Self {
         let store = Self {
             jobs: Arc::new(DashMap::new()),
-            storage_path,
+            layout: FileSystemLayout::new(storage_path),
         };
         store.load_all().await;
         store
     }
 
-    /// Returns the jobs directory path for a specific task.
-    fn job_dir(&self, task_id: Uuid) -> PathBuf {
-        self.storage_path
-            .join("tasks")
-            .join(task_id.to_string())
-            .join("jobs")
-    }
-
-    /// Returns the path to a specific job's metadata file.
-    fn job_json_path(&self, task_id: Uuid, job_id: Uuid) -> PathBuf {
-        self.job_dir(task_id).join(format!("{}.json", job_id))
-    }
-
     /// Loads all jobs from the filesystem into memory.
     async fn load_all(&self) {
-        let tasks_dir = self.storage_path.join("tasks");
+        let tasks_dir = self.layout.tasks_root();
 
         if !tasks_dir.exists() {
             debug!("Tasks directory does not exist, starting with empty job store");
@@ -115,29 +90,27 @@ impl FileSystemJobStore {
                 continue;
             }
 
-            let jobs_dir = task_path.join("jobs");
-            if !jobs_dir.exists() {
-                continue;
-            }
+            // Extract task_id from directory name
+            let task_id = match task_path.file_name().and_then(|n| n.to_str()).and_then(|s| s.parse::<Uuid>().ok()) {
+                Some(id) => id,
+                None => {
+                    warn!("Skipping invalid task directory: {:?}", task_path);
+                    continue;
+                }
+            };
 
-            // Iterate through job JSON files in this task's jobs/ directory
-            let mut job_entries = match tokio::fs::read_dir(&jobs_dir).await {
-                Ok(entries) => entries,
+            // Scan for job files in this task
+            let job_files = match self.layout.scan_job_files_by_id(task_id).await {
+                Ok(files) => files,
                 Err(e) => {
-                    warn!("Failed to read jobs directory {:?}: {}", jobs_dir, e);
+                    warn!("Failed to scan jobs for task {}: {}", task_id, e);
                     error_count += 1;
                     continue;
                 }
             };
 
-            while let Ok(Some(job_entry)) = job_entries.next_entry().await {
-                let job_path = job_entry.path();
-                if !job_path.is_file()
-                    || job_path.extension().and_then(|s| s.to_str()) != Some("json")
-                {
-                    continue;
-                }
-
+            // Load each job file
+            for job_path in job_files {
                 match self.load_job_from_file(&job_path).await {
                     Ok(job) => {
                         self.jobs.insert(job.job_id, job);
@@ -169,7 +142,7 @@ impl FileSystemJobStore {
 
     /// Saves a job's metadata to the filesystem.
     async fn save_job_to_file(&self, job: &Job) -> JobStoreResult<()> {
-        let path = self.job_json_path(job.task_id, job.job_id);
+        let path = self.layout.job_file_path(job);
         let content = serde_json::to_string_pretty(job)
             .map_err(|e| JobStoreError::StorageError(format!("Failed to serialize job: {}", e)))?;
 
@@ -199,14 +172,17 @@ impl JobStore for FileSystemJobStore {
             Entry::Occupied(_) => Err(JobStoreError::AlreadyExists(job_id)),
             Entry::Vacant(entry) => {
                 // Ensure jobs directory exists
-                let job_dir = self.job_dir(job.task_id);
-                if let Err(e) = tokio::fs::create_dir_all(&job_dir).await {
-                    error!("Failed to create jobs directory {:?}: {}", job_dir, e);
-                    return Err(JobStoreError::StorageError(format!(
-                        "Failed to create jobs directory: {}",
-                        e
-                    )));
-                }
+                use crate::models::Task;
+                let task = Task {
+                    task_id: job.task_id,
+                    context: String::new(), // Dummy task for layout operations
+                    created_at: chrono::Utc::now(),
+                };
+
+                let job_dir = self.layout.ensure_jobs_dir(&task).await.map_err(|e| {
+                    error!("Failed to create jobs directory: {}", e);
+                    JobStoreError::StorageError(format!("Failed to create jobs directory: {}", e))
+                })?;
                 debug!("Ensured jobs directory exists: {:?}", job_dir);
 
                 // Save metadata to filesystem
@@ -302,7 +278,7 @@ impl JobStore for FileSystemJobStore {
         match self.jobs.remove(&job_id) {
             Some((_, job)) => {
                 // Remove job JSON file
-                let job_path = self.job_json_path(job.task_id, job_id);
+                let job_path = self.layout.job_file_path(&job);
                 if job_path.exists() {
                     if let Err(e) = tokio::fs::remove_file(&job_path).await {
                         error!("Failed to remove job file {:?}: {}", job_path, e);
@@ -338,7 +314,7 @@ impl JobStore for FileSystemJobStore {
         // Remove all jobs and their files
         for job_id in job_ids {
             if let Some((_, job)) = self.jobs.remove(&job_id) {
-                let job_path = self.job_json_path(job.task_id, job_id);
+                let job_path = self.layout.job_file_path(&job);
                 if job_path.exists() {
                     if let Err(e) = tokio::fs::remove_file(&job_path).await {
                         error!("Failed to remove job file {:?}: {}", job_path, e);
@@ -441,10 +417,10 @@ mod tests {
         assert!(exists);
 
         // Verify jobs directory was created
-        assert!(ts.store.job_dir(task_id).exists());
+        assert!(ts.store.layout.jobs_dir_by_id(task_id).exists());
 
         // Verify job JSON file was created
-        assert!(ts.store.job_json_path(task_id, job.job_id).exists());
+        assert!(ts.store.layout.job_file_path(&job).exists());
     }
 
     #[tokio::test]
@@ -612,7 +588,7 @@ mod tests {
         let job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
 
         ts.store.create(job.clone()).await.unwrap();
-        let job_path = ts.store.job_json_path(task_id, job.job_id);
+        let job_path = ts.store.layout.job_file_path(&job);
         assert!(job_path.exists());
 
         // Delete the job
@@ -660,8 +636,8 @@ mod tests {
         ts.store.create(job2.clone()).await.unwrap();
         ts.store.create(job3).await.unwrap();
 
-        let job1_path = ts.store.job_json_path(task_a, job1.job_id);
-        let job2_path = ts.store.job_json_path(task_a, job2.job_id);
+        let job1_path = ts.store.layout.job_file_path(&job1);
+        let job2_path = ts.store.layout.job_file_path(&job2);
         assert!(job1_path.exists());
         assert!(job2_path.exists());
 

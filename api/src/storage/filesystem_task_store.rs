@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::models::Task;
 
-use super::{TaskStore, TaskStoreError, TaskStoreResult};
+use super::{FileSystemLayout, TaskStore, TaskStoreError, TaskStoreResult};
 
 // ============================================================================
 // FileSystemTaskStore Implementation
@@ -32,26 +32,16 @@ use super::{TaskStore, TaskStoreError, TaskStoreResult};
 /// - **Full persistence**: Task metadata survives server restarts
 /// - **Filesystem integration**: Creates/removes task directories and metadata files
 ///
-/// ## Directory Structure
-///
-/// ```text
-/// {storage_path}/
-/// └── tasks/
-///     ├── {task_id_1}/
-///     │   └── task.json
-///     ├── {task_id_2}/
-///     │   └── task.json
-///     └── ...
-/// ```
-///
 /// ## Persistence Strategy
 ///
 /// - Metadata is written to disk after each create/update operation
 /// - On startup, all existing task.json files are loaded into memory
 /// - Deleting a task removes both the in-memory entry and the entire directory
+///
+/// For details on the filesystem layout, see [`FileSystemLayout`]
 pub struct FileSystemTaskStore {
     tasks: Arc<DashMap<Uuid, Task>>,
-    storage_path: PathBuf,
+    layout: FileSystemLayout,
 }
 
 impl FileSystemTaskStore {
@@ -65,35 +55,18 @@ impl FileSystemTaskStore {
     pub async fn new(storage_path: PathBuf) -> Self {
         let store = Self {
             tasks: Arc::new(DashMap::new()),
-            storage_path,
+            layout: FileSystemLayout::new(storage_path),
         };
         store.load_all().await;
         store
     }
 
-    /// Returns the directory path for a specific task.
-    fn task_dir(&self, task_id: Uuid) -> PathBuf {
-        self.storage_path.join("tasks").join(task_id.to_string())
-    }
-
-    /// Returns the path to the task's metadata file.
-    fn task_json_path(&self, task_id: Uuid) -> PathBuf {
-        self.task_dir(task_id).join("task.json")
-    }
-
     /// Loads all tasks from the filesystem into memory.
     async fn load_all(&self) {
-        let tasks_dir = self.storage_path.join("tasks");
-
-        if !tasks_dir.exists() {
-            debug!("Tasks directory does not exist, starting with empty store");
-            return;
-        }
-
-        let mut entries = match tokio::fs::read_dir(&tasks_dir).await {
-            Ok(entries) => entries,
+        let task_files = match self.layout.scan_task_json_files().await {
+            Ok(files) => files,
             Err(e) => {
-                warn!("Failed to read tasks directory: {}", e);
+                warn!("Failed to scan task files: {}", e);
                 return;
             }
         };
@@ -101,19 +74,7 @@ impl FileSystemTaskStore {
         let mut loaded_count = 0;
         let mut error_count = 0;
 
-        while let Ok(Some(entry)) = entries.next_entry().await {
-            let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-
-            let task_json = path.join("task.json");
-            if !task_json.exists() {
-                warn!("Task directory {:?} has no task.json, skipping", path);
-                error_count += 1;
-                continue;
-            }
-
+        for task_json in task_files {
             match self.load_task_from_file(&task_json).await {
                 Ok(task) => {
                     self.tasks.insert(task.task_id, task);
@@ -144,7 +105,7 @@ impl FileSystemTaskStore {
 
     /// Saves a task's metadata to the filesystem.
     async fn save_task_to_file(&self, task: &Task) -> TaskStoreResult<()> {
-        let path = self.task_json_path(task.task_id);
+        let path = self.layout.task_json_path(task);
         let content = serde_json::to_string_pretty(task).map_err(|e| {
             TaskStoreError::StorageError(format!("Failed to serialize task: {}", e))
         })?;
@@ -175,14 +136,10 @@ impl TaskStore for FileSystemTaskStore {
             Entry::Occupied(_) => Err(TaskStoreError::AlreadyExists(task_id)),
             Entry::Vacant(entry) => {
                 // Create task directory on filesystem
-                let task_dir = self.task_dir(task_id);
-                if let Err(e) = tokio::fs::create_dir_all(&task_dir).await {
-                    error!("Failed to create task directory {:?}: {}", task_dir, e);
-                    return Err(TaskStoreError::StorageError(format!(
-                        "Failed to create task directory: {}",
-                        e
-                    )));
-                }
+                let task_dir = self.layout.ensure_task_dir(&task).await.map_err(|e| {
+                    error!("Failed to create task directory: {}", e);
+                    TaskStoreError::StorageError(format!("Failed to create task directory: {}", e))
+                })?;
                 debug!("Created task directory: {:?}", task_dir);
 
                 // Save metadata to filesystem
@@ -259,7 +216,7 @@ impl TaskStore for FileSystemTaskStore {
         match self.tasks.remove(&task_id) {
             Some((_, task)) => {
                 // Remove task directory and all its contents (includes task.json and photos)
-                let task_dir = self.task_dir(task_id);
+                let task_dir = self.layout.task_dir(&task);
                 if task_dir.exists() {
                     if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
                         error!("Failed to remove task directory {:?}: {}", task_dir, e);
@@ -352,10 +309,10 @@ mod tests {
         assert!(exists);
 
         // Verify directory was created
-        assert!(ts.store.task_dir(task.task_id).exists());
+        assert!(ts.store.layout.task_dir(&task).exists());
 
         // Verify task.json was created
-        assert!(ts.store.task_json_path(task.task_id).exists());
+        assert!(ts.store.layout.task_json_path(&task).exists());
     }
 
     #[tokio::test]
@@ -475,7 +432,7 @@ mod tests {
         let task = create_test_task("vacation in SF");
 
         ts.store.create(task.clone()).await.unwrap();
-        let task_dir = ts.store.task_dir(task.task_id);
+        let task_dir = ts.store.layout.task_dir(&task);
         assert!(task_dir.exists());
 
         // Delete the task
