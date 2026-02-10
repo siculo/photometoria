@@ -37,7 +37,7 @@ This example demonstrates a typical workflow from task creation to cleanup:
    }
    ← {job_id: "12345678-abcd-ef01-2345-6789abcdef01", status: "queued"}
 
-4. Client monitors via SSE
+4. Client monitors via SSE (not yet implemented — see Issue #11)
    GET /api/jobs/12345678-abcd-ef01-2345-6789abcdef01/stream
    ← Real-time events as job progresses
 
@@ -144,28 +144,26 @@ Creates a new task. Multiple tasks can be active simultaneously.
 
 Returns list of all tasks.
 
-**Response:**
+**Response:** `200 OK` — JSON array
 
 ```json
-{
-  "tasks": [
-    {
-      "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "context": "...",
-      "photo_count": 15,
-      "storage_used": 47395430,
-      "created_at": "...",
-      "job_count": 2
-    }
-  ]
-}
+[
+  {
+    "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "context": "...",
+    "photo_count": 15,
+    "storage_used": 47395430,
+    "created_at": "...",
+    "job_count": 2
+  }
+]
 ```
 
 ### GET /api/tasks/{task_id}
 
-Returns detailed information about a specific task, including all associated jobs.
+Returns detailed information about a specific task.
 
-**Response:**
+**Response:** `200 OK`
 
 ```json
 {
@@ -173,26 +171,15 @@ Returns detailed information about a specific task, including all associated job
   "context": "vacation in SF",
   "created_at": "2024-01-15T10:30:00Z",
   "photo_count": 15,
-  "storage_used": 47395430,
-  "jobs": [
-    {
-      "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
-      "status": "completed",
-      "model": "qwen2-vl:8b",
-      "photo_count": 15,
-      "created_at": "2024-01-15T10:35:00Z",
-      "completed_at": "2024-01-15T10:45:00Z"
-    },
-    {
-      "job_id": "abcdef01-2345-6789-abcd-ef0123456789",
-      "status": "processing",
-      "model": "llava",
-      "photo_count": 15,
-      "created_at": "2024-01-15T10:50:00Z"
-    }
-  ]
+  "storage_used": 47395430
 }
 ```
+
+**Note:** A `jobs` field is planned but not yet included in the response.
+
+**Errors:**
+
+- `404` - Task not found
 
 ### PATCH /api/tasks/{task_id}
 
@@ -206,22 +193,29 @@ Updates the task context.
 }
 ```
 
-**Response:**
+**Response:** `200 OK`
 
 ```json
 {
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "context": "updated context information"
+  "context": "updated context information",
+  "created_at": "2024-01-15T10:30:00Z"
 }
 ```
+
+**Errors:**
+
+- `404` - Task not found
 
 ### DELETE /api/tasks/{task_id}
 
 Deletes a task and all associated resources (photos, jobs).
 
+**Response:** `204 No Content`
+
 **Errors:**
 
-- `409` - Cannot delete task with active jobs
+- `404` - Task not found
 
 ## Photo Endpoints
 
@@ -341,7 +335,7 @@ Deletes a specific photo.
 
 ### POST /api/tasks/{task_id}/jobs
 
-Creates and starts a new analysis job.
+Creates a new analysis job in `queued` status.
 
 **Request:**
 
@@ -349,82 +343,84 @@ Creates and starts a new analysis job.
 {
   "model": "qwen2-vl:8b",
   "photo_ids": null
-  // null = all photos, or array of specific IDs
 }
 ```
 
-**Response:**
+- `model`: AI model to use (e.g. `qwen2-vl:8b`, `llava`)
+- `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task
+
+**Response:** `201 Created`
 
 ```json
 {
   "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
-  "photo_count": 15,
   "model": "qwen2-vl:8b",
-  "created_at": "2024-01-15T10:35:00Z",
-  "queue_position": 1
-  // optional, if in queue
+  "photo_count": 15,
+  "created_at": "2024-01-15T10:35:00Z"
 }
 ```
 
+Fields `started_at` and `completed_at` are omitted until the job reaches the corresponding state.
+
 **Errors:**
 
-- `400` - Invalid model or photo_ids
+- `400` - One or more `photo_ids` do not belong to the task (`invalid_parameter`)
 - `404` - Task not found
 
 ### POST /api/jobs/{job_id}/retry
 
-Retries only the failed photos from a completed job, using the same model and enriched context from successfully processed photos.
+Creates a new job to retry only the failed photos from a finished job, using the same model.
 
-**Response:**
+**Errors:**
+
+- `400` - No failed photos to retry (`no_failed_photos`)
+- `404` - Job not found
+- `409` - Job is still processing (`job_in_progress`)
+
+**Response:** `201 Created`
 
 ```json
 {
   "job_id": "fedcba98-7654-3210-fedc-ba9876543210",
-  "parent_job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
-  "photo_count": 2,
-  // only failed photos
   "model": "qwen2-vl:8b",
-  "retry": true,
-  "created_at": "2024-01-15T10:50:00Z"
+  "photo_count": 2,
+  "created_at": "2024-01-15T10:50:00Z",
+  "parent_job_id": "12345678-abcd-ef01-2345-6789abcdef01"
 }
 ```
-
-**Errors:**
-
-- `400` - No failed photos to retry
-- `409` - Original job still processing
 
 ### GET /api/jobs
 
-Returns list of all jobs across all tasks.
+Returns a summary list of all jobs across all tasks.
 
-**Response:**
+**Response:** `200 OK` — JSON array
 
 ```json
-{
-  "jobs": [
-    {
-      "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
-      "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "status": "completed",
-      "model": "qwen2-vl:8b",
-      "photo_count": 15,
-      "created_at": "...",
-      "completed_at": "..."
-    }
-  ]
-}
+[
+  {
+    "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
+    "status": "completed",
+    "model": "qwen2-vl:8b",
+    "photo_count": 15,
+    "queued_photo_count": 0,
+    "processed_photo_count": 15,
+    "created_at": "2024-01-15T10:35:00Z",
+    "completed_at": "2024-01-15T10:45:00Z"
+  }
+]
 ```
+
+`completed_at` is omitted when the job has not yet finished.
 
 ### GET /api/jobs/{job_id}
 
-Returns current state of a specific job.
+Returns the current state of a specific job.
 
-**Response:**
+**Response:** `200 OK`
 
 ```json
 {
@@ -433,28 +429,34 @@ Returns current state of a specific job.
   "status": "processing",
   "model": "qwen2-vl:8b",
   "photo_count": 15,
+  "created_at": "2024-01-15T10:35:00Z",
+  "started_at": "2024-01-15T10:35:10Z",
   "progress": {
     "completed": 7,
     "failed": 1,
     "remaining": 7,
     "current_photo_id": "11111111-2222-3333-4444-555555555555"
-  },
-  "created_at": "2024-01-15T10:35:00Z"
+  }
 }
 ```
 
+- `started_at` and `completed_at` are omitted until the job reaches those states
+- `progress` is only present when `status` is `processing`; `current_photo_id` within `progress` may be omitted between photos
+- `progress` is omitted for `queued`, `completed`, `failed`, and `cancelled` jobs
+
+**Errors:**
+
+- `404` - Job not found
+
 ### GET /api/jobs/{job_id}/results
 
-Returns analysis results. Available even for jobs in "processing" or "cancelled" state (partial results).
+Returns the AI analysis results for all processed photos in a job. Available for jobs in any status; results accumulate as photos are processed.
 
-**Response:**
+**Response:** `200 OK`
 
 ```json
 {
   "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
-  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "status": "completed",
-  "model": "qwen2-vl:8b",
   "results": [
     {
       "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
@@ -466,12 +468,7 @@ Returns analysis results. Available even for jobs in "processing" or "cancelled"
       "photo_id": "a9b8c7d6-e5f4-3210-9876-543210fedcba",
       "status": "failed",
       "error": "ollama timeout",
-      "tags": null
-    },
-    {
-      "photo_id": "11111111-2222-3333-4444-555555555555",
-      "status": "completed",
-      "tags": "san francisco bay, sailboat, clear sky, afternoon light"
+      "processed_at": "2024-01-15T10:37:00Z"
     }
   ],
   "summary": {
@@ -482,81 +479,25 @@ Returns analysis results. Available even for jobs in "processing" or "cancelled"
 }
 ```
 
+- `tags` is omitted when `status` is `failed`
+- `error` is omitted when `status` is `completed`
+- `processed_at` may be omitted for photos not yet processed
+
+**Errors:**
+
+- `404` - Job not found
+
 ### GET /api/jobs/{job_id}/stream
 
-Opens a Server-Sent Events (SSE) stream for real-time job updates.
+> **Not yet implemented** — tracked in Issue #11.
 
-**Event Types:**
-
-**started:**
-
-```json
-{
-  "event": "started",
-  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
-  "total_photos": 15
-}
-```
-
-**progress:**
-
-```json
-{
-  "event": "progress",
-  "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
-  "status": "completed",
-  "progress": "1/15"
-}
-```
-
-**progress (failed photo):**
-
-```json
-{
-  "event": "progress",
-  "photo_id": "a9b8c7d6-e5f4-3210-9876-543210fedcba",
-  "status": "failed",
-  "error": "ollama timeout",
-  "progress": "2/15"
-}
-```
-
-**completed:**
-
-```json
-{
-  "event": "completed",
-  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
-  "total": 15,
-  "succeeded": 13,
-  "failed": 2
-}
-```
-
-**cancelled:**
-
-```json
-{
-  "event": "cancelled",
-  "job_id": "12345678-abcd-ef01-2345-6789abcdef01"
-}
-```
-
-**Client Disconnection:**
-
-When a client disconnects from the SSE stream, the server detects this and marks the job as "abandoned". Currently, no automatic timeout/cleanup is implemented for abandoned jobs (future enhancement).
+Will open a Server-Sent Events (SSE) stream for real-time job progress updates.
 
 ### DELETE /api/jobs/{job_id}
 
-Cancels and deletes a job.
+Cancels and deletes a job. If the job is currently `processing`, it is cancelled before deletion. The job and all its results are permanently removed.
 
-**Behavior:**
-
-- If job is running: completes current photo processing, then stops
-- Partial results are preserved and retrievable
-- Associated photos remain in the task
-
-**Response:**
+**Response:** `200 OK`
 
 ```json
 {
@@ -564,6 +505,10 @@ Cancels and deletes a job.
   "status": "cancelled"
 }
 ```
+
+**Errors:**
+
+- `404` - Job not found
 
 ## Data Models
 
@@ -639,13 +584,13 @@ All errors follow a consistent JSON format:
 - `job_not_found` (404) - Specified job does not exist
 - `photo_not_found` (404) - Specified photo does not exist
 - `invalid_model` (400) - Model not in supported/available list
-- `invalid_photo_ids` (400) - Photo IDs invalid or not in task
+- `invalid_parameter` (400) - One or more photo IDs not found in the task
 - `file_too_large` (400) - Uploaded file exceeds max_photo_size
 - `too_many_files` (400) - Upload exceeds max_photos_per_request
 - `insufficient_storage` (507) - Storage quota exceeded
 - `resource_in_use` (409) - Cannot delete resource referenced by active jobs
 - `no_failed_photos` (400) - Retry requested but no failed photos
-- `job_still_processing` (409) - Operation not allowed on active job
+- `job_in_progress` (409) - Operation not allowed while job is still processing
 
 ## See Also
 

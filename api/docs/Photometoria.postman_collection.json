@@ -20,6 +20,11 @@
 			"key": "photo_id",
 			"value": "",
 			"type": "string"
+		},
+		{
+			"key": "job_id",
+			"value": "",
+			"type": "string"
 		}
 	],
 	"item": [
@@ -483,6 +488,497 @@
 							"_postman_previewlanguage": "text",
 							"header": [],
 							"body": ""
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Jobs",
+			"item": [
+				{
+					"name": "Create Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('job_id', jsonData.job_id);",
+									"    console.log('Job ID saved:', jsonData.job_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"model\": \"qwen2-vl:8b\",\n    \"photo_ids\": null\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+							"host": ["{{base_url}}"],
+							"path": ["api", "tasks", "{{task_id}}", "jobs"]
+						},
+						"description": "Creates a new job to process photos with the specified AI model.\n\n- `model`: AI model to use (e.g. `qwen2-vl:8b`, `llava`)\n- `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task\n\nThe job is created in `queued` status. The `job_id` is saved automatically for subsequent requests."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"model\": \"qwen2-vl:8b\",\n    \"photo_ids\": null\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "{{task_id}}", "jobs"]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen2-vl:8b\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
+						},
+						{
+							"name": "Task Not Found",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"model\": \"qwen2-vl:8b\",\n    \"photo_ids\": null\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/nonexistent/jobs",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "nonexistent", "jobs"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Task with id 'nonexistent' not found\"\n}"
+						},
+						{
+							"name": "Invalid Photo ID",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"model\": \"qwen2-vl:8b\",\n    \"photo_ids\": [\"00000000-0000-0000-0000-000000000000\"]\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "{{task_id}}", "jobs"]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"invalid_parameter\",\n    \"message\": \"photo with photo_id '00000000-0000-0000-0000-000000000000' does not exists in task '550e8400-e29b-41d4-a716-446655440000'\"\n}"
+						}
+					]
+				},
+				{
+					"name": "List Jobs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/jobs",
+							"host": ["{{base_url}}"],
+							"path": ["api", "jobs"]
+						},
+						"description": "Returns a summary list of all jobs across all tasks."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen2-vl:8b\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    },\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440011\",\n        \"status\": \"queued\",\n        \"model\": \"llava\",\n        \"photo_count\": 5,\n        \"queued_photo_count\": 5,\n        \"processed_photo_count\": 0,\n        \"created_at\": \"2024-01-15T11:00:00Z\"\n    }\n]"
+						}
+					]
+				},
+				{
+					"name": "Get Job by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/jobs/{{job_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "jobs", "{{job_id}}"]
+						},
+						"description": "Returns detailed information about a specific job, including progress when in `processing` status.\n\nThe `progress` field is only present when `status` is `processing`."
+					},
+					"response": [
+						{
+							"name": "Success (queued)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "{{job_id}}"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen2-vl:8b\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
+						},
+						{
+							"name": "Success (processing with progress)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "{{job_id}}"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"processing\",\n    \"model\": \"qwen2-vl:8b\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"progress\": {\n        \"completed\": 5,\n        \"failed\": 1,\n        \"remaining\": 9,\n        \"current_photo_id\": \"550e8400-e29b-41d4-a716-446655440003\"\n    }\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/nonexistent",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "nonexistent"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Job Results",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/jobs/{{job_id}}/results",
+							"host": ["{{base_url}}"],
+							"path": ["api", "jobs", "{{job_id}}", "results"]
+						},
+						"description": "Returns the AI analysis results for all processed photos in a job.\n\nAvailable for jobs in any status; results accumulate as photos are processed."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}/results",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "{{job_id}}", "results"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"results\": [\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"status\": \"completed\",\n            \"tags\": \"landscape, mountain, sunset, golden hour, nature\",\n            \"processed_at\": \"2024-01-15T10:36:00Z\"\n        },\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440003\",\n            \"status\": \"failed\",\n            \"error\": \"Model timeout\",\n            \"processed_at\": \"2024-01-15T10:37:00Z\"\n        }\n    ],\n    \"summary\": {\n        \"total\": 15,\n        \"completed\": 12,\n        \"failed\": 3\n    }\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/nonexistent/results",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "nonexistent", "results"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Retry Job",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('job_id', jsonData.job_id);",
+									"    console.log('New Job ID saved:', jsonData.job_id);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+							"host": ["{{base_url}}"],
+							"path": ["api", "jobs", "{{job_id}}", "retry"]
+						},
+						"description": "Creates a new job to retry only the failed photos from an existing finished job.\n\nReturns `409 Conflict` if the job is still processing, or `400 Bad Request` if there are no failed photos to retry.\n\nThe new `job_id` is saved automatically."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "{{job_id}}", "retry"]
+								}
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440020\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen2-vl:8b\",\n    \"photo_count\": 3,\n    \"created_at\": \"2024-01-15T11:00:00Z\",\n    \"parent_job_id\": \"550e8400-e29b-41d4-a716-446655440010\"\n}"
+						},
+						{
+							"name": "Job Still Processing",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "{{job_id}}", "retry"]
+								}
+							},
+							"status": "Conflict",
+							"code": 409,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"job_in_progress\",\n    \"message\": \"Cannot retry job '550e8400-e29b-41d4-a716-446655440010' while it is still processing\"\n}"
+						},
+						{
+							"name": "No Failed Photos",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "{{job_id}}", "retry"]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"no_failed_photos\",\n    \"message\": \"Job '550e8400-e29b-41d4-a716-446655440010' has no failed photos to retry\"\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/nonexistent/retry",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "nonexistent", "retry"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Delete Job",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/jobs/{{job_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["api", "jobs", "{{job_id}}"]
+						},
+						"description": "Cancels and deletes a job. If the job is currently `processing`, it is cancelled before deletion.\n\nAlways returns the `cancelled` status regardless of the original job state."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "{{job_id}}"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"status\": \"cancelled\"\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/nonexistent",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "nonexistent"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
 						}
 					]
 				}
