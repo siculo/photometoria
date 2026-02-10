@@ -3,12 +3,14 @@ pub mod byte_size;
 pub mod server;
 pub mod storage;
 pub mod upload;
+pub mod worker_pool;
 
 pub use ai::{AIConfig, OllamaModelConfig, OllamaProviderConfig, ProviderConfig};
 pub use byte_size::ByteSize;
 pub use server::ServerConfig;
 pub use storage::StorageConfig;
 pub use upload::UploadConfig;
+pub use worker_pool::WorkerPoolConfig;
 
 use std::fs;
 use std::path::Path;
@@ -23,6 +25,9 @@ pub struct Config {
     /// AI provider configuration.
     #[serde(default)]
     pub ai: AIConfig,
+    /// Worker pool configuration.
+    #[serde(default)]
+    pub worker_pool: WorkerPoolConfig,
 }
 
 impl Config {
@@ -47,11 +52,13 @@ pub fn load_config(config_path: &Path) -> Result<Config, ConfigError> {
     if !config_path.exists() {
         #[cfg(debug_assertions)]
         {
+            let config = Config::default();
             tracing::warn!(
                 "Configuration file '{}' not found, using default values",
                 path_str
             );
-            return Ok(Config::default());
+            tracing::debug!(config = ?config, "Effective configuration (defaults)");
+            return Ok(config);
         }
 
         #[cfg(not(debug_assertions))]
@@ -68,7 +75,14 @@ pub fn load_config(config_path: &Path) -> Result<Config, ConfigError> {
         path: path_str.clone(),
         source: e,
     })?;
+
+    config
+        .worker_pool
+        .validate()
+        .map_err(ConfigError::ValidationError)?;
+
     tracing::info!("Loaded configuration from '{}'", path_str);
+    tracing::debug!(config = ?config, "Effective configuration");
 
     Ok(config)
 }
@@ -93,4 +107,7 @@ pub enum ConfigError {
         #[source]
         source: toml::de::Error,
     },
+
+    #[error("Invalid configuration: {0}")]
+    ValidationError(String),
 }

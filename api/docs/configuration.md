@@ -44,6 +44,10 @@ ollama_model = "llava:latest"
 prompt_template = "List tags for this image, comma-separated. Context: {context}"
 description = "Faster, good for testing"
 supports_vision = true
+
+[worker_pool]
+min_photos_before_swap = 10
+max_time_before_swap = "120s"
 ```
 
 ## Configuration Sections
@@ -231,6 +235,36 @@ ollama_model = "llava:latest"
 prompt_template = "List tags for this image, comma-separated."
 description = "Faster, good for testing"
 supports_vision = true
+```
+
+### [worker_pool]
+
+Controls how the worker pool schedules photo processing across jobs and manages model switching.
+
+The number of workers is determined by `[ai.providers.ollama] devices`: one worker per configured GPU. If `devices` is empty, one worker runs on device 0.
+
+**Options:**
+
+- **min_photos_before_swap** (integer, optional)
+  - Minimum photos to process with the current model before allowing a switch to another model
+  - Higher values improve efficiency (fewer model reloads); lower values improve fairness between jobs
+  - Must be ≥ 1
+  - Default: `10`
+
+- **max_time_before_swap** (string, optional)
+  - Maximum time a model can stay loaded before forcing a swap
+  - Ensures jobs with different models are not starved indefinitely
+  - Supported suffixes: `s` (seconds), `m` (minutes)
+  - Default: `"120s"`
+
+A model swap is allowed only when **both** thresholds are exceeded. This balances loading efficiency with temporal fairness.
+
+**Example:**
+
+```toml
+[worker_pool]
+min_photos_before_swap = 10
+max_time_before_swap = "120s"
 ```
 
 ## AI Provider System

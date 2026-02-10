@@ -76,3 +76,18 @@ ollama_model = "llava:latest"
 prompt_template = "Describe the main subjects, setting, and mood of this photograph."
 description = "Fast vision model, good for development"
 supports_vision = true
+
+# Worker Pool Configuration
+# -------------------------
+# Controls how the worker pool processes jobs and manages model switching.
+
+[worker_pool]
+# Minimum number of photos to process with the current model before allowing a swap.
+# Higher values improve efficiency (fewer model reloads), lower values improve fairness.
+# Must be >= 1. Default: 10
+min_photos_before_swap = 10
+
+# Maximum time to keep the same model loaded before forcing a swap.
+# Ensures no job waits indefinitely when photos with a different model are queued.
+# Supported suffixes: "s" (seconds), "m" (minutes). Default: "120s"
+max_time_before_swap = "120s"
