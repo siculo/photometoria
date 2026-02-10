@@ -12,6 +12,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Handler for POST /api/tasks/{task_id}/jobs
+///
+/// Creates a new job for processing photos with AI analysis.
 pub async fn create_job(
     State(state): State<AppState>,
     AppPath(task_id): AppPath<Uuid>,
