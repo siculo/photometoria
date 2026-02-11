@@ -20,13 +20,27 @@ const BASE_PROMPT: &str = "Analyze this image and generate keywords for a photo 
 // ProcessingResult
 // ============================================================================
 
-/// Result of processing a single photo.
+/// Outcome of the processing pipeline for a single photo.
+#[derive(Debug)]
+pub enum Outcome {
+    /// AI analysis succeeded and job state was persisted correctly.
+    Success { tags: String },
+
+    /// AI analysis succeeded but persisting the updated job state failed.
+    /// The tags are returned so the caller can log them; the job in the store
+    /// may still reflect the previous state.
+    SuccessWithPersistenceError { tags: String, error: String },
+
+    /// AI analysis failed (photo data missing, task not found, AI error, etc.).
+    /// The job state has been updated to mark the photo as failed when possible.
+    AnalysisFailed { error: String },
+}
+
+/// Result of processing a single photo, pairing the photo identity with its outcome.
 #[derive(Debug)]
 pub struct ProcessingResult {
     pub photo_id: Uuid,
-    pub tags: Option<String>,
-    pub success: bool,
-    pub error: Option<String>,
+    pub outcome: Outcome,
 }
 
 // ============================================================================
@@ -65,24 +79,48 @@ impl PhotoProcessor {
             "Processing photo"
         );
 
-        let result = self.analyze(&photo).await;
-        self.update_job(&photo, &result).await;
-        result
+        let photo_id = photo.photo_id;
+
+        let outcome = match self.analyze(&photo).await {
+            Ok(tags) => {
+                match self.update_job(&photo, Ok(&tags)).await {
+                    Ok(()) => Outcome::Success { tags },
+                    Err(e) => {
+                        error!(
+                            photo_id = %photo.photo_id,
+                            job_id = %photo.job_id,
+                            error = %e,
+                            "Analysis succeeded but job state could not be persisted"
+                        );
+                        Outcome::SuccessWithPersistenceError { tags, error: e }
+                    }
+                }
+            }
+            Err(error) => {
+                if let Err(e) = self.update_job(&photo, Err(&error)).await {
+                    error!(
+                        photo_id = %photo.photo_id,
+                        job_id = %photo.job_id,
+                        error = %e,
+                        "Analysis failed and job state could not be persisted either"
+                    );
+                }
+                Outcome::AnalysisFailed { error }
+            }
+        };
+
+        ProcessingResult { photo_id, outcome }
     }
 
     /// Load photo data, build request, call AI provider.
-    async fn analyze(&self, photo: &QueuedPhoto) -> ProcessingResult {
+    /// Returns `Ok(tags)` on success or `Err(message)` on any failure.
+    async fn analyze(&self, photo: &QueuedPhoto) -> Result<String, String> {
         // Load raw image bytes
         let bytes = match self.photo_store.load_data(photo.photo_id).await {
             Ok(data) => data,
             Err(e) => {
                 error!(photo_id = %photo.photo_id, error = %e, "Failed to load photo data");
-                return ProcessingResult {
-                    photo_id: photo.photo_id,
-                    tags: None,
-                    success: false,
-                    error: Some(format!("Failed to load photo: {}", e)),
-                };
+                return Err(format!("Failed to load photo: {}", e));
             }
         };
 
@@ -96,12 +134,7 @@ impl PhotoProcessor {
                     error = %e,
                     "Task not found or unavailable — cannot process photo"
                 );
-                return ProcessingResult {
-                    photo_id: photo.photo_id,
-                    tags: None,
-                    success: false,
-                    error: Some(e),
-                };
+                return Err(e);
             }
         };
 
@@ -124,21 +157,11 @@ impl PhotoProcessor {
                     model = %response.model,
                     "Photo analysis completed"
                 );
-                ProcessingResult {
-                    photo_id: photo.photo_id,
-                    tags: Some(response.text),
-                    success: true,
-                    error: None,
-                }
+                Ok(response.text)
             }
             Err(e) => {
                 error!(photo_id = %photo.photo_id, error = %e, "Photo analysis failed");
-                ProcessingResult {
-                    photo_id: photo.photo_id,
-                    tags: None,
-                    success: false,
-                    error: Some(e.to_string()),
-                }
+                Err(e.to_string())
             }
         }
     }
@@ -157,17 +180,22 @@ impl PhotoProcessor {
         }
     }
 
-    /// Update job state after processing a photo (success or failure).
-    async fn update_job(&self, photo: &QueuedPhoto, result: &ProcessingResult) {
+    /// Update job state after processing a photo.
+    ///
+    /// `analysis` is `Ok(tags)` when the AI succeeded, `Err(error)` when it failed.
+    /// Returns `Err` if the job state could not be persisted to the store.
+    async fn update_job(
+        &self,
+        photo: &QueuedPhoto,
+        analysis: Result<&str, &str>,
+    ) -> Result<(), String> {
         let mut job = match self.job_store.get(photo.job_id).await {
             Ok(Some(job)) => job,
             Ok(None) => {
-                error!(job_id = %photo.job_id, "Job not found when updating after photo processing");
-                return;
+                return Err(format!("Job {} not found", photo.job_id));
             }
             Err(e) => {
-                error!(job_id = %photo.job_id, error = %e, "Failed to load job for update");
-                return;
+                return Err(format!("Failed to load job {}: {}", photo.job_id, e));
             }
         };
 
@@ -181,8 +209,7 @@ impl PhotoProcessor {
         job.processed_photo_ids.push(photo.photo_id);
 
         // Store result
-        let photo_result = Self::build_photo_result(photo.photo_id, result);
-        job.results.insert(photo.photo_id, photo_result);
+        job.results.insert(photo.photo_id, Self::build_photo_result(photo.photo_id, analysis));
 
         // Complete job when all photos have been processed
         if job.queued_photo_ids.is_empty() {
@@ -190,28 +217,29 @@ impl PhotoProcessor {
             info!(job_id = %photo.job_id, "Job completed");
         }
 
-        if let Err(e) = self.job_store.update(job).await {
-            error!(job_id = %photo.job_id, error = %e, "Failed to persist job update");
-        }
+        self.job_store
+            .update(job)
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("Failed to persist job {}: {}", photo.job_id, e))
     }
 
-    fn build_photo_result(photo_id: Uuid, result: &ProcessingResult) -> PhotoResult {
-        if result.success {
-            PhotoResult {
+    fn build_photo_result(photo_id: Uuid, analysis: Result<&str, &str>) -> PhotoResult {
+        match analysis {
+            Ok(tags) => PhotoResult {
                 photo_id,
                 status: PhotoResultStatus::Completed,
-                tags: result.tags.clone(),
+                tags: Some(tags.to_string()),
                 error: None,
                 processed_at: Some(Utc::now()),
-            }
-        } else {
-            PhotoResult {
+            },
+            Err(error) => PhotoResult {
                 photo_id,
                 status: PhotoResultStatus::Failed,
                 tags: None,
-                error: result.error.clone(),
+                error: Some(error.to_string()),
                 processed_at: Some(Utc::now()),
-            }
+            },
         }
     }
 }
@@ -237,7 +265,7 @@ mod tests {
     use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore};
 
     // -----------------------------------------------------------------------
-    // Mock AI provider
+    // Mock AI providers
     // -----------------------------------------------------------------------
 
     struct SuccessProvider {
@@ -329,9 +357,7 @@ mod tests {
         }
     }
 
-    async fn setup_job_and_photo(
-        fixture: &TestFixture,
-    ) -> (Job, Uuid) {
+    async fn setup_job_and_photo(fixture: &TestFixture) -> (Job, Uuid) {
         let task = fixture
             .task_store
             .create(Task::new("test context".to_string()))
@@ -350,11 +376,7 @@ mod tests {
 
         let job = fixture
             .job_store
-            .create(Job::new(
-                task.task_id,
-                "llava".to_string(),
-                vec![photo_id],
-            ))
+            .create(Job::new(task.task_id, "llava".to_string(), vec![photo_id]))
             .await
             .unwrap();
 
@@ -373,18 +395,20 @@ mod tests {
         let fixture = make_fixture(provider).await;
         let (job, photo_id) = setup_job_and_photo(&fixture).await;
 
-        let queued_photo = QueuedPhoto {
-            job_id: job.job_id,
-            photo_id,
-            task_id: job.task_id,
-            model: "llava".to_string(),
-        };
+        let result = fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+            })
+            .await;
 
-        let result = fixture.processor.process(queued_photo).await;
-
-        assert!(result.success);
-        assert_eq!(result.tags.as_deref(), Some("landscape, mountain, sunset"));
-        assert!(result.error.is_none());
+        assert!(matches!(result.outcome, Outcome::Success { .. }));
+        if let Outcome::Success { tags } = result.outcome {
+            assert_eq!(tags, "landscape, mountain, sunset");
+        }
 
         let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
         assert_eq!(updated_job.status, JobStatus::Completed);
@@ -396,25 +420,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_process_failure_marks_photo_as_failed() {
+    async fn test_process_ai_failure_marks_photo_as_failed() {
         let provider = Arc::new(FailingProvider {
             error_message: "model timeout".to_string(),
         });
         let fixture = make_fixture(provider).await;
         let (job, photo_id) = setup_job_and_photo(&fixture).await;
 
-        let queued_photo = QueuedPhoto {
-            job_id: job.job_id,
-            photo_id,
-            task_id: job.task_id,
-            model: "llava".to_string(),
-        };
+        let result = fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+            })
+            .await;
 
-        let result = fixture.processor.process(queued_photo).await;
-
-        assert!(!result.success);
-        assert!(result.tags.is_none());
-        assert!(result.error.is_some());
+        assert!(matches!(result.outcome, Outcome::AnalysisFailed { .. }));
 
         let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
         assert_eq!(updated_job.status, JobStatus::Completed);
@@ -425,7 +448,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_process_transitions_queued_to_processing_then_completed() {
+    async fn test_process_success_with_persistence_error() {
+        let provider = Arc::new(SuccessProvider {
+            response_text: "ocean, wave, blue".to_string(),
+        });
+        let fixture = make_fixture(provider).await;
+        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+
+        // Delete the job to make update_job fail with NotFound
+        fixture.job_store.delete(job.job_id).await.unwrap();
+
+        let result = fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+            })
+            .await;
+
+        assert!(matches!(result.outcome, Outcome::SuccessWithPersistenceError { .. }));
+        if let Outcome::SuccessWithPersistenceError { tags, .. } = result.outcome {
+            assert_eq!(tags, "ocean, wave, blue");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_process_transitions_queued_to_completed_on_single_photo() {
         let provider = Arc::new(SuccessProvider {
             response_text: "street, city".to_string(),
         });
@@ -434,17 +484,17 @@ mod tests {
 
         assert_eq!(job.status, JobStatus::Queued);
 
-        let queued_photo = QueuedPhoto {
-            job_id: job.job_id,
-            photo_id,
-            task_id: job.task_id,
-            model: "llava".to_string(),
-        };
-
-        fixture.processor.process(queued_photo).await;
+        fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+            })
+            .await;
 
         let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        // Started and immediately completed (single photo job)
         assert_eq!(updated_job.status, JobStatus::Completed);
         assert!(updated_job.started_at.is_some());
         assert!(updated_job.completed_at.is_some());
@@ -463,7 +513,6 @@ mod tests {
             .await
             .unwrap();
 
-        // Create two photos
         let photo_id_1 = Uuid::new_v4();
         let photo_id_2 = Uuid::new_v4();
 
@@ -484,7 +533,6 @@ mod tests {
             .await
             .unwrap();
 
-        // Process first photo
         fixture
             .processor
             .process(QueuedPhoto {
@@ -500,7 +548,6 @@ mod tests {
         assert_eq!(job_after_first.queued_photo_ids.len(), 1);
         assert_eq!(job_after_first.processed_photo_ids.len(), 1);
 
-        // Process second photo
         fixture
             .processor
             .process(QueuedPhoto {
@@ -518,7 +565,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_process_missing_photo_data_returns_failure() {
+    async fn test_process_missing_photo_data_returns_analysis_failed() {
         let provider = Arc::new(SuccessProvider {
             response_text: "should not reach".to_string(),
         });
@@ -552,20 +599,16 @@ mod tests {
             })
             .await;
 
-        assert!(!result.success);
-        assert!(result.error.is_some());
+        assert!(matches!(result.outcome, Outcome::AnalysisFailed { .. }));
     }
 
     #[tokio::test]
-    async fn test_process_missing_task_returns_failure() {
+    async fn test_process_missing_task_returns_analysis_failed() {
         let provider = Arc::new(SuccessProvider {
             response_text: "should not reach".to_string(),
         });
         let fixture = make_fixture(provider).await;
 
-        // Create the task and photo normally, then delete the task to
-        // simulate the case where a task is removed while a job is still running
-        // (should not happen in production, but must be handled defensively).
         let (job, photo_id) = setup_job_and_photo(&fixture).await;
         fixture.task_store.delete(job.task_id).await.unwrap();
 
@@ -579,7 +622,6 @@ mod tests {
             })
             .await;
 
-        assert!(!result.success);
-        assert!(result.error.as_deref().unwrap().contains("not found"));
+        assert!(matches!(result.outcome, Outcome::AnalysisFailed { ref error } if error.contains("not found")));
     }
 }
