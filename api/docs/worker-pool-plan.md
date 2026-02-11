@@ -24,7 +24,7 @@ This plan implements a worker pool system for concurrent job execution with GPU 
 - [x] Phase 1: Configuration — Add `WorkerPoolConfig` to `api/src/config/mod.rs`
 - [x] Phase 2: Photo Queue — Create `api/src/services/worker/queue.rs` (trait + `HybridThresholdQueue`)
 - [x] Phase 2b: PhotoBuffer Refactor — Refactor `queue.rs`: remove `PhotoQueue` trait, extract scheduling state into `Worker`, rename to `PhotoBuffer`
-- [ ] Phase 3: Photo Processor — Create `api/src/services/worker/processor.rs`
+- [x] Phase 3: Photo Processor — Create `api/src/services/worker/processor.rs`
 - [ ] Phase 4: Worker Implementation — Create `api/src/services/worker/worker.rs` (includes scheduling state)
 - [ ] Phase 5: Worker Pool — Create `api/src/services/worker/pool.rs` (single shared buffer)
 - [ ] Phase 6: Module Organization — Create `api/src/services/worker/mod.rs`, update `api/src/services/mod.rs`
