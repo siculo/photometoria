@@ -368,15 +368,16 @@ impl PhotoBuffer {
     /// Add all pending photos from a job to the buffer.
     pub fn enqueue_job(&mut self, job: &Job) {
         for &photo_id in &job.queued_photo_ids {
-            self.photos_by_model
-                .entry(job.model.clone())
-                .or_default()
-                .push_back(QueuedPhoto {
-                    job_id: job.job_id,
-                    photo_id,
-                    task_id: job.task_id,
-                    model: job.model.clone(),
-                });
+            match self.photos_by_model.get_mut(&job.model) {
+                Some(queue) => {
+                    queue.push_back(QueuedPhoto { job_id: job.job_id, photo_id, task_id: job.task_id, model: job.model.clone() });
+                }
+                None => {
+                    let mut queue = VecDeque::new();
+                    queue.push_back(QueuedPhoto { job_id: job.job_id, photo_id, task_id: job.task_id, model: job.model.clone() });
+                    self.photos_by_model.insert(job.model.clone(), queue);
+                }
+            }
             self.total += 1;
         }
     }
@@ -384,21 +385,18 @@ impl PhotoBuffer {
     /// Pop the front photo from a specific model's queue.
     /// Returns `None` if no photos are queued for that model.
     pub fn pop_by_model(&mut self, model: &str) -> Option<QueuedPhoto> {
-        let photo = self.photos_by_model
-            .get_mut(model)
-            .and_then(|q| q.pop_front());
-        if photo.is_some() { self.total -= 1; }
-        photo
+        let queue = self.photos_by_model.get_mut(model)?;
+        let photo = queue.pop_front()?;
+        self.total -= 1;
+        Some(photo)
     }
 
     /// Pop the front photo from any non-empty model queue.
     pub fn pop_any(&mut self) -> Option<QueuedPhoto> {
-        let photo = self.photos_by_model
-            .values_mut()
-            .find(|q| !q.is_empty())
-            .and_then(|q| q.pop_front());
-        if photo.is_some() { self.total -= 1; }
-        photo
+        let queue = self.photos_by_model.values_mut().find(|q| !q.is_empty())?;
+        let photo = queue.pop_front()?;
+        self.total -= 1;
+        Some(photo)
     }
 
     /// Returns the list of models that have at least one photo queued.
@@ -430,22 +428,41 @@ Separate photo processing logic:
 use std::sync::Arc;
 use uuid::Uuid;
 use tracing::{info, error, debug};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 
 use crate::services::ai::{AIProvider, AnalyzeImageRequest};
 use crate::storage::{JobStore, PhotoStore, TaskStore};
-use crate::models::job::{Job, JobStatus};
+use crate::models::job::{JobStatus, PhotoResult, PhotoResultStatus};
 use super::queue::QueuedPhoto;
 
-/// Result of processing a photo
+const BASE_PROMPT: &str = "Analyze this image and generate keywords for a photo library. \
+    Return a comma-separated list of relevant keywords covering: subject matter, \
+    colors, mood, style, and any notable elements. \
+    Return only the comma-separated keywords, no other text.";
+
+/// Outcome of the processing pipeline for a single photo.
+#[derive(Debug)]
+pub enum Outcome {
+    /// AI analysis succeeded and job state was persisted correctly.
+    Success { tags: String },
+
+    /// AI analysis succeeded but persisting the updated job state failed.
+    /// The tags are returned so the caller can log them.
+    SuccessWithPersistenceError { tags: String, error: String },
+
+    /// AI analysis failed (photo data missing, task not found, AI error, etc.).
+    /// The job state has been updated to mark the photo as failed when possible.
+    AnalysisFailed { error: String },
+}
+
+/// Result of processing a single photo, pairing the photo identity with its outcome.
 #[derive(Debug)]
 pub struct ProcessingResult {
     pub photo_id: Uuid,
-    pub tags: Vec<String>,
-    pub success: bool,
-    pub error: Option<String>,
+    pub outcome: Outcome,
 }
 
-/// Handles the actual photo processing logic
+/// Handles the AI analysis and job state update for a single photo.
 pub struct PhotoProcessor {
     ai_provider: Arc<dyn AIProvider>,
     job_store: Arc<dyn JobStore>,
@@ -459,124 +476,101 @@ impl PhotoProcessor {
         job_store: Arc<dyn JobStore>,
         photo_store: Arc<dyn PhotoStore>,
         task_store: Arc<dyn TaskStore>,
-    ) -> Self {
-        Self {
-            ai_provider,
-            job_store,
-            photo_store,
-            task_store,
-        }
-    }
+    ) -> Self { /* ... */ }
 
-    /// Process a single photo
+    /// Process a single photo: load data, call AI, update job state.
     pub async fn process(&self, photo: QueuedPhoto) -> ProcessingResult {
-        debug!(
-            photo_id = %photo.photo_id,
-            job_id = %photo.job_id,
-            model = %photo.model,
-            "Processing photo"
-        );
-
-        // Load photo data
-        let photo_data = match self.photo_store.get_photo_data(&photo.task_id, &photo.photo_id).await {
-            Ok(data) => data,
-            Err(e) => {
-                error!(photo_id = %photo.photo_id, error = %e, "Failed to load photo data");
-                return ProcessingResult {
-                    photo_id: photo.photo_id,
-                    tags: vec![],
-                    success: false,
-                    error: Some(format!("Failed to load photo: {}", e)),
-                };
+        let photo_id = photo.photo_id;
+        let outcome = match self.analyze(&photo).await {
+            Ok(tags) => {
+                match self.update_job(&photo, Ok(&tags)).await {
+                    Ok(()) => Outcome::Success { tags },
+                    Err(e) => Outcome::SuccessWithPersistenceError { tags, error: e },
+                }
+            }
+            Err(error) => {
+                let _ = self.update_job(&photo, Err(&error)).await;
+                Outcome::AnalysisFailed { error }
             }
         };
+        ProcessingResult { photo_id, outcome }
+    }
 
-        // Get task context
-        let context = match self.task_store.get(&photo.task_id).await {
-            Ok(Some(task)) => task.context.unwrap_or_default(),
-            _ => String::new(),
+    /// Load photo bytes, load task context, call AI provider.
+    /// Returns `Ok(tags)` on success or `Err(message)` on any failure.
+    ///
+    /// A missing task is treated as an error (not a silent fallback) because
+    /// a job cannot outlive its parent task.
+    async fn analyze(&self, photo: &QueuedPhoto) -> Result<String, String> {
+        let bytes = self.photo_store.load_data(photo.photo_id).await
+            .map_err(|e| format!("Failed to load photo: {}", e))?;
+
+        let context = self.load_task_context(photo.task_id).await?;
+
+        let prompt = if context.is_empty() {
+            BASE_PROMPT.to_string()
+        } else {
+            format!("Context: {}\n\n{}", context, BASE_PROMPT)
         };
 
-        // Call AI provider
         let request = AnalyzeImageRequest {
             model: photo.model.clone(),
-            image_data: photo_data,
-            prompt: None, // Provider uses configured prompt template
-            context: Some(context),
+            image_base64: STANDARD.encode(&bytes),
+            prompt,
         };
 
-        match self.ai_provider.analyze_image(request).await {
-            Ok(response) => {
-                info!(
-                    photo_id = %photo.photo_id,
-                    tags_count = response.tags.len(),
-                    "Photo analysis completed"
-                );
+        self.ai_provider.analyze_image(request).await
+            .map(|r| r.text)
+            .map_err(|e| e.to_string())
+    }
 
-                // Update job state
-                self.mark_photo_completed(photo.job_id, photo.photo_id, response.tags.clone()).await;
-
-                ProcessingResult {
-                    photo_id: photo.photo_id,
-                    tags: response.tags,
-                    success: true,
-                    error: None,
-                }
-            }
-            Err(e) => {
-                error!(photo_id = %photo.photo_id, error = %e, "Photo analysis failed");
-
-                // Update job state with failure
-                self.mark_photo_failed(photo.job_id, photo.photo_id, &e.to_string()).await;
-
-                ProcessingResult {
-                    photo_id: photo.photo_id,
-                    tags: vec![],
-                    success: false,
-                    error: Some(e.to_string()),
-                }
-            }
+    /// Loads the task context string, or returns `Err` if the task is not found.
+    async fn load_task_context(&self, task_id: Uuid) -> Result<String, String> {
+        match self.task_store.get(task_id).await {
+            Ok(Some(task)) => Ok(task.context),
+            Ok(None) => Err(format!("Task {} not found", task_id)),
+            Err(e) => Err(format!("Failed to load task {}: {}", task_id, e)),
         }
     }
 
-    /// Mark photo as completed in job
-    async fn mark_photo_completed(&self, job_id: Uuid, photo_id: Uuid, tags: Vec<String>) {
-        let mut job = match self.job_store.get(&job_id).await {
-            Ok(Some(job)) => job,
-            _ => return,
-        };
+    /// Update job state after processing a photo.
+    /// `analysis` is `Ok(tags)` on AI success, `Err(error)` on AI failure.
+    /// Returns `Err` if the job state could not be persisted.
+    async fn update_job(&self, photo: &QueuedPhoto, analysis: Result<&str, &str>) -> Result<(), String> {
+        let mut job = self.job_store.get(photo.job_id).await
+            .map_err(|e| format!("Failed to load job: {}", e))?
+            .ok_or_else(|| format!("Job {} not found", photo.job_id))?;
 
-        // Transition to Processing if still Queued
-        if job.status == JobStatus::Queued {
-            job.start();
-        }
+        if job.status == JobStatus::Queued { job.start(); }
 
-        // Move photo from queued to processed
-        if let Some(pos) = job.queued_photo_ids.iter().position(|id| id == &photo_id) {
-            job.queued_photo_ids.remove(pos);
-        }
-        job.processed_photo_ids.push(photo_id);
+        job.queued_photo_ids.retain(|id| id != &photo.photo_id);
+        job.processed_photo_ids.push(photo.photo_id);
+        job.results.insert(photo.photo_id, Self::build_photo_result(photo.photo_id, analysis));
 
-        // Store result (requires Job model extension - see Phase 7)
-        // job.results.insert(photo_id, PhotoResult { ... });
+        if job.queued_photo_ids.is_empty() { job.complete(); }
 
-        // Check if job is complete
-        if job.queued_photo_ids.is_empty() {
-            job.complete();
-            info!(job_id = %job_id, "Job completed");
-        }
-
-        // Save updated job
-        if let Err(e) = self.job_store.update(&job).await {
-            error!(job_id = %job_id, error = %e, "Failed to update job");
-        }
+        self.job_store.update(job).await
+            .map(|_| ())
+            .map_err(|e| format!("Failed to persist job: {}", e))
     }
 
-    /// Mark photo as failed in job
-    async fn mark_photo_failed(&self, job_id: Uuid, photo_id: Uuid, error_msg: &str) {
-        // Similar to mark_photo_completed but track failure
-        // For now, move to processed with empty tags
-        self.mark_photo_completed(job_id, photo_id, vec![]).await;
+    fn build_photo_result(photo_id: Uuid, analysis: Result<&str, &str>) -> PhotoResult {
+        match analysis {
+            Ok(tags) => PhotoResult {
+                photo_id,
+                status: PhotoResultStatus::Completed,
+                tags: Some(tags.to_string()),
+                error: None,
+                processed_at: Some(Utc::now()),
+            },
+            Err(error) => PhotoResult {
+                photo_id,
+                status: PhotoResultStatus::Failed,
+                tags: None,
+                error: Some(error.to_string()),
+                processed_at: Some(Utc::now()),
+            },
+        }
     }
 }
 ```
@@ -742,7 +736,7 @@ use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
 use crate::storage::{JobStore, PhotoStore, TaskStore};
 use crate::models::job::JobStatus;
-use super::queue::{PhotoQueue, HybridThresholdQueue};
+use super::queue::PhotoBuffer;
 use super::worker::Worker;
 use super::processor::PhotoProcessor;
 
@@ -1070,22 +1064,21 @@ Extend Job model to store results:
 pub struct Job {
     // ... existing fields ...
 
-    /// Results per photo (photo_id -> tags)
+    /// Results per photo (photo_id -> PhotoResult)
     pub results: HashMap<Uuid, PhotoResult>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhotoResult {
     pub photo_id: Uuid,
-    pub status: PhotoStatus,
-    pub tags: Vec<String>,
+    pub status: PhotoResultStatus,
+    pub tags: Option<String>,   // comma-separated keywords, None on failure
     pub error: Option<String>,
-    pub processed_at: DateTime<Utc>,
+    pub processed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum PhotoStatus {
-    Pending,
+pub enum PhotoResultStatus {
     Completed,
     Failed,
 }
@@ -1141,10 +1134,13 @@ Test Worker scheduling logic (using a mock/real `PhotoBuffer`):
 
 Test PhotoProcessor (with mocked AI provider):
 
-- Photo processing success path
-- Photo processing failure path
-- Job status transitions (Queued → Processing → Completed)
-- Context loading from task
+- `Outcome::Success`: AI succeeds, job persisted → job moves to Completed
+- `Outcome::AnalysisFailed`: AI fails → photo marked as failed in job
+- `Outcome::SuccessWithPersistenceError`: AI succeeds but job deleted before update → tags returned, error reported
+- Job status transitions: Queued → Processing (first photo) → Completed (last photo)
+- Multi-photo job: not completed until last photo processed
+- Missing photo binary data → `Outcome::AnalysisFailed`
+- Missing task → `Outcome::AnalysisFailed` (task not found is a logic error, not a fallback)
 
 ### Integration Tests
 
