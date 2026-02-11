@@ -52,10 +52,6 @@ pub struct OllamaProviderConfig {
     #[serde(default)]
     pub devices: Vec<u32>,
 
-    /// Maximum number of concurrent workers.
-    #[serde(default = "OllamaProviderConfig::default_max_workers")]
-    pub max_workers: usize,
-
     /// Model configurations for this provider.
     #[serde(default)]
     pub models: HashMap<String, OllamaModelConfig>,
@@ -67,7 +63,6 @@ impl Default for OllamaProviderConfig {
             base_url: Self::default_base_url(),
             timeout_seconds: Self::default_timeout_seconds(),
             devices: Vec::new(),
-            max_workers: Self::default_max_workers(),
             models: HashMap::new(),
         }
     }
@@ -82,9 +77,7 @@ impl OllamaProviderConfig {
         120
     }
 
-    fn default_max_workers() -> usize {
-        2
-    }
+
 }
 
 /// Configuration for an Ollama model.

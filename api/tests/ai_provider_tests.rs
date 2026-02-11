@@ -303,7 +303,6 @@ async fn test_provider_registry_from_config() {
             base_url: mock_server.uri(),
             timeout_seconds: 30,
             devices: vec![],
-            max_workers: 1,
             models: HashMap::new(),
         }),
     );

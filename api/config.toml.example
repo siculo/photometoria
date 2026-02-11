@@ -57,8 +57,6 @@ base_url = "http://localhost:11434"
 timeout_seconds = 120
 # GPU devices to use (empty = auto-detect)
 devices = []
-# Maximum concurrent analysis workers
-max_workers = 2
 
 # Model Configurations
 # --------------------

@@ -31,7 +31,6 @@ type = "ollama"
 base_url = "http://localhost:11434"
 timeout_seconds = 120
 devices = []
-max_workers = 2
 
 [ai.providers.ollama.models.qwen2-vl]
 ollama_model = "qwen2-vl:8b"
@@ -185,10 +184,6 @@ Provider-specific configuration. Each provider is identified by a unique name (e
   - GPU device indices to use (empty = auto-detect)
   - Default: `[]`
 
-- **max_workers** (integer, optional)
-  - Maximum number of concurrent workers
-  - Default: `2`
-
 **Example:**
 
 ```toml
@@ -197,7 +192,6 @@ type = "ollama"
 base_url = "http://localhost:11434"
 timeout_seconds = 120
 devices = []
-max_workers = 2
 ```
 
 ### [ai.providers.{name}.models.{model_id}]
@@ -307,7 +301,6 @@ To add a new Ollama instance (e.g., remote server):
 type = "ollama"
 base_url = "http://gpu-server:11434"
 timeout_seconds = 180
-max_workers = 4
 
 [ai.providers.ollama-remote.models.qwen2-vl]
 ollama_model = "qwen2-vl:8b"

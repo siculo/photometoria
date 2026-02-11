@@ -20,12 +20,16 @@ pub struct QueuedPhoto {
 // PhotoBuffer
 // ============================================================================
 
-/// Pure storage buffer for photos pending processing.
+/// Storage buffer for photos pending processing.
 ///
 /// Photos are grouped by model for efficient per-model lookup.
-/// Scheduling logic (which model to pick next) lives in the Worker.
+/// Model insertion order is tracked for fair round-robin in `pop_excluding`.
 pub struct PhotoBuffer {
     photos_by_model: HashMap<String, VecDeque<QueuedPhoto>>,
+    /// Insertion order of models — used for round-robin in `pop_excluding`.
+    model_order: Vec<String>,
+    /// Next index in `model_order` to try in `pop_excluding`.
+    rotation_index: usize,
     total: usize,
 }
 
@@ -33,37 +37,35 @@ impl PhotoBuffer {
     pub fn new() -> Self {
         Self {
             photos_by_model: HashMap::new(),
+            model_order: Vec::new(),
+            rotation_index: 0,
             total: 0,
         }
     }
 
     /// Add all pending photos from a job to the buffer.
     pub fn enqueue_job(&mut self, job: &Job) {
+        if job.queued_photo_ids.is_empty() {
+            return;
+        }
+
+        // Track insertion order for round-robin (only on first appearance of the model)
+        if !self.photos_by_model.contains_key(&job.model) {
+            self.model_order.push(job.model.clone());
+        }
+
+        let queue = self.photos_by_model.entry(job.model.clone()).or_default();
         for &photo_id in &job.queued_photo_ids {
-            match self.photos_by_model.get_mut(&job.model) {
-                Some(queue) => {
-                    queue.push_back(QueuedPhoto {
-                        job_id: job.job_id,
-                        photo_id,
-                        task_id: job.task_id,
-                        model: job.model.clone(),
-                    });
-                }
-                None => {
-                    let mut queue = VecDeque::new();
-                    queue.push_back(QueuedPhoto {
-                        job_id: job.job_id,
-                        photo_id,
-                        task_id: job.task_id,
-                        model: job.model.clone(),
-                    });
-                    self.photos_by_model.insert(job.model.clone(), queue);
-                }
-            }
+            queue.push_back(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: job.model.clone(),
+            });
             self.total += 1;
         }
     }
-    
+
     /// Pop the front photo from a specific model's queue.
     /// Returns `None` if no photos are queued for that model.
     pub fn pop_by_model(&mut self, model: &str) -> Option<QueuedPhoto> {
@@ -81,13 +83,28 @@ impl PhotoBuffer {
         Some(photo)
     }
 
-    /// Returns the list of models that have at least one photo queued.
-    pub fn available_models(&self) -> Vec<String> {
-        self.photos_by_model
-            .iter()
-            .filter(|(_, q)| !q.is_empty())
-            .map(|(model, _)| model.clone())
-            .collect()
+    /// Pop from any non-excluded, non-empty model queue using round-robin.
+    ///
+    /// Models are served in their insertion order, rotating after each call so
+    /// that no model is systematically preferred over others when swapping.
+    /// Returns `None` if all non-excluded queues are empty.
+    pub fn pop_excluding(&mut self, exclude: &str) -> Option<QueuedPhoto> {
+        let n = self.model_order.len();
+        for i in 0..n {
+            let idx = (self.rotation_index + i) % n;
+            let model = self.model_order[idx].as_str();
+            if model == exclude {
+                continue;
+            }
+            if let Some(queue) = self.photos_by_model.get_mut(model) {
+                if let Some(photo) = queue.pop_front() {
+                    self.total -= 1;
+                    self.rotation_index = (idx + 1) % n;
+                    return Some(photo);
+                }
+            }
+        }
+        None
     }
 
     /// Returns `true` if the buffer contains no photos.
@@ -219,32 +236,78 @@ mod tests {
         assert!(buf.pop_any().is_none());
     }
 
-    // --- available_models ---
+    // --- pop_excluding ---
 
     #[test]
-    fn test_available_models_empty_buffer() {
-        let buf = PhotoBuffer::new();
-        assert!(buf.available_models().is_empty());
-    }
-
-    #[test]
-    fn test_available_models_lists_enqueued_models() {
+    fn test_pop_excluding_skips_excluded_model() {
         let mut buf = PhotoBuffer::new();
-        buf.enqueue_job(&make_job("llava", 1));
-        buf.enqueue_job(&make_job("qwen2-vl", 1));
-        let mut models = buf.available_models();
-        models.sort();
-        assert_eq!(models, vec!["llava", "qwen2-vl"]);
-    }
-
-    #[test]
-    fn test_available_models_excludes_exhausted_model() {
-        let mut buf = PhotoBuffer::new();
-        buf.enqueue_job(&make_job("llava", 1));
+        buf.enqueue_job(&make_job("llava", 2));
         buf.enqueue_job(&make_job("qwen2-vl", 2));
-        buf.pop_by_model("llava");
-        let models = buf.available_models();
-        assert!(!models.contains(&"llava".to_string()));
-        assert!(models.contains(&"qwen2-vl".to_string()));
+
+        let photo = buf.pop_excluding("llava").unwrap();
+        assert_eq!(photo.model, "qwen2-vl");
+    }
+
+    #[test]
+    fn test_pop_excluding_returns_none_when_only_excluded_has_photos() {
+        let mut buf = PhotoBuffer::new();
+        buf.enqueue_job(&make_job("llava", 2));
+
+        assert!(buf.pop_excluding("llava").is_none());
+        assert_eq!(buf.len(), 2, "Photos should remain untouched");
+    }
+
+    #[test]
+    fn test_pop_excluding_returns_none_when_empty() {
+        let mut buf = PhotoBuffer::new();
+        assert!(buf.pop_excluding("llava").is_none());
+    }
+
+    #[test]
+    fn test_pop_excluding_round_robin_three_models() {
+        let mut buf = PhotoBuffer::new();
+        // Enqueue in order: A, B, C
+        buf.enqueue_job(&make_job("A", 4));
+        buf.enqueue_job(&make_job("B", 4));
+        buf.enqueue_job(&make_job("C", 4));
+
+        // Excluding "A": should alternate B → C → B → C
+        let p1 = buf.pop_excluding("A").unwrap();
+        let p2 = buf.pop_excluding("A").unwrap();
+        let p3 = buf.pop_excluding("A").unwrap();
+        let p4 = buf.pop_excluding("A").unwrap();
+
+        assert_eq!(p1.model, "B");
+        assert_eq!(p2.model, "C");
+        assert_eq!(p3.model, "B");
+        assert_eq!(p4.model, "C");
+    }
+
+    #[test]
+    fn test_pop_excluding_skips_empty_queues_in_rotation() {
+        let mut buf = PhotoBuffer::new();
+        buf.enqueue_job(&make_job("A", 4));
+        buf.enqueue_job(&make_job("B", 1)); // only 1 photo
+        buf.enqueue_job(&make_job("C", 4));
+
+        // Excluding "A": B → C → (B exhausted) → C → C → ...
+        let p1 = buf.pop_excluding("A").unwrap();
+        let p2 = buf.pop_excluding("A").unwrap();
+        assert_eq!(p1.model, "B");
+        assert_eq!(p2.model, "C");
+
+        // B is now empty; next should go to C
+        let p3 = buf.pop_excluding("A").unwrap();
+        assert_eq!(p3.model, "C");
+    }
+
+    #[test]
+    fn test_pop_excluding_decrements_len() {
+        let mut buf = PhotoBuffer::new();
+        buf.enqueue_job(&make_job("llava", 2));
+        buf.enqueue_job(&make_job("qwen2-vl", 2));
+
+        buf.pop_excluding("llava");
+        assert_eq!(buf.len(), 3);
     }
 }

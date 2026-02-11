@@ -177,13 +177,12 @@ The configuration structure is already in place in `OllamaProviderConfig`:
 ```toml
 [ai.providers.ollama]
 base_url = "http://localhost:11434"
-devices = [0, 1]     # GPU indices to use (ready for worker pool)
-max_workers = 2      # Maximum concurrent jobs (ready for worker pool)
+devices = [0, 1]     # GPU indices — one worker is spawned per device
 ```
 
 **Current Behavior:**
 
-Jobs are processed sequentially without a worker pool. The `max_workers` and `devices` configuration is parsed but not yet used.
+One worker is spawned per GPU listed in `devices`. If `devices` is empty, a single worker on device 0 is used.
 
 ---
 
@@ -655,9 +654,8 @@ Workers pull complete jobs from queue:
 
 ```
 Worker loop:
-  1. Acquire semaphore permit (enforces max_workers limit)
-  2. Pop job from queue
-  3. For each photo in job:
+  1. Pop job from queue
+  2. For each photo in job:
      - Call AI provider API (via AIProvider trait)
      - Save result incrementally
      - Send SSE update
@@ -674,8 +672,7 @@ Workers pull individual photos using priority-based selection with hybrid thresh
 
 ```
 Worker loop:
-  1. Acquire semaphore permit (enforces max_workers limit)
-  2. Load AI model if needed (check current_model)
+  1. Load AI model if needed (check current_model)
   3. Initialize: photos_processed = 0, model_load_time = now()
   4. Loop:
      a. Check swap criteria:
@@ -704,7 +701,7 @@ See the **Photo Selection Strategy** section in Worker Pool for detailed analysi
 
 When implementing the worker pool:
 - Use the existing `AIProvider` trait for provider abstraction
-- Leverage the `max_workers` and `devices` configuration from `OllamaProviderConfig`
+- Leverage the `devices` configuration from `OllamaProviderConfig` (one worker per GPU)
 - Implement the **hybrid threshold strategy** (min_photos + max_time)
   - Recommended defaults: `min_photos=10`, `max_time=120s`
   - See "Photo Selection Strategy" section for detailed rationale

@@ -184,7 +184,6 @@ mod tests {
                 base_url: "http://localhost:11434".to_string(),
                 timeout_seconds: 30,
                 devices: vec![],
-                max_workers: 1,
                 models,
             }),
         );
