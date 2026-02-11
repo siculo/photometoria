@@ -11,7 +11,7 @@ use crate::storage::{JobStore, PhotoStore, TaskStore};
 
 use super::queue::QueuedPhoto;
 
-const DEFAULT_PROMPT: &str = "Analyze this image and generate keywords for a photo library. \
+const BASE_PROMPT: &str = "Analyze this image and generate keywords for a photo library. \
     Return a comma-separated list of relevant keywords covering: subject matter, \
     colors, mood, style, and any notable elements. \
     Return only the comma-separated keywords, no other text.";
@@ -86,12 +86,29 @@ impl PhotoProcessor {
             }
         };
 
-        // Build prompt, prepending task context if present
-        let context = self.load_context(photo.task_id).await;
+        // Load task context — task must exist: a job cannot outlive its task
+        let context = match self.load_task_context(photo.task_id).await {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                error!(
+                    photo_id = %photo.photo_id,
+                    task_id = %photo.task_id,
+                    error = %e,
+                    "Task not found or unavailable — cannot process photo"
+                );
+                return ProcessingResult {
+                    photo_id: photo.photo_id,
+                    tags: None,
+                    success: false,
+                    error: Some(e),
+                };
+            }
+        };
+
         let prompt = if context.is_empty() {
-            DEFAULT_PROMPT.to_string()
+            BASE_PROMPT.to_string()
         } else {
-            format!("Context: {}\n\n{}", context, DEFAULT_PROMPT)
+            format!("Context: {}\n\n{}", context, BASE_PROMPT)
         };
 
         let request = AnalyzeImageRequest {
@@ -126,18 +143,17 @@ impl PhotoProcessor {
         }
     }
 
-    /// Returns the task context, or an empty string if unavailable.
-    async fn load_context(&self, task_id: Uuid) -> String {
+    /// Loads the task context string.
+    ///
+    /// Returns `Ok(context)` if the task exists (context may be empty if the
+    /// user provided none). Returns `Err` if the task is not found or if the
+    /// store fails — a missing task is a logic error because a job cannot
+    /// outlive its parent task.
+    async fn load_task_context(&self, task_id: Uuid) -> Result<String, String> {
         match self.task_store.get(task_id).await {
-            Ok(Some(task)) => task.context,
-            Ok(None) => {
-                debug!(task_id = %task_id, "Task not found when loading context");
-                String::new()
-            }
-            Err(e) => {
-                error!(task_id = %task_id, error = %e, "Failed to load task context");
-                String::new()
-            }
+            Ok(Some(task)) => Ok(task.context),
+            Ok(None) => Err(format!("Task {} not found", task_id)),
+            Err(e) => Err(format!("Failed to load task {}: {}", task_id, e)),
         }
     }
 
@@ -538,5 +554,32 @@ mod tests {
 
         assert!(!result.success);
         assert!(result.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_process_missing_task_returns_failure() {
+        let provider = Arc::new(SuccessProvider {
+            response_text: "should not reach".to_string(),
+        });
+        let fixture = make_fixture(provider).await;
+
+        // Create the task and photo normally, then delete the task to
+        // simulate the case where a task is removed while a job is still running
+        // (should not happen in production, but must be handled defensively).
+        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        fixture.task_store.delete(job.task_id).await.unwrap();
+
+        let result = fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+            })
+            .await;
+
+        assert!(!result.success);
+        assert!(result.error.as_deref().unwrap().contains("not found"));
     }
 }
