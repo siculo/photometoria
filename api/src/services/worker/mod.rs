@@ -1,3 +1,3 @@
 pub mod queue;
 
-pub use queue::{HybridThresholdQueue, PhotoQueue, QueuedPhoto};
+pub use queue::{PhotoBuffer, QueuedPhoto};
