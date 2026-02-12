@@ -11,10 +11,11 @@ use crate::storage::{JobStore, PhotoStore, TaskStore};
 
 use super::queue::QueuedPhoto;
 
-const BASE_PROMPT: &str = "Analyze this image and generate keywords for a photo library. \
-    Return a comma-separated list of relevant keywords covering: subject matter, \
-    colors, mood, style, and any notable elements. \
-    Return only the comma-separated keywords, no other text.";
+const BASE_PROMPT: &str = "You must respond ONLY with a comma-separated list of tags. \
+    Do not write sentences. Do not explain. Only output tags separated by commas. \
+    Tags to include: subjects, objects, colors, composition, mood, location type. \
+    Output format example: tag1, tag2, tag3, tag4 \
+    Now analyze this image and output ONLY the tags:";
 
 // ============================================================================
 // ProcessingResult

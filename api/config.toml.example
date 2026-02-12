@@ -70,13 +70,23 @@ devices = []
 
 [ai.providers.ollama.models.qwen2-vl]
 ollama_model = "qwen2-vl:8b"
-prompt_template = "Analyze this photograph and generate relevant keywords for cataloging. Focus on: subjects, actions, settings, mood, colors, and photography style."
+prompt_template = """
+You must respond ONLY with a comma-separated list of tags. Do not write sentences. Do not explain. Only output tags separated by commas.
+
+Tags to include: subjects, objects, colors, composition, mood, location type.
+
+Output format example: tag1, tag2, tag3, tag4
+
+Now analyze this image and output ONLY the tags:"""
 description = "Best quality vision model, slower processing"
 supports_vision = true
 
 [ai.providers.ollama.models.llava]
 ollama_model = "llava:latest"
-prompt_template = "Describe the main subjects, setting, and mood of this photograph."
+prompt_template = """
+List relevant tags for this image as a comma-separated list.
+Include: subjects, objects, colors, composition, mood, location.
+Format: tag1, tag2, tag3"""
 description = "Fast vision model, good for development"
 supports_vision = true
 
