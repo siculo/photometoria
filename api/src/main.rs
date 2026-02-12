@@ -32,7 +32,7 @@ async fn main() {
             std::process::exit(1);
         }
     };
-    let app = routes::create_router(state);
+    let app = routes::create_router(state.clone());
 
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(listener) => listener,
@@ -49,4 +49,8 @@ async fn main() {
         tracing::error!("Server error: {}", e);
         std::process::exit(1);
     }
+
+    state.worker_pool.lock().await.shutdown().await;
+
+    tracing::info!("Server stopped");
 }

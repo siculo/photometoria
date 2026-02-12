@@ -23,6 +23,9 @@ pub struct Worker {
     current_model: Option<String>,
     photos_processed_with_model: usize,
     model_loaded_at: Instant,
+
+    /// How long to sleep when the buffer is empty.
+    idle_sleep: Duration,
 }
 
 impl Worker {
@@ -33,6 +36,7 @@ impl Worker {
         processor: PhotoProcessor,
         min_photos_before_swap: usize,
         max_time_before_swap: Duration,
+        idle_sleep: Duration,
     ) -> Self {
         Self {
             id,
@@ -44,6 +48,7 @@ impl Worker {
             current_model: None,
             photos_processed_with_model: 0,
             model_loaded_at: Instant::now(),
+            idle_sleep,
         }
     }
 
@@ -120,7 +125,7 @@ impl Worker {
                 }
                 None => {
                     debug!(worker_id = self.id, "Buffer empty, waiting");
-                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    tokio::time::sleep(self.idle_sleep).await;
                 }
             }
         }
@@ -194,7 +199,7 @@ mod tests {
         let ai_provider: Arc<dyn AIProvider> = Arc::new(NoopProvider);
 
         let processor = PhotoProcessor::new(ai_provider, job_store, photo_store, task_store);
-        let worker = Worker::new(0, 0, buffer, processor, min_photos, max_time);
+        let worker = Worker::new(0, 0, buffer, processor, min_photos, max_time, Duration::from_millis(10));
         (worker, temp)
     }
 

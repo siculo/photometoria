@@ -27,6 +27,9 @@ pub struct WorkerPool {
     /// Job store for polling
     job_store: Arc<dyn JobStore>,
 
+    /// How often the discovery loop polls for new queued jobs.
+    discovery_poll_interval: Duration,
+
     /// Job discovery task handle
     discovery_task: Option<JoinHandle<()>>,
 }
@@ -43,6 +46,10 @@ impl WorkerPool {
         let min_photos = worker_config.min_photos_before_swap;
         let max_time = parse_duration(&worker_config.max_time_before_swap)
             .unwrap_or(Duration::from_secs(120));
+        let idle_sleep = parse_duration(&worker_config.worker_idle_sleep)
+            .unwrap_or(Duration::from_millis(500));
+        let discovery_poll_interval = parse_duration(&worker_config.discovery_poll_interval)
+            .unwrap_or(Duration::from_secs(5));
 
         let gpu_assignments = Self::gpu_assignment_from_providers_config(&config
             .ai
@@ -53,6 +60,8 @@ impl WorkerPool {
             gpu_assignments = ?gpu_assignments,
             min_photos_before_swap = min_photos,
             max_time_before_swap_secs = max_time.as_secs(),
+            worker_idle_sleep_ms = idle_sleep.as_millis(),
+            discovery_poll_interval_secs = discovery_poll_interval.as_secs(),
             "Initializing worker pool"
         );
 
@@ -80,6 +89,7 @@ impl WorkerPool {
                 processor,
                 min_photos,
                 max_time,
+                idle_sleep,
             );
 
             let handle = tokio::spawn(async move {
@@ -93,6 +103,7 @@ impl WorkerPool {
             workers,
             buffer,
             job_store,
+            discovery_poll_interval,
             discovery_task: None,
         }
     }
@@ -108,15 +119,29 @@ impl WorkerPool {
             .unwrap_or_else(|| vec![0])
     }
 
+    /// Creates a pool with no workers and no discovery task.
+    /// For use in tests where job processing should not run.
+    #[cfg(test)]
+    pub fn new_inactive(job_store: Arc<dyn JobStore>) -> Self {
+        Self {
+            workers: Vec::new(),
+            buffer: Arc::new(Mutex::new(PhotoBuffer::new())),
+            job_store,
+            discovery_poll_interval: Duration::from_secs(5),
+            discovery_task: None,
+        }
+    }
+
     /// Start the worker pool: recover stale jobs, then begin job discovery.
     pub async fn start(&mut self) {
         Self::recover_stale_jobs(self.job_store.clone()).await;
 
         let buffer = self.buffer.clone();
         let job_store = self.job_store.clone();
+        let poll_interval = self.discovery_poll_interval;
 
         let handle = tokio::spawn(async move {
-            Self::job_discovery_loop(buffer, job_store).await;
+            Self::job_discovery_loop(buffer, job_store, poll_interval).await;
         });
 
         self.discovery_task = Some(handle);
@@ -184,6 +209,7 @@ impl WorkerPool {
     async fn job_discovery_loop(
         buffer: Arc<Mutex<PhotoBuffer>>,
         job_store: Arc<dyn JobStore>,
+        poll_interval: Duration,
     ) {
         // Track jobs already enqueued to avoid duplicate photos in the buffer
         let mut enqueued_job_ids: HashSet<Uuid> = HashSet::new();
@@ -221,21 +247,21 @@ impl WorkerPool {
                 }
             }
 
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            tokio::time::sleep(poll_interval).await;
         }
     }
 
     /// Abort all workers and the discovery task immediately.
     ///
     /// Jobs in `Processing` state will be recovered at next startup.
-    pub async fn shutdown(self) {
+    pub async fn shutdown(&mut self) {
         info!("Shutting down worker pool");
 
-        if let Some(task) = self.discovery_task {
+        if let Some(task) = self.discovery_task.take() {
             task.abort();
         }
 
-        for worker in self.workers {
+        for worker in self.workers.drain(..) {
             worker.abort();
         }
 

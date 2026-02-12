@@ -59,9 +59,11 @@ mod tests {
     use crate::app_state::AppState;
     use crate::config::Config;
     use crate::services::ai::ProviderRegistry;
+    use crate::services::worker::WorkerPool;
     use crate::storage::{
         FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore, PhotoStore, TaskStore,
     };
+    use tokio::sync::Mutex;
 
     struct TestApp {
         router: Router,
@@ -79,7 +81,8 @@ mod tests {
             Arc::new(FileSystemPhotoStore::new(storage_path.clone()).await);
         let job_store = Arc::new(FileSystemJobStore::new(storage_path).await);
         let ai_providers = Arc::new(ProviderRegistry::new());
-        let state = AppState::new(config, task_store, photo_store, job_store, ai_providers);
+        let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(job_store.clone())));
+        let state = AppState::new(config, task_store, photo_store, job_store, ai_providers, worker_pool);
         let router = create_router(state.clone());
         TestApp {
             router,

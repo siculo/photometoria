@@ -27,9 +27,9 @@ This plan implements a worker pool system for concurrent job execution with GPU 
 - [x] Phase 3: Photo Processor — Create `api/src/services/worker/processor.rs`
 - [x] Phase 4: Worker Implementation — Create `api/src/services/worker/worker.rs` (includes scheduling state)
 - [x] Phase 5: Worker Pool — Create `api/src/services/worker/pool.rs` (single shared buffer)
-- [ ] Phase 6: Module Organization — Create `api/src/services/worker/mod.rs`, update `api/src/services/mod.rs`
-- [ ] Phase 7: AppState Integration — Update `api/src/app_state.rs` and `api/src/startup.rs`
-- [ ] Phase 8: Model Extensions — Extend `api/src/models/job.rs` with `PhotoResult`
+- [x] Phase 6: Module Organization — Create `api/src/services/worker/mod.rs`, update `api/src/services/mod.rs`
+- [x] Phase 7: AppState Integration — Update `api/src/app_state.rs` and `api/src/startup.rs`
+- [x] Phase 8: Model Extensions — Extend `api/src/models/job.rs` with `PhotoResult`
 
 ## Architecture Overview
 

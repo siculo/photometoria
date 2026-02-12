@@ -7,9 +7,11 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 use crate::app_state::AppState;
 use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
+use crate::services::worker::WorkerPool;
 use crate::storage::{
     FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore, JobStore, PhotoStore, TaskStore,
 };
+use tokio::sync::Mutex;
 
 /// Initializes the application state with all required dependencies.
 ///
@@ -74,12 +76,27 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
         };
     }
 
+    // Initialize and start the worker pool
+    let worker_pool = WorkerPool::new(
+        &config,
+        job_store.clone(),
+        photo_store.clone(),
+        task_store.clone(),
+        ai_providers.clone(),
+    );
+    let worker_pool = Arc::new(Mutex::new(worker_pool));
+    {
+        let mut pool = worker_pool.lock().await;
+        pool.start().await;
+    }
+
     Ok(AppState::new(
         config,
         task_store,
         photo_store,
         job_store,
         ai_providers,
+        worker_pool,
     ))
 }
 

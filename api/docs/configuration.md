@@ -47,6 +47,8 @@ supports_vision = true
 [worker_pool]
 min_photos_before_swap = 10
 max_time_before_swap = "120s"
+worker_idle_sleep = "500ms"
+discovery_poll_interval = "5s"
 ```
 
 ## Configuration Sections
@@ -248,10 +250,22 @@ The number of workers is determined by `[ai.providers.ollama] devices`: one work
 - **max_time_before_swap** (string, optional)
   - Maximum time a model can stay loaded before forcing a swap
   - Ensures jobs with different models are not starved indefinitely
-  - Supported suffixes: `s` (seconds), `m` (minutes)
+  - Supported suffixes: `ms` (milliseconds), `s` (seconds), `m` (minutes)
   - Default: `"120s"`
 
 A model swap is allowed only when **both** thresholds are exceeded. This balances loading efficiency with temporal fairness.
+
+- **worker_idle_sleep** (string, optional)
+  - How long a worker sleeps when the photo buffer is empty before checking again
+  - Lower values reduce processing latency at the cost of more CPU usage when idle
+  - Supported suffixes: `ms` (milliseconds), `s` (seconds), `m` (minutes)
+  - Default: `"500ms"`
+
+- **discovery_poll_interval** (string, optional)
+  - How often the worker pool polls the job store for newly queued jobs
+  - Lower values reduce the delay between job creation and processing start
+  - Supported suffixes: `ms` (milliseconds), `s` (seconds), `m` (minutes)
+  - Default: `"5s"`
 
 **Example:**
 
@@ -259,6 +273,8 @@ A model swap is allowed only when **both** thresholds are exceeded. This balance
 [worker_pool]
 min_photos_before_swap = 10
 max_time_before_swap = "120s"
+worker_idle_sleep = "500ms"
+discovery_poll_interval = "5s"
 ```
 
 ## AI Provider System

@@ -87,5 +87,15 @@ min_photos_before_swap = 10
 
 # Maximum time to keep the same model loaded before forcing a swap.
 # Ensures no job waits indefinitely when photos with a different model are queued.
-# Supported suffixes: "s" (seconds), "m" (minutes). Default: "120s"
+# Supported suffixes: "ms" (milliseconds), "s" (seconds), "m" (minutes). Default: "120s"
 max_time_before_swap = "120s"
+
+# How long a worker sleeps when the photo buffer is empty before checking again.
+# Lower values reduce processing latency at the cost of more CPU usage when idle.
+# Supported suffixes: "ms" (milliseconds), "s" (seconds), "m" (minutes). Default: "500ms"
+worker_idle_sleep = "500ms"
+
+# How often the worker pool polls the job store for newly queued jobs.
+# Lower values reduce the delay between job creation and processing start.
+# Supported suffixes: "ms" (milliseconds), "s" (seconds), "m" (minutes). Default: "5s"
+discovery_poll_interval = "5s"

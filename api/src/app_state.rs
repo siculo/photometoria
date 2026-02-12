@@ -1,7 +1,9 @@
 use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
+use crate::services::worker::WorkerPool;
 use crate::storage::{JobStore, PhotoStore, TaskStore};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Application state shared across all request handlers.
 ///
@@ -20,6 +22,8 @@ pub struct AppState {
     pub job_store: Arc<dyn JobStore>,
     /// Registry of AI providers for image analysis.
     pub ai_providers: Arc<ProviderRegistry>,
+    /// Worker pool for background job processing.
+    pub worker_pool: Arc<Mutex<WorkerPool>>,
 }
 
 impl AppState {
@@ -48,6 +52,7 @@ impl AppState {
         photo_store: Arc<dyn PhotoStore>,
         job_store: Arc<dyn JobStore>,
         ai_providers: Arc<ProviderRegistry>,
+        worker_pool: Arc<Mutex<WorkerPool>>,
     ) -> Self {
         Self {
             config,
@@ -55,6 +60,7 @@ impl AppState {
             photo_store,
             ai_providers,
             job_store,
+            worker_pool,
         }
     }
 }

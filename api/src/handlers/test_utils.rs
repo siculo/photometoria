@@ -8,9 +8,11 @@ pub mod fixtures {
     use crate::app_state::AppState;
     use crate::config::Config;
     use crate::services::ai::ProviderRegistry;
+    use crate::services::worker::WorkerPool;
     use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore};
     use std::sync::Arc;
     use tempfile::TempDir;
+    use tokio::sync::Mutex;
 
     /// Test state wrapper that holds an AppState and keeps the temp directory alive
     pub struct TestState {
@@ -39,8 +41,9 @@ pub mod fixtures {
         let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path.clone()).await);
         let job_store = Arc::new(FileSystemJobStore::new(storage_path).await);
         let ai_providers = Arc::new(ProviderRegistry::new());
+        let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(job_store.clone())));
         TestState {
-            state: AppState::new(config, task_store, photo_store, job_store, ai_providers),
+            state: AppState::new(config, task_store, photo_store, job_store, ai_providers, worker_pool),
             temp_dir,
         }
     }
