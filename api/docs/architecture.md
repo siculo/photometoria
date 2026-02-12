@@ -41,7 +41,7 @@ The initial version simplifies this to a single-level tagging system that produc
 
 **Key Findings:**
 
-- **qwen3-vl:8b**: Superior quality for landmark identification and detailed tagging, but slower
+- **qwen3-vl**: Superior quality for landmark identification and detailed tagging, but slower
 - **llava**: Faster iteration for development work, acceptable quality
 
 **Technical Approach:**
