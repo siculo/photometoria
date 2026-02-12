@@ -86,8 +86,13 @@ pub struct HealthStatus {
 /// purely from the static configuration and requires no network call.
 #[derive(Debug, Clone)]
 pub struct ConfiguredModelInfo {
-    /// The model ID as used in API requests (e.g., "qwen3-vl:8b").
+    /// The model ID as used in API requests (config key, e.g., "qwen3-vl").
     pub id: String,
+
+    /// The actual model name as known to the backend (e.g., "qwen3-vl:8b").
+    ///
+    /// Used to cross-reference against the list of installed models.
+    pub backend_model_name: String,
 
     /// Optional human-readable description from the configuration.
     pub description: Option<String>,

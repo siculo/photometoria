@@ -104,6 +104,7 @@ impl AIProvider for OllamaProvider {
             .iter()
             .map(|(id, config)| super::super::provider::ConfiguredModelInfo {
                 id: id.clone(),
+                backend_model_name: config.ollama_model.clone(),
                 description: config.description.clone(),
             })
             .collect()
