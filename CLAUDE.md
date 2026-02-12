@@ -55,7 +55,7 @@ photometoria/
 ## AI Models
 
 Tested models via Ollama:
-* **qwen3-vl:8b** - Best quality, slower (recommended for production)
+* **qwen3-vl** - Best quality, slower (recommended for production)
 * **llava** - Faster, good for development
 
 ## Open Issues (Roadmap)
