@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::Utc;
 use tracing::{debug, error, info};
 use uuid::Uuid;
@@ -82,20 +82,18 @@ impl PhotoProcessor {
         let photo_id = photo.photo_id;
 
         let outcome = match self.analyze(&photo).await {
-            Ok(tags) => {
-                match self.update_job(&photo, Ok(&tags)).await {
-                    Ok(()) => Outcome::Success { tags },
-                    Err(e) => {
-                        error!(
-                            photo_id = %photo.photo_id,
-                            job_id = %photo.job_id,
-                            error = %e,
-                            "Analysis succeeded but job state could not be persisted"
-                        );
-                        Outcome::SuccessWithPersistenceError { tags, error: e }
-                    }
+            Ok(tags) => match self.update_job(&photo, Ok(&tags)).await {
+                Ok(()) => Outcome::Success { tags },
+                Err(e) => {
+                    error!(
+                        photo_id = %photo.photo_id,
+                        job_id = %photo.job_id,
+                        error = %e,
+                        "Analysis succeeded but job state could not be persisted"
+                    );
+                    Outcome::SuccessWithPersistenceError { tags, error: e }
                 }
-            }
+            },
             Err(error) => {
                 if let Err(e) = self.update_job(&photo, Err(&error)).await {
                     error!(
@@ -199,6 +197,13 @@ impl PhotoProcessor {
             }
         };
 
+        // If the job was cancelled (or finished by another path) while this
+        // photo was in-flight, skip the update to avoid overwriting the
+        // terminal state.
+        if job.is_finished() {
+            return Ok(());
+        }
+
         // Transition Queued → Processing on the first photo
         if job.status == JobStatus::Queued {
             job.start();
@@ -209,7 +214,10 @@ impl PhotoProcessor {
         job.processed_photo_ids.push(photo.photo_id);
 
         // Store result
-        job.results.insert(photo.photo_id, Self::build_photo_result(photo.photo_id, analysis));
+        job.results.insert(
+            photo.photo_id,
+            Self::build_photo_result(photo.photo_id, analysis),
+        );
 
         // Complete job when all photos have been processed
         if job.queued_photo_ids.is_empty() {
@@ -280,9 +288,7 @@ mod tests {
         fn configured_model_ids(&self) -> Vec<String> {
             vec![]
         }
-        fn configured_model_details(
-            &self,
-        ) -> Vec<crate::services::ai::ConfiguredModelInfo> {
+        fn configured_model_details(&self) -> Vec<crate::services::ai::ConfiguredModelInfo> {
             vec![]
         }
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {
@@ -315,9 +321,7 @@ mod tests {
         fn configured_model_ids(&self) -> Vec<String> {
             vec![]
         }
-        fn configured_model_details(
-            &self,
-        ) -> Vec<crate::services::ai::ConfiguredModelInfo> {
+        fn configured_model_details(&self) -> Vec<crate::services::ai::ConfiguredModelInfo> {
             vec![]
         }
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {
@@ -432,7 +436,10 @@ mod tests {
         assert!(updated_job.processed_photo_ids.contains(&photo_id));
         let photo_result = updated_job.results.get(&photo_id).unwrap();
         assert_eq!(photo_result.status, PhotoResultStatus::Completed);
-        assert_eq!(photo_result.tags.as_deref(), Some("landscape, mountain, sunset"));
+        assert_eq!(
+            photo_result.tags.as_deref(),
+            Some("landscape, mountain, sunset")
+        );
     }
 
     #[tokio::test]
@@ -484,7 +491,10 @@ mod tests {
             })
             .await;
 
-        assert!(matches!(result.outcome, Outcome::SuccessWithPersistenceError { .. }));
+        assert!(matches!(
+            result.outcome,
+            Outcome::SuccessWithPersistenceError { .. }
+        ));
         if let Outcome::SuccessWithPersistenceError { tags, .. } = result.outcome {
             assert_eq!(tags, "ocean, wave, blue");
         }
@@ -534,7 +544,10 @@ mod tests {
 
         for (id, name) in [(photo_id_1, "a.jpg"), (photo_id_2, "b.jpg")] {
             let photo = crate::models::Photo::new(task.task_id, name.to_string(), 100);
-            let photo = crate::models::Photo { photo_id: id, ..photo };
+            let photo = crate::models::Photo {
+                photo_id: id,
+                ..photo
+            };
             fixture.photo_store.create(photo).await.unwrap();
             fixture.photo_store.save_data(id, b"bytes").await.unwrap();
         }
@@ -619,6 +632,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_process_cancelled_job_skips_update() {
+        let provider = Arc::new(SuccessProvider {
+            response_text: "landscape, mountain".to_string(),
+        });
+        let fixture = make_fixture(provider).await;
+        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+
+        // Cancel the job before processing completes
+        let mut cancelled_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
+        cancelled_job.cancel();
+        fixture.job_store.update(cancelled_job).await.unwrap();
+
+        // Process the photo — the job is already cancelled, so update_job should bail early
+        let result = fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+            })
+            .await;
+
+        // Analysis succeeds but persistence is skipped (job already finished)
+        // This manifests as Success (from analyze) but the job state stays Cancelled
+        assert!(matches!(
+            result.outcome,
+            Outcome::Success { .. } | Outcome::SuccessWithPersistenceError { .. }
+        ));
+
+        // Job must still be Cancelled — update_job must not have overwritten it
+        let final_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
+        assert_eq!(final_job.status, JobStatus::Cancelled);
+    }
+
+    #[tokio::test]
     async fn test_process_missing_task_returns_analysis_failed() {
         let provider = Arc::new(SuccessProvider {
             response_text: "should not reach".to_string(),
@@ -638,6 +687,8 @@ mod tests {
             })
             .await;
 
-        assert!(matches!(result.outcome, Outcome::AnalysisFailed { ref error } if error.contains("not found")));
+        assert!(
+            matches!(result.outcome, Outcome::AnalysisFailed { ref error } if error.contains("not found"))
+        );
     }
 }

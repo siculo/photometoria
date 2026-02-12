@@ -263,6 +263,16 @@ impl Job {
             .map(|r| r.photo_id)
             .collect()
     }
+
+    /// Returns all photo IDs that should be retried: failed + not yet processed.
+    ///
+    /// Used by retry endpoint after cancellation or partial completion, to
+    /// collect both photos that never ran and photos that ran but failed.
+    pub fn retriable_photo_ids(&self) -> Vec<Uuid> {
+        let mut ids = self.queued_photo_ids.clone();
+        ids.extend(self.failed_photo_ids());
+        ids
+    }
 }
 
 // ============================================================================

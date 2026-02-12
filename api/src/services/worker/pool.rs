@@ -7,8 +7,8 @@ use tokio::task::JoinHandle;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::config::{Config, ProviderConfig};
 use crate::config::worker_pool::parse_duration;
+use crate::config::{Config, ProviderConfig};
 use crate::models::job::JobStatus;
 use crate::services::ai::ProviderRegistry;
 use crate::storage::{JobStore, PhotoStore, TaskStore};
@@ -44,16 +44,14 @@ impl WorkerPool {
     ) -> Self {
         let worker_config = &config.worker_pool;
         let min_photos = worker_config.min_photos_before_swap;
-        let max_time = parse_duration(&worker_config.max_time_before_swap)
-            .unwrap_or(Duration::from_secs(120));
-        let idle_sleep = parse_duration(&worker_config.worker_idle_sleep)
-            .unwrap_or(Duration::from_millis(500));
+        let max_time =
+            parse_duration(&worker_config.max_time_before_swap).unwrap_or(Duration::from_secs(120));
+        let idle_sleep =
+            parse_duration(&worker_config.worker_idle_sleep).unwrap_or(Duration::from_millis(500));
         let discovery_poll_interval = parse_duration(&worker_config.discovery_poll_interval)
             .unwrap_or(Duration::from_secs(5));
 
-        let gpu_assignments = Self::gpu_assignment_from_providers_config(&config
-            .ai
-            .providers);
+        let gpu_assignments = Self::gpu_assignment_from_providers_config(&config.ai.providers);
 
         info!(
             worker_count = gpu_assignments.len(),
@@ -110,8 +108,7 @@ impl WorkerPool {
 
     /// Determine GPU assignments from Ollama providers config
     fn gpu_assignment_from_providers_config(poc: &HashMap<String, ProviderConfig>) -> Vec<u32> {
-        poc
-            .get("ollama")
+        poc.get("ollama")
             .and_then(|p| match p {
                 ProviderConfig::Ollama(c) => Some(c.devices.clone()),
             })
@@ -249,6 +246,19 @@ impl WorkerPool {
 
             tokio::time::sleep(poll_interval).await;
         }
+    }
+
+    /// Remove all pending photos for a job from the shared buffer.
+    ///
+    /// Called when a job is cancelled: any photos still waiting in the queue
+    /// are discarded so workers will not process them. Photos already picked
+    /// up by a worker will still complete, but `update_job` will detect the
+    /// terminal state and skip the update.
+    ///
+    /// Returns the number of photos removed from the buffer.
+    pub async fn cancel_job(&self, job_id: Uuid) -> usize {
+        let mut buf = self.buffer.lock().await;
+        buf.remove_job(job_id)
     }
 
     /// Abort all workers and the discovery task immediately.

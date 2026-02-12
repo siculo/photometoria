@@ -2,8 +2,8 @@ use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
 use crate::handlers::tasks::get_existing_task;
 use crate::models::{
-    CreateJobRequest, Job, JobDetailResponse, JobResponse,
-    JobResultsResponse, JobSummary, Photo, RetryJobResponse,
+    CreateJobRequest, Job, JobDetailResponse, JobResponse, JobResultsResponse, JobSummary, Photo,
+    RetryJobResponse,
 };
 use crate::storage::JobStore;
 use axum::Json;
@@ -124,9 +124,46 @@ pub async fn get_job_results(
     Ok(Json(response))
 }
 
+/// Handler for POST /api/jobs/{job_id}/cancel
+///
+/// Cancels an active job. Removes any pending photos from the worker buffer
+/// and marks the job as Cancelled. Photos already being processed by a worker
+/// will still complete, but their results won't be saved.
+pub async fn cancel_job(
+    State(state): State<AppState>,
+    AppPath(job_id): AppPath<Uuid>,
+) -> Result<Json<JobResponse>, AppError> {
+    let mut job = get_existing_job(&state.job_store, job_id).await?;
+
+    if job.is_finished() {
+        return Err(AppError::conflict(
+            "job_already_finished",
+            format!(
+                "Cannot cancel job '{}': it has already finished with status '{}'",
+                job_id, job.status
+            ),
+        ));
+    }
+
+    // Remove any photos still waiting in the worker buffer
+    {
+        let pool = state.worker_pool.lock().await;
+        pool.cancel_job(job_id).await;
+    }
+
+    // Mark job as cancelled and persist
+    job.cancel();
+    match state.job_store.update(job).await {
+        Ok(updated_job) => Ok(Json((&updated_job).into())),
+        Err(e) => Err(AppError::internal_error(e.to_string())),
+    }
+}
+
 /// Handler for POST /api/jobs/{job_id}/retry
 ///
-/// Creates a new job to retry failed photos from an existing job.
+/// Creates a new job to retry unprocessed or failed photos from an existing job.
+/// Includes both photos that failed during processing and photos that were never
+/// processed (e.g. because the original job was cancelled).
 pub async fn retry_job(
     State(state): State<AppState>,
     AppPath(job_id): AppPath<Uuid>,
@@ -141,20 +178,23 @@ pub async fn retry_job(
         ));
     }
 
-    // Get failed photo IDs
-    let failed_photo_ids = original_job.failed_photo_ids();
-    if failed_photo_ids.is_empty() {
+    // Get failed + unprocessed photo IDs
+    let retriable_photo_ids = original_job.retriable_photo_ids();
+    if retriable_photo_ids.is_empty() {
         return Err(AppError::bad_request(
             "no_failed_photos",
-            format!("Job '{}' has no failed photos to retry", job_id),
+            format!(
+                "Job '{}' has no failed or unprocessed photos to retry",
+                job_id
+            ),
         ));
     }
 
-    // Create new job with failed photos
+    // Create new job with retriable photos
     let new_job = Job::new(
         original_job.task_id,
         original_job.model.clone(),
-        failed_photo_ids,
+        retriable_photo_ids,
     );
 
     // Store the new job
@@ -663,7 +703,9 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        // Create job with failed photos
+        // Create job with mixed results: photo1 completed, photo2+photo3 failed.
+        // Simulate realistic post-processing state: queued_photo_ids is empty,
+        // all photos are in processed_photo_ids.
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
         let photo3 = Uuid::new_v4();
@@ -673,6 +715,9 @@ mod tests {
             vec![photo1, photo2, photo3],
         );
         job.start();
+        // Simulate all photos having been processed
+        job.queued_photo_ids.clear();
+        job.processed_photo_ids = vec![photo1, photo2, photo3];
         job.complete();
 
         // Add mixed results
@@ -782,6 +827,9 @@ mod tests {
         let photo1 = Uuid::new_v4();
         let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![photo1]);
         job.start();
+        // Simulate photo1 having been processed
+        job.queued_photo_ids.clear();
+        job.processed_photo_ids = vec![photo1];
         job.complete();
 
         // Add only successful result
@@ -805,6 +853,143 @@ mod tests {
         let error = result.unwrap_err();
         assert_eq!(error.body.error, "no_failed_photos");
         assert!(error.body.message.contains(&job_id.to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_retry_cancelled_job_includes_unprocessed_photos() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        // Simulate a job that was partially processed then cancelled:
+        // photo1 was processed (failed), photo2 and photo3 were never processed
+        let photo1 = Uuid::new_v4();
+        let photo2 = Uuid::new_v4();
+        let photo3 = Uuid::new_v4();
+        let mut job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            vec![photo1, photo2, photo3],
+        );
+        job.start();
+
+        // Mark photo1 as failed (processed), leave photo2 and photo3 in queued_photo_ids
+        job.queued_photo_ids.retain(|id| id != &photo1);
+        job.processed_photo_ids.push(photo1);
+        job.results.insert(
+            photo1,
+            crate::models::PhotoResult {
+                photo_id: photo1,
+                status: crate::models::PhotoResultStatus::Failed,
+                tags: None,
+                error: Some("timeout".to_string()),
+                processed_at: Some(chrono::Utc::now()),
+            },
+        );
+
+        job.cancel();
+        let original_job_id = job.job_id;
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = retry_job(State(ts.state.clone()), AppPath(original_job_id)).await;
+
+        assert!(result.is_ok());
+        let Json(response) = result.unwrap();
+        // All 3 photos: 1 failed + 2 never processed
+        assert_eq!(response.photo_count, 3);
+        assert_eq!(response.parent_job_id, original_job_id);
+
+        let new_job = ts
+            .state
+            .job_store
+            .get(response.job_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(new_job.photo_ids.contains(&photo1));
+        assert!(new_job.photo_ids.contains(&photo2));
+        assert!(new_job.photo_ids.contains(&photo3));
+    }
+
+    // ========================================================================
+    // Tests for cancel_job handler
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_cancel_job_queued() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let job_id = job.job_id;
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = cancel_job(State(ts.state.clone()), AppPath(job_id)).await;
+
+        assert!(result.is_ok());
+        let Json(response) = result.unwrap();
+        assert_eq!(response.job_id, job_id);
+        assert_eq!(response.status, JobStatus::Cancelled);
+
+        // Verify the job is cancelled in storage
+        let stored_job = ts.state.job_store.get(job_id).await.unwrap().unwrap();
+        assert_eq!(stored_job.status, JobStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_job_processing() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        job.start();
+        let job_id = job.job_id;
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = cancel_job(State(ts.state.clone()), AppPath(job_id)).await;
+
+        assert!(result.is_ok());
+        let Json(response) = result.unwrap();
+        assert_eq!(response.status, JobStatus::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_job_already_finished() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        job.start();
+        job.complete();
+        let job_id = job.job_id;
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = cancel_job(State(ts.state.clone()), AppPath(job_id)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "job_already_finished");
+    }
+
+    #[tokio::test]
+    async fn test_cancel_job_not_found() {
+        let ts = create_test_state().await;
+        let nonexistent_id = Uuid::new_v4();
+
+        let result = cancel_job(State(ts.state.clone()), AppPath(nonexistent_id)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "not_found");
     }
 
     // ========================================================================

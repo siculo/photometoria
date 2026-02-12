@@ -45,11 +45,16 @@ This example demonstrates a typical workflow from task creation to cleanup:
    GET /api/jobs/12345678-abcd-ef01-2345-6789abcdef01/results
    ← {results: [{photo_id, status, tags}, ...]}
 
-6. If some photos failed, retry them
+6. If needed, cancel the job
+   POST /api/jobs/12345678-abcd-ef01-2345-6789abcdef01/cancel
+   ← {job_id: ..., status: "cancelled"}
+
+7. If some photos failed (or were cancelled), retry them
    POST /api/jobs/12345678-abcd-ef01-2345-6789abcdef01/retry
    ← {job_id: "fedcba98-7654-3210-fedc-ba9876543210", ...}
+   Note: retry includes both failed photos AND photos that were never processed
 
-7. Or re-analyze with different model
+8. Or re-analyze with different model
    POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/jobs
    {
      model: "llava:latest",
@@ -57,7 +62,7 @@ This example demonstrates a typical workflow from task creation to cleanup:
    }
    ← {job_id: "abcdef01-2345-6789-abcd-ef0123456789"}
 
-8. When done, cleanup
+9. When done, cleanup
    DELETE /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890
    → Deletes task, all photos, and all associated jobs
 ```
@@ -370,13 +375,35 @@ Fields `started_at` and `completed_at` are omitted until the job reaches the cor
 - `400` - One or more `photo_ids` do not belong to the task (`invalid_parameter`)
 - `404` - Task not found
 
-### POST /api/jobs/{job_id}/retry
+### POST /api/jobs/{job_id}/cancel
 
-Creates a new job to retry only the failed photos from a finished job, using the same model.
+Cancels an active job. Any photos still waiting in the worker buffer are discarded. Photos already being processed by a worker are allowed to finish, but their results will not be saved (the job state is set to `cancelled` immediately).
+
+**Response:** `200 OK`
+
+```json
+{
+  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
+  "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "cancelled",
+  "model": "qwen3-vl:8b",
+  "photo_count": 15,
+  "created_at": "2024-01-15T10:35:00Z"
+}
+```
 
 **Errors:**
 
-- `400` - No failed photos to retry (`no_failed_photos`)
+- `404` - Job not found
+- `409` - Job has already finished (`job_already_finished`)
+
+### POST /api/jobs/{job_id}/retry
+
+Creates a new job to retry failed and unprocessed photos from a finished job, using the same model. This includes photos that failed during analysis and photos that were never processed (e.g. because the original job was cancelled).
+
+**Errors:**
+
+- `400` - No failed or unprocessed photos to retry (`no_failed_photos`)
 - `404` - Job not found
 - `409` - Job is still processing (`job_in_progress`)
 
@@ -585,7 +612,8 @@ All errors follow a consistent JSON format:
 - `insufficient_storage` (507) - Storage quota exceeded
 - `job_active` (409) - Cannot delete task or photo: task has active (queued or processing) jobs
 - `job_not_finished` (409) - Cannot delete job: it is still active (queued or processing)
-- `no_failed_photos` (400) - Retry requested but no failed photos
+- `job_already_finished` (409) - Cannot cancel job: it has already reached a terminal state
+- `no_failed_photos` (400) - Retry requested but no failed or unprocessed photos
 - `job_in_progress` (409) - Cannot retry: job is still processing
 
 ## See Also

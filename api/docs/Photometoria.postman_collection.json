@@ -38,8 +38,12 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/version",
-							"host": ["{{base_url}}"],
-							"path": ["version"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"version"
+							]
 						},
 						"description": "Returns the API version"
 					},
@@ -57,8 +61,13 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/models",
-							"host": ["{{base_url}}"],
-							"path": ["api", "models"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"models"
+							]
 						},
 						"description": "Returns the list of AI models that are configured and currently available in Ollama.\n\nUseful to discover which model IDs can be passed to the `model` field when creating a job."
 					},
@@ -70,8 +79,13 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/models",
-									"host": ["{{base_url}}"],
-									"path": ["api", "models"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"models"
+									]
 								}
 							},
 							"status": "OK",
@@ -123,8 +137,13 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/tasks",
-							"host": ["{{base_url}}"],
-							"path": ["api", "tasks"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks"
+							]
 						},
 						"description": "Creates a new task with the specified context.\n\nThe task_id is automatically saved to a collection variable for subsequent requests."
 					},
@@ -145,8 +164,13 @@
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks"
+									]
 								}
 							},
 							"status": "Created",
@@ -169,8 +193,13 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/tasks",
-							"host": ["{{base_url}}"],
-							"path": ["api", "tasks"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks"
+							]
 						},
 						"description": "Returns the list of all tasks with summary information."
 					},
@@ -182,8 +211,13 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/tasks",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks"
+									]
 								}
 							},
 							"status": "OK",
@@ -206,8 +240,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/tasks/{{task_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "tasks", "{{task_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"{{task_id}}"
+							]
 						},
 						"description": "Returns the details of a specific task.\n\nUses the task_id saved from creation or replace it manually."
 					},
@@ -219,8 +259,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "{{task_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}"
+									]
 								}
 							},
 							"status": "OK",
@@ -241,8 +287,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/tasks/nonexistent",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "nonexistent"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"nonexistent"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -269,8 +321,14 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/tasks/{{task_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "tasks", "{{task_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"{{task_id}}"
+							]
 						},
 						"description": "Updates the context of an existing task.\n\nUses the task_id saved from creation or replace it manually."
 					},
@@ -291,8 +349,14 @@
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "{{task_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}"
+									]
 								}
 							},
 							"status": "OK",
@@ -322,8 +386,14 @@
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/nonexistent",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "nonexistent"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"nonexistent"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -341,8 +411,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/tasks/{{task_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "tasks", "{{task_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"{{task_id}}"
+							]
 						},
 						"description": "Deletes a task and all associated data (photos, jobs).\n\nReturns `409 Conflict` if the task has any active (queued or processing) jobs. Cancel or wait for all jobs to finish before deleting the task.\n\nUses the task_id saved from creation or replace it manually."
 					},
@@ -354,8 +430,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "{{task_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}"
+									]
 								}
 							},
 							"status": "No Content",
@@ -371,8 +453,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/tasks/nonexistent",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "nonexistent"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"nonexistent"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -388,8 +476,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "{{task_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}"
+									]
 								}
 							},
 							"status": "Conflict",
@@ -412,8 +506,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
-							"host": ["{{base_url}}"],
-							"path": ["api", "tasks", "{{task_id}}", "photos"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"{{task_id}}",
+								"photos"
+							]
 						},
 						"description": "Returns the list of photo IDs belonging to a task.\n\nUses the task_id saved from creation or replace it manually."
 					},
@@ -425,8 +526,15 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "{{task_id}}", "photos"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}",
+										"photos"
+									]
 								}
 							},
 							"status": "OK",
@@ -447,8 +555,15 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/tasks/nonexistent/photos",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "nonexistent", "photos"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"nonexistent",
+										"photos"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -488,8 +603,15 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
-							"host": ["{{base_url}}"],
-							"path": ["api", "tasks", "{{task_id}}", "photos"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"{{task_id}}",
+								"photos"
+							]
 						},
 						"description": "Uploads one or more photos to a task.\n\nRequires two fields:\n- client_ids: JSON array of identifiers (e.g., local file paths)\n- files: The actual image files\n\nThe number of client_ids must match the number of files.\n\nSupported formats: JPEG, PNG.\nReturns 201 if at least one photo was uploaded, 200 otherwise."
 					},
@@ -511,8 +633,15 @@
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "{{task_id}}", "photos"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}",
+										"photos"
+									]
 								}
 							},
 							"status": "Created",
@@ -543,8 +672,15 @@
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/nonexistent/photos",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "nonexistent", "photos"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"nonexistent",
+										"photos"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -591,8 +727,15 @@
 						},
 						"url": {
 							"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-							"host": ["{{base_url}}"],
-							"path": ["api", "tasks", "{{task_id}}", "jobs"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"{{task_id}}",
+								"jobs"
+							]
 						},
 						"description": "Creates a new job to process photos with the specified AI model.\n\n- `model`: AI model to use (e.g. `qwen3-vl:8b`, `llava`)\n- `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task\n\nThe job is created in `queued` status. The `job_id` is saved automatically for subsequent requests."
 					},
@@ -613,8 +756,15 @@
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "{{task_id}}", "jobs"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}",
+										"jobs"
+									]
 								}
 							},
 							"status": "Created",
@@ -644,8 +794,15 @@
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/nonexistent/jobs",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "nonexistent", "jobs"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"nonexistent",
+										"jobs"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -675,8 +832,15 @@
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-									"host": ["{{base_url}}"],
-									"path": ["api", "tasks", "{{task_id}}", "jobs"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}",
+										"jobs"
+									]
 								}
 							},
 							"status": "Bad Request",
@@ -699,8 +863,13 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/jobs",
-							"host": ["{{base_url}}"],
-							"path": ["api", "jobs"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"jobs"
+							]
 						},
 						"description": "Returns a summary list of all jobs across all tasks."
 					},
@@ -712,8 +881,13 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs"
+									]
 								}
 							},
 							"status": "OK",
@@ -736,8 +910,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/jobs/{{job_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "jobs", "{{job_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"jobs",
+								"{{job_id}}"
+							]
 						},
 						"description": "Returns detailed information about a specific job, including progress when in `processing` status.\n\nThe `progress` field is only present when `status` is `processing`."
 					},
@@ -749,8 +929,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "{{job_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}"
+									]
 								}
 							},
 							"status": "OK",
@@ -771,8 +957,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "{{job_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}"
+									]
 								}
 							},
 							"status": "OK",
@@ -793,8 +985,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/nonexistent",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "nonexistent"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"nonexistent"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -817,8 +1015,15 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/jobs/{{job_id}}/results",
-							"host": ["{{base_url}}"],
-							"path": ["api", "jobs", "{{job_id}}", "results"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"jobs",
+								"{{job_id}}",
+								"results"
+							]
 						},
 						"description": "Returns the AI analysis results for all processed photos in a job.\n\nAvailable for jobs in any status; results accumulate as photos are processed."
 					},
@@ -830,8 +1035,15 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/{{job_id}}/results",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "{{job_id}}", "results"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}",
+										"results"
+									]
 								}
 							},
 							"status": "OK",
@@ -852,8 +1064,124 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/nonexistent/results",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "nonexistent", "results"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"nonexistent",
+										"results"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Cancel Job",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"jobs",
+								"{{job_id}}",
+								"cancel"
+							]
+						},
+						"description": "Cancels an active job. Removes any pending photos from the worker buffer and marks the job as `cancelled`.\n\nPhotos already being processed by a worker are allowed to finish, but their results will not be saved.\n\nReturns `409 Conflict` if the job has already reached a terminal state (completed, failed, or cancelled)."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}",
+										"cancel"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl:8b\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
+						},
+						{
+							"name": "Already Finished",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}",
+										"cancel"
+									]
+								}
+							},
+							"status": "Conflict",
+							"code": 409,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"job_already_finished\",\n    \"message\": \"Cannot cancel job '550e8400-e29b-41d4-a716-446655440010': it has already finished with status 'completed'\"\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/nonexistent/cancel",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"nonexistent",
+										"cancel"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -891,10 +1219,17 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
-							"host": ["{{base_url}}"],
-							"path": ["api", "jobs", "{{job_id}}", "retry"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"jobs",
+								"{{job_id}}",
+								"retry"
+							]
 						},
-						"description": "Creates a new job to retry only the failed photos from an existing finished job.\n\nReturns `409 Conflict` if the job is still processing, or `400 Bad Request` if there are no failed photos to retry.\n\nThe new `job_id` is saved automatically."
+						"description": "Creates a new job to retry failed and unprocessed photos from a finished job (including photos cancelled before processing).\n\nReturns `409 Conflict` if the job is still processing, or `400 Bad Request` if there are no failed or unprocessed photos to retry.\n\nThe new `job_id` is saved automatically."
 					},
 					"response": [
 						{
@@ -904,8 +1239,15 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "{{job_id}}", "retry"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}",
+										"retry"
+									]
 								}
 							},
 							"status": "Created",
@@ -926,8 +1268,15 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "{{job_id}}", "retry"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}",
+										"retry"
+									]
 								}
 							},
 							"status": "Conflict",
@@ -948,8 +1297,15 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "{{job_id}}", "retry"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}",
+										"retry"
+									]
 								}
 							},
 							"status": "Bad Request",
@@ -961,7 +1317,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"error\": \"no_failed_photos\",\n    \"message\": \"Job '550e8400-e29b-41d4-a716-446655440010' has no failed photos to retry\"\n}"
+							"body": "{\n    \"error\": \"no_failed_photos\",\n    \"message\": \"Job '550e8400-e29b-41d4-a716-446655440010' has no failed or unprocessed photos to retry\"\n}"
 						},
 						{
 							"name": "Not Found",
@@ -970,8 +1326,15 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/nonexistent/retry",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "nonexistent", "retry"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"nonexistent",
+										"retry"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -994,8 +1357,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/jobs/{{job_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "jobs", "{{job_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"jobs",
+								"{{job_id}}"
+							]
 						},
 						"description": "Deletes a job and all its results. The job must be in a terminal state (`completed`, `failed`, or `cancelled`).\n\nReturns `409 Conflict` if the job is still active (queued or processing)."
 					},
@@ -1007,8 +1376,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "{{job_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}"
+									]
 								}
 							},
 							"status": "No Content",
@@ -1024,8 +1399,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/nonexistent",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "nonexistent"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"nonexistent"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -1046,8 +1427,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "jobs", "{{job_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}"
+									]
 								}
 							},
 							"status": "Conflict",
@@ -1075,8 +1462,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/photos/{{photo_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "photos", "{{photo_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"photos",
+								"{{photo_id}}"
+							]
 						},
 						"description": "Returns detailed information about a specific photo.\n\nNote: You need to set the photo_id variable manually or capture it from an upload response."
 					},
@@ -1088,8 +1481,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/photos/{{photo_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "photos", "{{photo_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"photos",
+										"{{photo_id}}"
+									]
 								}
 							},
 							"status": "OK",
@@ -1110,8 +1509,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/photos/nonexistent",
-									"host": ["{{base_url}}"],
-									"path": ["api", "photos", "nonexistent"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"photos",
+										"nonexistent"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -1134,8 +1539,14 @@
 						"header": [],
 						"url": {
 							"raw": "{{base_url}}/api/photos/{{photo_id}}",
-							"host": ["{{base_url}}"],
-							"path": ["api", "photos", "{{photo_id}}"]
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"photos",
+								"{{photo_id}}"
+							]
 						},
 						"description": "Deletes a specific photo.\n\nReturns `409 Conflict` if the photo's task has any active (queued or processing) jobs.\n\nNote: You need to set the photo_id variable manually or capture it from an upload response."
 					},
@@ -1147,8 +1558,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/photos/{{photo_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "photos", "{{photo_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"photos",
+										"{{photo_id}}"
+									]
 								}
 							},
 							"status": "No Content",
@@ -1164,8 +1581,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/photos/nonexistent",
-									"host": ["{{base_url}}"],
-									"path": ["api", "photos", "nonexistent"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"photos",
+										"nonexistent"
+									]
 								}
 							},
 							"status": "Not Found",
@@ -1186,8 +1609,14 @@
 								"header": [],
 								"url": {
 									"raw": "{{base_url}}/api/photos/{{photo_id}}",
-									"host": ["{{base_url}}"],
-									"path": ["api", "photos", "{{photo_id}}"]
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"photos",
+										"{{photo_id}}"
+									]
 								}
 							},
 							"status": "Conflict",

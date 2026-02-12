@@ -107,6 +107,21 @@ impl PhotoBuffer {
         None
     }
 
+    /// Remove all pending photos for a specific job from the buffer.
+    ///
+    /// Returns the number of photos removed. Used to cancel a job that has
+    /// photos waiting in the queue.
+    pub fn remove_job(&mut self, job_id: Uuid) -> usize {
+        let mut removed = 0;
+        for queue in self.photos_by_model.values_mut() {
+            let before = queue.len();
+            queue.retain(|p| p.job_id != job_id);
+            removed += before - queue.len();
+        }
+        self.total -= removed;
+        removed
+    }
+
     /// Returns `true` if the buffer contains no photos.
     pub fn is_empty(&self) -> bool {
         self.total == 0
@@ -309,5 +324,59 @@ mod tests {
 
         buf.pop_excluding("llava");
         assert_eq!(buf.len(), 3);
+    }
+
+    // --- remove_job ---
+
+    #[test]
+    fn test_remove_job_removes_all_photos_for_job() {
+        let mut buf = PhotoBuffer::new();
+        let job = make_job("llava", 3);
+        let job_id = job.job_id;
+        buf.enqueue_job(&job);
+        assert_eq!(buf.len(), 3);
+
+        let removed = buf.remove_job(job_id);
+        assert_eq!(removed, 3);
+        assert!(buf.is_empty());
+    }
+
+    #[test]
+    fn test_remove_job_only_removes_target_job() {
+        let mut buf = PhotoBuffer::new();
+        let job1 = make_job("llava", 2);
+        let job2 = make_job("llava", 3);
+        let job1_id = job1.job_id;
+        buf.enqueue_job(&job1);
+        buf.enqueue_job(&job2);
+        assert_eq!(buf.len(), 5);
+
+        let removed = buf.remove_job(job1_id);
+        assert_eq!(removed, 2);
+        assert_eq!(buf.len(), 3);
+    }
+
+    #[test]
+    fn test_remove_job_across_models() {
+        let mut buf = PhotoBuffer::new();
+        let job1 = make_job("llava", 2);
+        let job2 = make_job("qwen3-vl", 3);
+        let job1_id = job1.job_id;
+        buf.enqueue_job(&job1);
+        buf.enqueue_job(&job2);
+
+        let removed = buf.remove_job(job1_id);
+        assert_eq!(removed, 2);
+        assert_eq!(buf.len(), 3);
+    }
+
+    #[test]
+    fn test_remove_job_unknown_job_returns_zero() {
+        let mut buf = PhotoBuffer::new();
+        buf.enqueue_job(&make_job("llava", 2));
+
+        let removed = buf.remove_job(Uuid::new_v4());
+        assert_eq!(removed, 0);
+        assert_eq!(buf.len(), 2);
     }
 }
