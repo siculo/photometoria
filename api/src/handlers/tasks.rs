@@ -14,7 +14,7 @@ use crate::handlers::app_error::{AppError, AppJson, AppPath};
 use crate::models::{
     CreateTaskRequest, Task, TaskDetail, TaskResponse, TaskSummary, UpdateTaskRequest,
 };
-use crate::storage::{PhotoStore, TaskStoreError};
+use crate::storage::{JobStore, PhotoStore, TaskStoreError};
 
 /// Handler for POST /api/tasks
 ///
@@ -87,6 +87,28 @@ pub(crate) async fn get_existing_task(
     }
 }
 
+/// Returns an error if the task has any active (Queued or Processing) jobs.
+///
+/// Used to guard delete operations on tasks and photos against in-flight processing.
+pub(crate) async fn check_no_active_jobs(
+    job_store: &Arc<dyn JobStore>,
+    task_id: Uuid,
+) -> Result<(), AppError> {
+    match job_store.list_by_task(task_id).await {
+        Ok(jobs) => {
+            if jobs.iter().any(|j| !j.is_finished()) {
+                Err(AppError::conflict(
+                    "job_active",
+                    format!("Cannot delete: task '{}' has active jobs", task_id),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        Err(e) => Err(AppError::internal_error(e.to_string())),
+    }
+}
+
 /// Handler for GET /api/tasks/{task_id}
 ///
 /// Retrieves detailed information about a specific task.
@@ -135,10 +157,12 @@ pub async fn update_task(
 /// Handler for DELETE /api/tasks/{task_id}
 ///
 /// Deletes a task and all associated data.
+/// Returns 409 Conflict if the task has any active (Queued or Processing) jobs.
 pub async fn delete_task(
     State(state): State<AppState>,
     AppPath(task_id): AppPath<Uuid>,
 ) -> Result<StatusCode, AppError> {
+    check_no_active_jobs(&state.job_store, task_id).await?;
     match state.task_store.delete(task_id).await {
         Ok(()) => Ok(StatusCode::NO_CONTENT),
         Err(TaskStoreError::NotFound(not_found_task_id)) => {
@@ -328,6 +352,88 @@ mod tests {
         let result = delete_task(State(ts.state.clone()), AppPath(task_id)).await;
 
         assert_eq!(result, Err(AppError::task_not_found(task_id)));
+    }
+
+    #[tokio::test]
+    async fn test_delete_task_blocked_by_queued_job() {
+        let ts = create_test_state().await;
+
+        let (_, Json(task)) = create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest { context: "task".to_string() }),
+        )
+        .await
+        .unwrap();
+
+        let job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "job_active");
+    }
+
+    #[tokio::test]
+    async fn test_delete_task_blocked_by_processing_job() {
+        let ts = create_test_state().await;
+
+        let (_, Json(task)) = create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest { context: "task".to_string() }),
+        )
+        .await
+        .unwrap();
+
+        let mut job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
+        job.start();
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "job_active");
+    }
+
+    #[tokio::test]
+    async fn test_delete_task_allowed_when_job_completed() {
+        let ts = create_test_state().await;
+
+        let (_, Json(task)) = create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest { context: "task".to_string() }),
+        )
+        .await
+        .unwrap();
+
+        let mut job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
+        job.start();
+        job.complete();
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+
+        assert_eq!(result, Ok(StatusCode::NO_CONTENT));
+    }
+
+    #[tokio::test]
+    async fn test_delete_task_allowed_when_job_cancelled() {
+        let ts = create_test_state().await;
+
+        let (_, Json(task)) = create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest { context: "task".to_string() }),
+        )
+        .await
+        .unwrap();
+
+        let mut job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
+        job.cancel();
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+
+        assert_eq!(result, Ok(StatusCode::NO_CONTENT));
     }
 
     #[tokio::test]

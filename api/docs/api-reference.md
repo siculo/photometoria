@@ -216,6 +216,7 @@ Deletes a task and all associated resources (photos, jobs).
 **Errors:**
 
 - `404` - Task not found
+- `409` - Task has active jobs (`job_active`)
 
 ## Photo Endpoints
 
@@ -329,7 +330,7 @@ Deletes a specific photo.
 **Errors:**
 
 - `404` - Photo not found
-- `409` - Cannot delete photo referenced by active jobs (future implementation)
+- `409` - Task has active jobs (`job_active`)
 
 ## Job Endpoints
 
@@ -495,20 +496,14 @@ Will open a Server-Sent Events (SSE) stream for real-time job progress updates.
 
 ### DELETE /api/jobs/{job_id}
 
-Cancels and deletes a job. If the job is currently `processing`, it is cancelled before deletion. The job and all its results are permanently removed.
+Deletes a job. The job must be in a terminal state (`completed`, `failed`, or `cancelled`). The job and all its results are permanently removed.
 
-**Response:** `200 OK`
-
-```json
-{
-  "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
-  "status": "cancelled"
-}
-```
+**Response:** `204 No Content`
 
 **Errors:**
 
 - `404` - Job not found
+- `409` - Job is still active (`job_not_finished`)
 
 ## Data Models
 
@@ -588,9 +583,10 @@ All errors follow a consistent JSON format:
 - `file_too_large` (400) - Uploaded file exceeds max_photo_size
 - `too_many_files` (400) - Upload exceeds max_photos_per_request
 - `insufficient_storage` (507) - Storage quota exceeded
-- `resource_in_use` (409) - Cannot delete resource referenced by active jobs
+- `job_active` (409) - Cannot delete task or photo: task has active (queued or processing) jobs
+- `job_not_finished` (409) - Cannot delete job: it is still active (queued or processing)
 - `no_failed_photos` (400) - Retry requested but no failed photos
-- `job_in_progress` (409) - Operation not allowed while job is still processing
+- `job_in_progress` (409) - Cannot retry: job is still processing
 
 ## See Also
 

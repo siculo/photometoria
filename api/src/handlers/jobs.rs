@@ -2,8 +2,8 @@ use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
 use crate::handlers::tasks::get_existing_task;
 use crate::models::{
-    CreateJobRequest, Job, JobCancelledResponse, JobDetailResponse, JobResponse,
-    JobResultsResponse, JobStatus, JobSummary, Photo, RetryJobResponse,
+    CreateJobRequest, Job, JobDetailResponse, JobResponse,
+    JobResultsResponse, JobSummary, Photo, RetryJobResponse,
 };
 use crate::storage::JobStore;
 use axum::Json;
@@ -174,29 +174,23 @@ pub async fn retry_job(
 
 /// Handler for DELETE /api/jobs/{job_id}
 ///
-/// Cancels and deletes a job.
+/// Deletes a job. The job must be in a terminal state (Completed, Failed, Cancelled).
+/// Returns 409 Conflict if the job is still active (Queued or Processing).
 pub async fn delete_job(
     State(state): State<AppState>,
     AppPath(job_id): AppPath<Uuid>,
-) -> Result<Json<JobCancelledResponse>, AppError> {
-    let mut job = get_existing_job(&state.job_store, job_id).await?;
+) -> Result<axum::http::StatusCode, AppError> {
+    let job = get_existing_job(&state.job_store, job_id).await?;
 
-    // If still processing, cancel it first
-    if job.status == JobStatus::Processing {
-        job.cancel();
-        // Update the job in store with cancelled status
-        match state.job_store.update(job.clone()).await {
-            Ok(_) => {}
-            Err(e) => return Err(AppError::internal_error(e.to_string())),
-        }
+    if !job.is_finished() {
+        return Err(AppError::conflict(
+            "job_not_finished",
+            format!("Cannot delete job '{}': it is still active", job_id),
+        ));
     }
 
-    // Delete the job from storage
     match state.job_store.delete(job_id).await {
-        Ok(_) => Ok(Json(JobCancelledResponse {
-            job_id,
-            status: JobStatus::Cancelled,
-        })),
+        Ok(_) => Ok(axum::http::StatusCode::NO_CONTENT),
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
@@ -832,21 +826,14 @@ mod tests {
 
         let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
 
-        assert!(result.is_ok());
-        let Json(response) = result.unwrap();
-        assert_eq!(response.job_id, job_id);
-        assert_eq!(response.status, JobStatus::Cancelled);
-
-        // Verify job was deleted
-        let deleted_job = ts.state.job_store.get(job_id).await.unwrap();
-        assert!(deleted_job.is_none());
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "job_not_finished");
     }
 
     #[tokio::test]
     async fn test_delete_job_processing() {
         let ts = create_test_state().await;
 
-        // Create task and processing job
         let task = Task::new("test task".to_string());
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
@@ -858,21 +845,14 @@ mod tests {
 
         let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
 
-        assert!(result.is_ok());
-        let Json(response) = result.unwrap();
-        assert_eq!(response.job_id, job_id);
-        assert_eq!(response.status, JobStatus::Cancelled);
-
-        // Verify job was deleted
-        let deleted_job = ts.state.job_store.get(job_id).await.unwrap();
-        assert!(deleted_job.is_none());
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "job_not_finished");
     }
 
     #[tokio::test]
     async fn test_delete_job_completed() {
         let ts = create_test_state().await;
 
-        // Create task and completed job
         let task = Task::new("test task".to_string());
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
@@ -885,12 +865,29 @@ mod tests {
 
         let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
 
-        assert!(result.is_ok());
-        let Json(response) = result.unwrap();
-        assert_eq!(response.job_id, job_id);
-        assert_eq!(response.status, JobStatus::Cancelled);
+        assert_eq!(result, Ok(axum::http::StatusCode::NO_CONTENT));
 
-        // Verify job was deleted
+        let deleted_job = ts.state.job_store.get(job_id).await.unwrap();
+        assert!(deleted_job.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_delete_job_cancelled() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        job.cancel();
+        let job_id = job.job_id;
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
+
+        assert_eq!(result, Ok(axum::http::StatusCode::NO_CONTENT));
+
         let deleted_job = ts.state.job_store.get(job_id).await.unwrap();
         assert!(deleted_job.is_none());
     }

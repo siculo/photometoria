@@ -344,7 +344,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "tasks", "{{task_id}}"]
 						},
-						"description": "Deletes a task and all associated data.\n\nUses the task_id saved from creation or replace it manually."
+						"description": "Deletes a task and all associated data (photos, jobs).\n\nReturns `409 Conflict` if the task has any active (queued or processing) jobs. Cancel or wait for all jobs to finish before deleting the task.\n\nUses the task_id saved from creation or replace it manually."
 					},
 					"response": [
 						{
@@ -380,6 +380,28 @@
 							"_postman_previewlanguage": "text",
 							"header": [],
 							"body": ""
+						},
+						{
+							"name": "Active Job",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "tasks", "{{task_id}}"]
+								}
+							},
+							"status": "Conflict",
+							"code": 409,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"job_active\",\n    \"message\": \"Cannot delete: task '550e8400-e29b-41d4-a716-446655440000' has active jobs\"\n}"
 						}
 					]
 				},
@@ -975,7 +997,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "jobs", "{{job_id}}"]
 						},
-						"description": "Cancels and deletes a job. If the job is currently `processing`, it is cancelled before deletion.\n\nAlways returns the `cancelled` status regardless of the original job state."
+						"description": "Deletes a job and all its results. The job must be in a terminal state (`completed`, `failed`, or `cancelled`).\n\nReturns `409 Conflict` if the job is still active (queued or processing)."
 					},
 					"response": [
 						{
@@ -989,16 +1011,11 @@
 									"path": ["api", "jobs", "{{job_id}}"]
 								}
 							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"status\": \"cancelled\"\n}"
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "text",
+							"header": [],
+							"body": ""
 						},
 						{
 							"name": "Not Found",
@@ -1021,6 +1038,28 @@
 								}
 							],
 							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+						},
+						{
+							"name": "Job Still Active",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "jobs", "{{job_id}}"]
+								}
+							},
+							"status": "Conflict",
+							"code": 409,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"job_not_finished\",\n    \"message\": \"Cannot delete job '550e8400-e29b-41d4-a716-446655440010': it is still active\"\n}"
 						}
 					]
 				}
@@ -1098,7 +1137,7 @@
 							"host": ["{{base_url}}"],
 							"path": ["api", "photos", "{{photo_id}}"]
 						},
-						"description": "Deletes a specific photo.\n\nNote: You need to set the photo_id variable manually or capture it from an upload response."
+						"description": "Deletes a specific photo.\n\nReturns `409 Conflict` if the photo's task has any active (queued or processing) jobs.\n\nNote: You need to set the photo_id variable manually or capture it from an upload response."
 					},
 					"response": [
 						{
@@ -1139,6 +1178,28 @@
 								}
 							],
 							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Photo with id nonexistent not found\"\n}"
+						},
+						{
+							"name": "Active Job",
+							"originalRequest": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/photos/{{photo_id}}",
+									"host": ["{{base_url}}"],
+									"path": ["api", "photos", "{{photo_id}}"]
+								}
+							},
+							"status": "Conflict",
+							"code": 409,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"job_active\",\n    \"message\": \"Cannot delete: task '550e8400-e29b-41d4-a716-446655440000' has active jobs\"\n}"
 						}
 					]
 				}

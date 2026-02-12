@@ -7,7 +7,7 @@ The Photometoria API is built using a modern async-first architecture with Rust 
 **Key Design Principles:**
 
 - Async-first design with Tokio runtime
-- Worker pool pattern for GPU resource management (planned - Issue #8)
+- Worker pool pattern for GPU resource management
 - Filesystem-based storage with abstraction layers for future database integration
 - Modular structure: routes, handlers, services, models, storage
 - Trait-based abstractions for future-proofing
@@ -77,9 +77,8 @@ The initial version simplifies this to a single-level tagging system that produc
 ### Concurrency Model
 
 - **Task-based async processing** using Tokio tasks
-- **Worker pool** with GPU-based limits (planned - one worker per GPU typically)
-- **Queue-based execution** for job scheduling (planned)
-- Current: Jobs are processed sequentially (concurrent execution not yet implemented)
+- **Worker pool** with GPU-based limits (one worker per GPU)
+- **Queue-based execution** for job scheduling via shared `PhotoBuffer`
 
 ## Core Concepts
 
@@ -135,15 +134,15 @@ A **Job** is an AI analysis process that runs on photos within a task.
 - Specifies which AI model to use
 - Can process all photos in the task or a specific subset
 - Works on a snapshot of available photos at creation time
-- Multiple jobs can be queued (concurrent execution planned - Issue #8)
+- Multiple jobs can be queued (processed concurrently up to one per GPU)
 
 **States:**
 
-- `queued` - Waiting for processing (worker pool not yet implemented)
-- `processing` - Currently being executed
+- `queued` - Waiting to be picked up by a worker
+- `processing` - Currently being executed by a worker
 - `completed` - Finished successfully
 - `failed` - Encountered fatal error
-- `cancelled` - Manually stopped by user (not yet implemented)
+- `cancelled` - Manually stopped by user
 
 **Results:**
 
@@ -157,30 +156,26 @@ A **Job** is an AI analysis process that runs on photos within a task.
 Created → Queued → Processing → Completed/Failed/Cancelled → Deleted
 ```
 
-### Worker Pool (Planned - Issue #8)
+### Worker Pool
 
-The **Worker Pool** will manage concurrent job execution based on available GPU resources.
+The **Worker Pool** manages concurrent job execution based on available GPU resources.
 
-**Status:** Not yet implemented. This section describes the planned design.
-
-**Planned Design:**
+**Design:**
 
 - One worker per GPU (configured in settings)
-- Workers will pull jobs from a queue
-- Jobs will wait in queue until a worker becomes available
-- Each worker will process photos sequentially within a job
+- Workers pull individual photos from a shared `PhotoBuffer`
+- Jobs transition from `queued` to `processing` when the first photo is picked up
+- Each worker processes photos sequentially
 
-**Configuration (Ready):**
+**Configuration:**
 
-The configuration structure is already in place in `OllamaProviderConfig`:
+Configured via `OllamaProviderConfig`:
 
 ```toml
 [ai.providers.ollama]
 base_url = "http://localhost:11434"
 devices = [0, 1]     # GPU indices — one worker is spawned per device
 ```
-
-**Current Behavior:**
 
 One worker is spawned per GPU listed in `devices`. If `devices` is empty, a single worker on device 0 is used.
 
@@ -488,7 +483,12 @@ src/
 │   │       ├── mod.rs
 │   │       ├── provider.rs  # OllamaProvider
 │   │       └── types.rs     # Ollama API types
-│   └── (worker.rs)      # Worker pool (planned - Issue #8)
+│   └── worker/          # Worker pool implementation
+│       ├── mod.rs
+│       ├── pool.rs      # WorkerPool: discovery loop, startup recovery
+│       ├── worker.rs    # Worker: hybrid threshold scheduling
+│       ├── processor.rs # PhotoProcessor: AI call + job state update
+│       └── queue.rs     # PhotoBuffer: shared photo queue
 ├── storage/             # Abstraction layer for persistence
 │   ├── mod.rs
 │   ├── task_store.rs    # Task storage abstraction
@@ -635,16 +635,14 @@ The storage layer uses trait-based abstraction patterns to enable future evoluti
 
 All storage implementations must be `Send + Sync` and support concurrent access from multiple Tokio tasks without data races. The trait design ensures this contract is enforced at compile time.
 
-### Worker Pool Implementation (Planned)
+### Worker Pool Implementation
 
-**Status:** Not yet implemented (Issue #8). This section describes the planned architecture.
+**Design:**
 
-**Planned Design:**
-
-- Tokio task per worker
-- Photo queue with priority-based selection (see "Photo Selection Strategy" in Worker Pool section)
-- Semaphore pattern to limit concurrency based on available GPUs
+- Tokio task per worker (one per GPU)
+- Shared `PhotoBuffer` with priority-based selection (see "Photo Selection Strategy" section)
 - Model-aware scheduling to minimize VRAM swaps
+- Stale job recovery on startup (jobs in `processing` state are reset to `queued`)
 
 **Two Implementation Approaches:**
 

@@ -1,6 +1,6 @@
 use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
-use crate::handlers::tasks::get_existing_task;
+use crate::handlers::tasks::{check_no_active_jobs, get_existing_task};
 use crate::models::{Photo, PhotoListResponse, PhotoResponse};
 use crate::storage::PhotoStore;
 use axum::Json;
@@ -29,7 +29,8 @@ pub async fn delete_photo(
     State(state): State<AppState>,
     AppPath(photo_id): AppPath<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    get_existing_photo(&state.photo_store, photo_id).await?;
+    let photo = get_existing_photo(&state.photo_store, photo_id).await?;
+    check_no_active_jobs(&state.job_store, photo.task_id).await?;
     match state.photo_store.delete(photo_id).await {
         Ok(_) => Ok(StatusCode::NO_CONTENT),
         Err(error) => Err(AppError::internal_error(error.to_string())),
@@ -220,5 +221,70 @@ mod tests {
         let error = result.unwrap_err();
         assert_eq!(error.body.error, "not_found");
         assert!(error.body.message.contains(&nonexistent_id.to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_delete_photo_blocked_by_queued_job() {
+        let ts = create_test_state().await;
+
+        let task = crate::models::Task::new("task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, "photo.jpg".to_string(), 1000);
+        let photo_id = photo.photo_id;
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let job = crate::models::Job::new(task_id, "llava".to_string(), vec![photo_id]);
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "job_active");
+    }
+
+    #[tokio::test]
+    async fn test_delete_photo_blocked_by_processing_job() {
+        let ts = create_test_state().await;
+
+        let task = crate::models::Task::new("task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, "photo.jpg".to_string(), 1000);
+        let photo_id = photo.photo_id;
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let mut job = crate::models::Job::new(task_id, "llava".to_string(), vec![photo_id]);
+        job.start();
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "job_active");
+    }
+
+    #[tokio::test]
+    async fn test_delete_photo_allowed_when_job_completed() {
+        let ts = create_test_state().await;
+
+        let task = crate::models::Task::new("task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, "photo.jpg".to_string(), 1000);
+        let photo_id = photo.photo_id;
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let mut job = crate::models::Job::new(task_id, "llava".to_string(), vec![photo_id]);
+        job.start();
+        job.complete();
+        ts.state.job_store.create(job).await.unwrap();
+
+        let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+
+        assert_eq!(result, Ok(StatusCode::NO_CONTENT));
     }
 }
