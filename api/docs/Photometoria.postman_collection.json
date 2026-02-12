@@ -83,7 +83,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"models\": [\n        {\n            \"name\": \"qwen3-vl:8b\",\n            \"description\": \"Best quality, slower processing\",\n            \"available\": true\n        },\n        {\n            \"name\": \"llava\",\n            \"description\": \"Faster, good for testing\",\n            \"available\": true\n        }\n    ]\n}"
+							"body": "{\n    \"models\": [\n        {\n            \"id\": \"qwen3-vl:8b\",\n            \"name\": \"qwen3-vl:8b\",\n            \"description\": \"8.0B parameters\",\n            \"supports_vision\": true,\n            \"provider\": \"ollama\"\n        },\n        {\n            \"id\": \"llava:latest\",\n            \"name\": \"llava:latest\",\n            \"supports_vision\": true,\n            \"provider\": \"ollama\"\n        }\n    ]\n}"
 						}
 					]
 				}

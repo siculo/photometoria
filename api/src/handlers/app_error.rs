@@ -63,6 +63,16 @@ impl AppError {
         Self::new(StatusCode::NOT_FOUND, "not_found", message)
     }
 
+    pub fn service_unavailable(description: impl Into<String>) -> Self {
+        let description = description.into();
+        error!("Service unavailable: {}", description);
+        Self::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "service_unavailable",
+            description,
+        )
+    }
+
     pub fn internal_error(description: String) -> Self {
         error!("An internal server error occurred: {}", description);
         Self::new(
