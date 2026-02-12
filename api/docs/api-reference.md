@@ -468,7 +468,8 @@ Returns the current state of a specific job.
 }
 ```
 
-- `started_at` and `completed_at` are omitted until the job reaches those states
+- `started_at` is set as soon as a worker picks up the first photo (before AI analysis begins); it is omitted while the job is still `queued`
+- `completed_at` is set when the job reaches a terminal state; it is omitted until then
 - `progress` is only present when `status` is `processing`; `current_photo_id` within `progress` may be omitted between photos
 - `progress` is omitted for `queued`, `completed`, `failed`, and `cancelled` jobs
 

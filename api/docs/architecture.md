@@ -164,7 +164,7 @@ The **Worker Pool** manages concurrent job execution based on available GPU reso
 
 - One worker per GPU (configured in settings)
 - Workers pull individual photos from a shared `PhotoBuffer`
-- Jobs transition from `queued` to `processing` when the first photo is picked up
+- Jobs transition from `queued` to `processing` as soon as a worker picks up the first photo, *before* the AI analysis call begins — so the status reflects work in progress during the entire analysis, not just after it completes
 - Each worker processes photos sequentially
 
 **Configuration:**
@@ -487,8 +487,8 @@ src/
 │       ├── mod.rs
 │       ├── pool.rs      # WorkerPool: discovery loop, startup recovery
 │       ├── worker.rs    # Worker: hybrid threshold scheduling
-│       ├── processor.rs # PhotoProcessor: AI call + job state update
-│       └── queue.rs     # PhotoBuffer: shared photo queue
+│       ├── processor.rs # PhotoProcessor: job start (Queued→Processing), AI call, job state update
+│       └── queue.rs     # PhotoBuffer: shared photo queue (with remove_job for cancellation)
 ├── storage/             # Abstraction layer for persistence
 │   ├── mod.rs
 │   ├── task_store.rs    # Task storage abstraction
@@ -695,25 +695,7 @@ Worker loop:
 
 See the **Photo Selection Strategy** section in Worker Pool for detailed analysis and threshold recommendations.
 
-**Implementation Notes:**
-
-When implementing the worker pool:
-- Use the existing `AIProvider` trait for provider abstraction
-- Leverage the `devices` configuration from `OllamaProviderConfig` (one worker per GPU)
-- Implement the **hybrid threshold strategy** (min_photos + max_time)
-  - Recommended defaults: `min_photos=10`, `max_time=120s`
-  - See "Photo Selection Strategy" section for detailed rationale
-- Track comprehensive metrics:
-  - Model swaps per job
-  - Time distribution: loading vs. processing
-  - Fairness: standard deviation of GPU time per job
-  - Photos per swap (amortization metric)
-- Consider GPU device assignment strategies (round-robin, load-based, etc.)
-- Implement graceful shutdown for worker tasks
-- Handle model loading failures gracefully (retry, skip, fail job)
-- Add configuration validation: `min_photos >= 1`, `max_time >= 10s`
-
-**Recommended:** Start with Approach 2 (photo-level with smart selection) as it provides better user experience, temporal fairness, and is more flexible for future enhancements.
+**Current implementation** uses Approach 2 (photo-level with smart hybrid selection). See the **Photo Selection Strategy** section for the detailed rationale behind the threshold algorithm.
 
 ### Photo Deduplication (Future)
 
