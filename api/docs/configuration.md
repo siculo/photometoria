@@ -211,7 +211,7 @@ Model configuration within a provider. Each model is identified by a unique ID.
 
 - **ollama_model** (string, required)
   - Actual Ollama model name
-  - Examples: `"qwen3-vl"`, `"llava:latest"`
+  - Examples: `"qwen3-vl:8b"`, `"llava:latest"`
 
 - **prompt_template** (string, optional)
   - Template for generating prompts
@@ -228,7 +228,7 @@ Model configuration within a provider. Each model is identified by a unique ID.
 
 ```toml
 [ai.providers.ollama.models.qwen3-vl]
-ollama_model = "qwen3-vl"
+ollama_model = "qwen3-vl:8b"
 prompt_template = "Analyze this photo and provide comma-separated tags."
 description = "Best quality, slower processing"
 supports_vision = true
@@ -326,7 +326,7 @@ base_url = "http://gpu-server:11434"
 timeout_seconds = 180
 
 [ai.providers.ollama-remote.models.qwen3-vl]
-ollama_model = "qwen3-vl"
+ollama_model = "qwen3-vl:8b"
 supports_vision = true
 ```
 
