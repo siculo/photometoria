@@ -95,6 +95,10 @@ impl AIProvider for OllamaProvider {
         &self.name
     }
 
+    fn configured_model_ids(&self) -> Vec<String> {
+        self.configured_models.keys().cloned().collect()
+    }
+
     async fn check_health(&self) -> AIProviderResult<HealthStatus> {
         let url = self.api_url("/api/tags");
 

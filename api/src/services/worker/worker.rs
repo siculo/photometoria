@@ -192,6 +192,9 @@ mod tests {
         fn name(&self) -> &str {
             "noop"
         }
+        fn configured_model_ids(&self) -> Vec<String> {
+            vec![]
+        }
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {
             Err(AIProviderError::Unavailable {
                 provider: "noop".into(),

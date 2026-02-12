@@ -21,6 +21,14 @@ pub async fn create_job(
     Json(request): Json<CreateJobRequest>,
 ) -> Result<Json<JobResponse>, AppError> {
     get_existing_task(&state.task_store, task_id).await?;
+
+    if !state.ai_providers.is_model_configured(&request.model) {
+        return Err(AppError::bad_request(
+            "invalid_model",
+            format!("Model '{}' is not configured", request.model),
+        ));
+    }
+
     match state.photo_store.list_by_task(task_id).await {
         Ok(photos) => {
             let photo_ids = job_photo_ids(task_id, photos, request.photo_ids)?;
@@ -293,6 +301,28 @@ mod tests {
         assert_eq!(stored_job.photo_ids.len(), 2);
         assert!(stored_job.photo_ids.contains(&photo1_id));
         assert!(stored_job.photo_ids.contains(&photo2_id));
+    }
+
+    #[tokio::test]
+    async fn test_create_job_invalid_model() {
+        let ts = create_test_state().await;
+
+        // Create task (test state uses an empty ProviderRegistry — no models configured)
+        let task = Task::new("test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let request = CreateJobRequest {
+            model: "nonexistent-model".to_string(),
+            photo_ids: None,
+        };
+
+        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.body.error, "invalid_model");
+        assert!(error.body.message.contains("nonexistent-model"));
     }
 
     #[tokio::test]

@@ -277,6 +277,9 @@ mod tests {
         fn name(&self) -> &str {
             "mock-success"
         }
+        fn configured_model_ids(&self) -> Vec<String> {
+            vec![]
+        }
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {
             unimplemented!()
         }
@@ -303,6 +306,9 @@ mod tests {
     impl AIProvider for FailingProvider {
         fn name(&self) -> &str {
             "mock-fail"
+        }
+        fn configured_model_ids(&self) -> Vec<String> {
+            vec![]
         }
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {
             unimplemented!()

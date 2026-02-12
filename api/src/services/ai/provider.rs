@@ -90,6 +90,12 @@ pub trait AIProvider: Send + Sync {
     /// Returns the unique name of this provider.
     fn name(&self) -> &str;
 
+    /// Returns the model IDs configured for this provider.
+    ///
+    /// These are the keys from the provider's model configuration — the IDs
+    /// that callers pass to `analyze_image`. No network call is made.
+    fn configured_model_ids(&self) -> Vec<String>;
+
     /// Checks the health/availability of the provider.
     ///
     /// This should verify that the provider is reachable and operational.

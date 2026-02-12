@@ -147,6 +147,15 @@ impl ProviderRegistry {
     }
 
     /// Returns true if no providers are registered.
+    /// Returns true if the given model ID is configured in the default provider.
+    ///
+    /// Does not make a network call — validates against the static configuration.
+    pub fn is_model_configured(&self, model_id: &str) -> bool {
+        self.default_provider()
+            .map(|p| p.configured_model_ids().contains(&model_id.to_string()))
+            .unwrap_or(false)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.providers.is_empty()
     }
