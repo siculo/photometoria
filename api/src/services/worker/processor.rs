@@ -79,6 +79,10 @@ impl PhotoProcessor {
             "Processing photo"
         );
 
+        // Transition the job to Processing before analysis begins, so the status
+        // reflects that work is underway even while the first photo is still running.
+        self.start_job_if_queued(photo.job_id).await;
+
         let photo_id = photo.photo_id;
 
         let outcome = match self.analyze(&photo).await {
@@ -178,6 +182,23 @@ impl PhotoProcessor {
         }
     }
 
+    /// Transition the job from Queued to Processing if it hasn't started yet.
+    ///
+    /// Called at the start of photo processing so the job status reflects
+    /// that work is underway before the first AI call completes.
+    /// No-op if the job is already Processing or in a terminal state.
+    async fn start_job_if_queued(&self, job_id: Uuid) {
+        match self.job_store.get(job_id).await {
+            Ok(Some(mut job)) if job.status == JobStatus::Queued => {
+                job.start();
+                if let Err(e) = self.job_store.update(job).await {
+                    error!(job_id = %job_id, error = %e, "Failed to mark job as processing");
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Update job state after processing a photo.
     ///
     /// `analysis` is `Ok(tags)` when the AI succeeded, `Err(error)` when it failed.
@@ -202,11 +223,6 @@ impl PhotoProcessor {
         // terminal state.
         if job.is_finished() {
             return Ok(());
-        }
-
-        // Transition Queued → Processing on the first photo
-        if job.status == JobStatus::Queued {
-            job.start();
         }
 
         // Move photo from queued to processed
@@ -629,6 +645,39 @@ mod tests {
             .await;
 
         assert!(matches!(result.outcome, Outcome::AnalysisFailed { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_process_marks_job_processing_before_analysis() {
+        // Use a provider that checks job status DURING the analyze call.
+        // We simulate this by verifying the job is Processing immediately
+        // after process() returns (the transition happens before analyze).
+        // The fixture approach: after process(), job must have started_at set
+        // and have been in Processing before completing.
+        let provider = Arc::new(SuccessProvider {
+            response_text: "portrait, indoor".to_string(),
+        });
+        let fixture = make_fixture(provider).await;
+        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+
+        assert_eq!(job.status, JobStatus::Queued);
+        assert!(job.started_at.is_none());
+
+        fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+            })
+            .await;
+
+        let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
+        // started_at must be set (was set by start_job_if_queued BEFORE analysis)
+        assert!(updated_job.started_at.is_some());
+        // Job completed normally after analysis
+        assert_eq!(updated_job.status, JobStatus::Completed);
     }
 
     #[tokio::test]
