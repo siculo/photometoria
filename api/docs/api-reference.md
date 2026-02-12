@@ -32,7 +32,7 @@ This example demonstrates a typical workflow from task creation to cleanup:
 3. Client starts analysis job
    POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/jobs
    {
-     model: "qwen3-vl:8b",
+     model: "qwen3-vl",
      photo_ids: null  // null = all photos in task
    }
    ← {job_id: "12345678-abcd-ef01-2345-6789abcdef01", status: "queued"}
@@ -106,7 +106,7 @@ Returns list of supported AI models that are currently available (both configure
 {
   "models": [
     {
-      "name": "qwen3-vl:8b",
+      "name": "qwen3-vl",
       "description": "Best quality, slower processing",
       "available": true
     },
@@ -347,12 +347,12 @@ Creates a new analysis job in `queued` status.
 
 ```json
 {
-  "model": "qwen3-vl:8b",
+  "model": "qwen3-vl",
   "photo_ids": null
 }
 ```
 
-- `model`: AI model to use (e.g. `qwen3-vl:8b`, `llava`)
+- `model`: AI model to use (e.g. `qwen3-vl`, `llava`)
 - `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task
 
 **Response:** `201 Created`
@@ -362,7 +362,7 @@ Creates a new analysis job in `queued` status.
   "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
-  "model": "qwen3-vl:8b",
+  "model": "qwen3-vl",
   "photo_count": 15,
   "created_at": "2024-01-15T10:35:00Z"
 }
@@ -386,7 +386,7 @@ Cancels an active job. Any photos still waiting in the worker buffer are discard
   "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "cancelled",
-  "model": "qwen3-vl:8b",
+  "model": "qwen3-vl",
   "photo_count": 15,
   "created_at": "2024-01-15T10:35:00Z"
 }
@@ -414,7 +414,7 @@ Creates a new job to retry failed and unprocessed photos from a finished job, us
   "job_id": "fedcba98-7654-3210-fedc-ba9876543210",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
-  "model": "qwen3-vl:8b",
+  "model": "qwen3-vl",
   "photo_count": 2,
   "created_at": "2024-01-15T10:50:00Z",
   "parent_job_id": "12345678-abcd-ef01-2345-6789abcdef01"
@@ -432,7 +432,7 @@ Returns a summary list of all jobs across all tasks.
   {
     "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
     "status": "completed",
-    "model": "qwen3-vl:8b",
+    "model": "qwen3-vl",
     "photo_count": 15,
     "queued_photo_count": 0,
     "processed_photo_count": 15,
@@ -455,7 +455,7 @@ Returns the current state of a specific job.
   "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "processing",
-  "model": "qwen3-vl:8b",
+  "model": "qwen3-vl",
   "photo_count": 15,
   "created_at": "2024-01-15T10:35:00Z",
   "started_at": "2024-01-15T10:35:10Z",
