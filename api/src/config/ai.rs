@@ -76,8 +76,6 @@ impl OllamaProviderConfig {
     fn default_timeout_seconds() -> u64 {
         120
     }
-
-
 }
 
 /// Configuration for an Ollama model.

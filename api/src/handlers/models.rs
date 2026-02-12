@@ -26,9 +26,7 @@ pub struct ModelsResponse {
 /// `available` is `true` only if the model is also currently installed in
 /// Ollama (matched by backend model name). If Ollama is unreachable all
 /// models are returned with `available: false`.
-pub async fn list_models(
-    State(state): State<AppState>,
-) -> Result<Json<ModelsResponse>, AppError> {
+pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsResponse>, AppError> {
     let provider = state
         .ai_providers
         .default_provider()

@@ -360,7 +360,9 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
-            AppJson(CreateTaskRequest { context: "task".to_string() }),
+            AppJson(CreateTaskRequest {
+                context: "task".to_string(),
+            }),
         )
         .await
         .unwrap();
@@ -380,7 +382,9 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
-            AppJson(CreateTaskRequest { context: "task".to_string() }),
+            AppJson(CreateTaskRequest {
+                context: "task".to_string(),
+            }),
         )
         .await
         .unwrap();
@@ -401,7 +405,9 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
-            AppJson(CreateTaskRequest { context: "task".to_string() }),
+            AppJson(CreateTaskRequest {
+                context: "task".to_string(),
+            }),
         )
         .await
         .unwrap();
@@ -422,7 +428,9 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
-            AppJson(CreateTaskRequest { context: "task".to_string() }),
+            AppJson(CreateTaskRequest {
+                context: "task".to_string(),
+            }),
         )
         .await
         .unwrap();

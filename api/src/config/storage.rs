@@ -1,5 +1,5 @@
-use serde::Deserialize;
 use super::ByteSize;
+use serde::Deserialize;
 
 /// Storage configuration section
 #[derive(Debug, Clone, Deserialize)]

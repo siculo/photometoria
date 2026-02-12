@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use tokio::sync::Mutex;
-use tracing::{debug, error, info};
-use crate::services::worker::ProcessingResult;
 use super::processor::{Outcome, PhotoProcessor};
 use super::queue::{PhotoBuffer, QueuedPhoto};
+use crate::services::worker::ProcessingResult;
+use tokio::sync::Mutex;
+use tracing::{debug, error, info};
 
 /// Worker executes photo processing with a hybrid threshold scheduling strategy.
 ///
@@ -57,8 +57,7 @@ impl Worker {
         match self.current_model {
             None => true,
             Some(_) => {
-                let photos_ok =
-                    self.photos_processed_with_model >= self.min_photos_before_swap;
+                let photos_ok = self.photos_processed_with_model >= self.min_photos_before_swap;
                 let time_ok = self.model_loaded_at.elapsed() >= self.max_time_before_swap;
                 photos_ok && time_ok
             }
@@ -92,9 +91,9 @@ impl Worker {
                 // No model loaded yet: take any photo
                 None => buf.pop_any(),
                 // Both thresholds met: prefer a different model for fairness (round-robin)
-                Some(ref current) if self.can_swap_model() => {
-                    buf.pop_excluding(current).or_else(|| buf.pop_by_model(current))
-                }
+                Some(ref current) if self.can_swap_model() => buf
+                    .pop_excluding(current)
+                    .or_else(|| buf.pop_by_model(current)),
                 // Below thresholds: prefer current model for efficiency
                 Some(ref current) => buf.pop_by_model(current).or_else(|| buf.pop_any()),
             }
@@ -110,7 +109,11 @@ impl Worker {
 
     /// Main worker loop: dequeues and processes photos indefinitely.
     pub async fn run(mut self) {
-        info!(worker_id = self.id, gpu_device = self.gpu_device, "Worker started");
+        info!(
+            worker_id = self.id,
+            gpu_device = self.gpu_device,
+            "Worker started"
+        );
 
         loop {
             match self.next_photo().await {
@@ -195,9 +198,7 @@ mod tests {
         fn configured_model_ids(&self) -> Vec<String> {
             vec![]
         }
-        fn configured_model_details(
-            &self,
-        ) -> Vec<crate::services::ai::ConfiguredModelInfo> {
+        fn configured_model_details(&self) -> Vec<crate::services::ai::ConfiguredModelInfo> {
             vec![]
         }
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {
@@ -236,7 +237,15 @@ mod tests {
         let ai_provider: Arc<dyn AIProvider> = Arc::new(NoopProvider);
 
         let processor = PhotoProcessor::new(ai_provider, job_store, photo_store, task_store);
-        let worker = Worker::new(0, 0, buffer, processor, min_photos, max_time, Duration::from_millis(10));
+        let worker = Worker::new(
+            0,
+            0,
+            buffer,
+            processor,
+            min_photos,
+            max_time,
+            Duration::from_millis(10),
+        );
         (worker, temp)
     }
 

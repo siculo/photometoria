@@ -36,9 +36,7 @@ pub mod fixtures {
             vec!["qwen3-vl:8b".to_string(), "llava".to_string()]
         }
 
-        fn configured_model_details(
-            &self,
-        ) -> Vec<crate::services::ai::ConfiguredModelInfo> {
+        fn configured_model_details(&self) -> Vec<crate::services::ai::ConfiguredModelInfo> {
             vec![]
         }
 
@@ -98,7 +96,14 @@ pub mod fixtures {
 
         let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(job_store.clone())));
         TestState {
-            state: AppState::new(config, task_store, photo_store, job_store, ai_providers, worker_pool),
+            state: AppState::new(
+                config,
+                task_store,
+                photo_store,
+                job_store,
+                ai_providers,
+                worker_pool,
+            ),
             temp_dir,
         }
     }
