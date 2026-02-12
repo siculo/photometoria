@@ -32,8 +32,8 @@ base_url = "http://localhost:11434"
 timeout_seconds = 120
 devices = []
 
-[ai.providers.ollama.models.qwen2-vl]
-ollama_model = "qwen2-vl:8b"
+[ai.providers.ollama.models.qwen3-vl]
+ollama_model = "qwen3-vl:8b"
 prompt_template = "Analyze this photo and provide comma-separated tags. Context: {context}"
 description = "Best quality, slower processing"
 supports_vision = true
@@ -183,7 +183,7 @@ Provider-specific configuration. Each provider is identified by a unique name (e
   - Default: `120`
   - This is a single value for the whole provider. Set it to accommodate the
     **slowest model on the slowest GPU** in your configuration — larger and more
-    complex models (e.g., `qwen2-vl:8b`) require significantly more time than
+    complex models (e.g., `qwen3-vl:8b`) require significantly more time than
     lighter ones (e.g., `llava`), and older or lower-VRAM cards will be slower
     than high-end ones. If you observe timeout errors, increase this value rather
     than assuming the analysis failed permanently (use the retry endpoint to
@@ -211,7 +211,7 @@ Model configuration within a provider. Each model is identified by a unique ID.
 
 - **ollama_model** (string, required)
   - Actual Ollama model name
-  - Examples: `"qwen2-vl:8b"`, `"llava:latest"`
+  - Examples: `"qwen3-vl:8b"`, `"llava:latest"`
 
 - **prompt_template** (string, optional)
   - Template for generating prompts
@@ -227,8 +227,8 @@ Model configuration within a provider. Each model is identified by a unique ID.
 **Example:**
 
 ```toml
-[ai.providers.ollama.models.qwen2-vl]
-ollama_model = "qwen2-vl:8b"
+[ai.providers.ollama.models.qwen3-vl]
+ollama_model = "qwen3-vl:8b"
 prompt_template = "Analyze this photo and provide comma-separated tags."
 description = "Best quality, slower processing"
 supports_vision = true
@@ -325,8 +325,8 @@ type = "ollama"
 base_url = "http://gpu-server:11434"
 timeout_seconds = 180
 
-[ai.providers.ollama-remote.models.qwen2-vl]
-ollama_model = "qwen2-vl:8b"
+[ai.providers.ollama-remote.models.qwen3-vl]
+ollama_model = "qwen3-vl:8b"
 supports_vision = true
 ```
 

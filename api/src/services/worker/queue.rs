@@ -161,7 +161,7 @@ mod tests {
     fn test_enqueue_multiple_jobs_different_models() {
         let mut buf = PhotoBuffer::new();
         buf.enqueue_job(&make_job("llava", 2));
-        buf.enqueue_job(&make_job("qwen2-vl", 3));
+        buf.enqueue_job(&make_job("qwen3-vl", 3));
         assert_eq!(buf.len(), 5);
     }
 
@@ -170,17 +170,17 @@ mod tests {
     #[test]
     fn test_pop_by_model_returns_correct_photo() {
         let mut buf = PhotoBuffer::new();
-        let job = make_job("qwen2-vl", 1);
+        let job = make_job("qwen3-vl", 1);
         let expected_job_id = job.job_id;
         let expected_task_id = job.task_id;
         let expected_photo_id = job.queued_photo_ids[0];
         buf.enqueue_job(&job);
 
-        let photo = buf.pop_by_model("qwen2-vl").unwrap();
+        let photo = buf.pop_by_model("qwen3-vl").unwrap();
         assert_eq!(photo.job_id, expected_job_id);
         assert_eq!(photo.task_id, expected_task_id);
         assert_eq!(photo.photo_id, expected_photo_id);
-        assert_eq!(photo.model, "qwen2-vl");
+        assert_eq!(photo.model, "qwen3-vl");
     }
 
     #[test]
@@ -195,7 +195,7 @@ mod tests {
     fn test_pop_by_model_unknown_model_returns_none() {
         let mut buf = PhotoBuffer::new();
         buf.enqueue_job(&make_job("llava", 2));
-        assert!(buf.pop_by_model("qwen2-vl").is_none());
+        assert!(buf.pop_by_model("qwen3-vl").is_none());
         assert_eq!(buf.len(), 2);
     }
 
@@ -228,7 +228,7 @@ mod tests {
     fn test_pop_any_drains_buffer() {
         let mut buf = PhotoBuffer::new();
         buf.enqueue_job(&make_job("llava", 2));
-        buf.enqueue_job(&make_job("qwen2-vl", 2));
+        buf.enqueue_job(&make_job("qwen3-vl", 2));
         for _ in 0..4 {
             assert!(buf.pop_any().is_some());
         }
@@ -242,10 +242,10 @@ mod tests {
     fn test_pop_excluding_skips_excluded_model() {
         let mut buf = PhotoBuffer::new();
         buf.enqueue_job(&make_job("llava", 2));
-        buf.enqueue_job(&make_job("qwen2-vl", 2));
+        buf.enqueue_job(&make_job("qwen3-vl", 2));
 
         let photo = buf.pop_excluding("llava").unwrap();
-        assert_eq!(photo.model, "qwen2-vl");
+        assert_eq!(photo.model, "qwen3-vl");
     }
 
     #[test]
@@ -305,7 +305,7 @@ mod tests {
     fn test_pop_excluding_decrements_len() {
         let mut buf = PhotoBuffer::new();
         buf.enqueue_job(&make_job("llava", 2));
-        buf.enqueue_job(&make_job("qwen2-vl", 2));
+        buf.enqueue_job(&make_job("qwen3-vl", 2));
 
         buf.pop_excluding("llava");
         assert_eq!(buf.len(), 3);

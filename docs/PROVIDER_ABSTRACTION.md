@@ -178,8 +178,8 @@ timeout_seconds = 120
 devices = []
 max_workers = 2
 
-[ai.providers.ollama.models.qwen2-vl]
-ollama_model = "qwen2-vl:8b"
+[ai.providers.ollama.models.qwen3-vl]
+ollama_model = "qwen3-vl:8b"
 description = "Best quality, slower"
 supports_vision = true
 
@@ -550,8 +550,8 @@ timeout_seconds = 120
 devices = []        # GPU device IDs (empty = auto-detect)
 max_workers = 2     # Concurrent workers for job processing
 
-[ai.providers.ollama.models.qwen2-vl]
-ollama_model = "qwen2-vl:8b"
+[ai.providers.ollama.models.qwen3-vl]
+ollama_model = "qwen3-vl:8b"
 description = "Best quality, slower"
 supports_vision = true
 prompt_template = "Analyze this image and generate descriptive keywords..."
@@ -802,7 +802,7 @@ Returns available models from the configured provider:
   "provider": "ollama",
   "models": [
     {
-      "id": "qwen2-vl:8b",
+      "id": "qwen3-vl:8b",
       "name": "Qwen2-VL 8B",
       "description": "Best quality, slower processing",
       "supports_vision": true,
@@ -825,7 +825,7 @@ Job creation now includes provider info:
 
 ```json
 {
-  "model": "qwen2-vl:8b",
+  "model": "qwen3-vl:8b",
   "photo_ids": null,
   "estimated_cost": 0.0  // For cloud providers
 }
@@ -837,7 +837,7 @@ Response includes provider metadata:
 {
   "job_id": "job_xyz",
   "provider": "ollama",
-  "model": "qwen2-vl:8b",
+  "model": "qwen3-vl:8b",
   "estimated_cost": 0.0,
   "status": "queued"
 }
@@ -948,7 +948,7 @@ type = "ollama"
 
 [provider.ollama]
 base_url = "http://localhost:11434"
-default_model = "qwen2-vl:8b"
+default_model = "qwen3-vl:8b"
 
 # Actual implementation
 [ai]
@@ -959,8 +959,8 @@ type = "ollama"
 base_url = "http://localhost:11434"
 timeout_seconds = 120
 
-[ai.providers.ollama.models.qwen2-vl]
-ollama_model = "qwen2-vl:8b"
+[ai.providers.ollama.models.qwen3-vl]
+ollama_model = "qwen3-vl:8b"
 supports_vision = true
 ```
 

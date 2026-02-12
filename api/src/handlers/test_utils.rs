@@ -33,7 +33,7 @@ pub mod fixtures {
         }
 
         fn configured_model_ids(&self) -> Vec<String> {
-            vec!["qwen2-vl:8b".to_string(), "llava".to_string()]
+            vec!["qwen3-vl:8b".to_string(), "llava".to_string()]
         }
 
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {

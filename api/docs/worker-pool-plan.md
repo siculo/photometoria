@@ -1196,7 +1196,7 @@ curl -X POST http://localhost:8080/api/tasks/{task_id}/photos \
 # Create job
 curl -X POST http://localhost:8080/api/tasks/{task_id}/jobs \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen2-vl"}'
+  -d '{"model":"qwen3-vl"}'
 
 # Poll for completion (requires Issue #9)
 curl http://localhost:8080/api/jobs/{job_id}
@@ -1231,7 +1231,7 @@ Check JobStore for:
 # Create job with multiple photos
 curl -X POST http://localhost:8080/api/tasks/{task_id}/jobs \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen2-vl"}'
+  -d '{"model":"qwen3-vl"}'
 
 # Let it start processing (check logs for "Processing photo")
 

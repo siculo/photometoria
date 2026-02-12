@@ -341,9 +341,9 @@ mod tests {
     fn test_get_ollama_model_name() {
         let mut models = HashMap::new();
         models.insert(
-            "qwen2-vl".to_string(),
+            "qwen3-vl".to_string(),
             OllamaModelConfig {
-                ollama_model: "qwen2-vl:8b".to_string(),
+                ollama_model: "qwen3-vl:8b".to_string(),
                 prompt_template: None,
                 description: None,
                 supports_vision: true,
@@ -353,8 +353,8 @@ mod tests {
         let provider = OllamaProvider::new("test", "http://localhost:11434", 30, models);
 
         assert_eq!(
-            provider.get_ollama_model_name("qwen2-vl"),
-            Some("qwen2-vl:8b")
+            provider.get_ollama_model_name("qwen3-vl"),
+            Some("qwen3-vl:8b")
         );
         assert_eq!(provider.get_ollama_model_name("unknown"), None);
     }
@@ -363,9 +363,9 @@ mod tests {
     fn test_get_prompt_for_model() {
         let mut models = HashMap::new();
         models.insert(
-            "qwen2-vl".to_string(),
+            "qwen3-vl".to_string(),
             OllamaModelConfig {
-                ollama_model: "qwen2-vl:8b".to_string(),
+                ollama_model: "qwen3-vl:8b".to_string(),
                 prompt_template: Some("Custom prompt".to_string()),
                 description: None,
                 supports_vision: true,
@@ -375,7 +375,7 @@ mod tests {
         let provider = OllamaProvider::new("test", "http://localhost:11434", 30, models);
 
         assert_eq!(
-            provider.get_prompt_for_model("qwen2-vl", "default"),
+            provider.get_prompt_for_model("qwen3-vl", "default"),
             "Custom prompt"
         );
         assert_eq!(

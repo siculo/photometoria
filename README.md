@@ -48,7 +48,7 @@ The project is in active development. The API specification is complete, and imp
    ollama serve
 
    # Pull recommended model
-   ollama pull qwen2-vl:8b
+   ollama pull qwen3-vl:8b
 ```
 
 1. **Test with Python scripts:**

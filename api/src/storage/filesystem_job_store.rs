@@ -405,7 +405,7 @@ mod tests {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
         let photo_ids = vec![Uuid::new_v4(), Uuid::new_v4()];
-        let job = create_test_job(task_id, "qwen2-vl:8b", photo_ids);
+        let job = create_test_job(task_id, "qwen3-vl:8b", photo_ids);
 
         let result = ts.store.create(job.clone()).await;
 
@@ -432,7 +432,7 @@ mod tests {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
         let photo_ids = vec![Uuid::new_v4()];
-        let job = create_test_job(task_id, "qwen2-vl:8b", photo_ids);
+        let job = create_test_job(task_id, "qwen3-vl:8b", photo_ids);
 
         // First creation should succeed
         ts.store.create(job.clone()).await.unwrap();
@@ -485,7 +485,7 @@ mod tests {
         // Create jobs with explicit timestamps to control ordering
         let now = Utc::now();
         let job1 =
-            create_test_job_with_timestamp(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()], now);
+            create_test_job_with_timestamp(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()], now);
         let job2 = create_test_job_with_timestamp(
             task_id,
             "llava",
@@ -494,7 +494,7 @@ mod tests {
         );
         let job3 = create_test_job_with_timestamp(
             task_id,
-            "qwen2-vl:8b",
+            "qwen3-vl:8b",
             vec![Uuid::new_v4()],
             now + Duration::seconds(2),
         );
@@ -522,9 +522,9 @@ mod tests {
         let task_b = Uuid::new_v4();
         let task_c = Uuid::new_v4();
         let photo_id = Uuid::new_v4();
-        let job1 = create_test_job(task_a, "qwen2-vl:8b", vec![photo_id]);
+        let job1 = create_test_job(task_a, "qwen3-vl:8b", vec![photo_id]);
         let job2 = create_test_job(task_a, "llava", vec![photo_id]);
-        let job3 = create_test_job(task_b, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job3 = create_test_job(task_b, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         ts.store.create(job1).await.unwrap();
         ts.store.create(job2).await.unwrap();
@@ -549,7 +549,7 @@ mod tests {
     async fn test_update_job() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
-        let mut job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let mut job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         ts.store.create(job.clone()).await.unwrap();
 
@@ -571,7 +571,7 @@ mod tests {
     async fn test_update_nonexistent_fails() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
-        let job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         // Try to update without creating first
         let result = ts.store.update(job.clone()).await;
@@ -589,7 +589,7 @@ mod tests {
     async fn test_delete_job() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
-        let job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         ts.store.create(job.clone()).await.unwrap();
         let job_path = ts.store.layout.job_file_path(&job);
@@ -632,9 +632,9 @@ mod tests {
         let task_a = Uuid::new_v4();
         let task_b = Uuid::new_v4();
         let photo_id = Uuid::new_v4();
-        let job1 = create_test_job(task_a, "qwen2-vl:8b", vec![photo_id]);
+        let job1 = create_test_job(task_a, "qwen3-vl:8b", vec![photo_id]);
         let job2 = create_test_job(task_a, "llava", vec![photo_id]);
-        let job3 = create_test_job(task_b, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job3 = create_test_job(task_b, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         ts.store.create(job1.clone()).await.unwrap();
         ts.store.create(job2.clone()).await.unwrap();
@@ -666,7 +666,7 @@ mod tests {
     async fn test_exists() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
-        let job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         // Should not exist initially
         let exists = ts.store.exists(job.job_id).await.unwrap();
@@ -697,9 +697,9 @@ mod tests {
 
         // Add jobs
         let photo_id = Uuid::new_v4();
-        let job1 = create_test_job(task_a, "qwen2-vl:8b", vec![photo_id]);
+        let job1 = create_test_job(task_a, "qwen3-vl:8b", vec![photo_id]);
         let job2 = create_test_job(task_a, "llava", vec![photo_id]);
-        let job3 = create_test_job(task_b, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job3 = create_test_job(task_b, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         ts.store.create(job1).await.unwrap();
         ts.store.create(job2).await.unwrap();
@@ -718,7 +718,7 @@ mod tests {
     async fn test_job_lifecycle_through_store() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
-        let mut job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4(), Uuid::new_v4()]);
+        let mut job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4(), Uuid::new_v4()]);
 
         // Create job (Queued)
         ts.store.create(job.clone()).await.unwrap();
@@ -752,7 +752,7 @@ mod tests {
 
         // Create store and add jobs
         let task_id = Uuid::new_v4();
-        let job1 = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job1 = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         let job2 = create_test_job(task_id, "llava", vec![Uuid::new_v4()]);
         let job1_id = job1.job_id;
         let job2_id = job2.job_id;
@@ -773,7 +773,7 @@ mod tests {
         assert!(store.exists(job2_id).await.unwrap());
 
         let loaded_job1 = store.get(job1_id).await.unwrap().unwrap();
-        assert_eq!(loaded_job1.model, "qwen2-vl:8b");
+        assert_eq!(loaded_job1.model, "qwen3-vl:8b");
     }
 
     #[tokio::test]
@@ -782,7 +782,7 @@ mod tests {
         let storage_path = temp_dir.path().to_path_buf();
 
         let task_id = Uuid::new_v4();
-        let mut job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let mut job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         let job_id = job.job_id;
 
         {
@@ -807,7 +807,7 @@ mod tests {
         let storage_path = temp_dir.path().to_path_buf();
 
         let task_id = Uuid::new_v4();
-        let job = create_test_job(task_id, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         let job_id = job.job_id;
 
         {
@@ -830,9 +830,9 @@ mod tests {
         // Create multiple tasks with multiple jobs each
         let task_a = Uuid::new_v4();
         let task_b = Uuid::new_v4();
-        let job1 = create_test_job(task_a, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job1 = create_test_job(task_a, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         let job2 = create_test_job(task_a, "llava", vec![Uuid::new_v4()]);
-        let job3 = create_test_job(task_b, "qwen2-vl:8b", vec![Uuid::new_v4()]);
+        let job3 = create_test_job(task_b, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         let job4 = create_test_job(task_b, "llava", vec![Uuid::new_v4()]);
 
         {

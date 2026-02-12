@@ -39,7 +39,7 @@
 //!
 //! // Analyze an image
 //! let request = AnalyzeImageRequest {
-//!     model: "qwen2-vl:8b".to_string(),
+//!     model: "qwen3-vl:8b".to_string(),
 //!     image_base64: base64_data,
 //!     prompt: "Describe this image".to_string(),
 //! };

@@ -133,7 +133,7 @@ impl OllamaModelInfo {
             "llava",
             "bakllava",
             "moondream",
-            "qwen2-vl",
+            "qwen3-vl",
             "qwen-vl",
             "cogvlm",
             "fuyu",
@@ -161,7 +161,7 @@ mod tests {
         assert!(model.likely_supports_vision());
 
         let model = OllamaModelInfo {
-            name: "qwen2-vl:8b".to_string(),
+            name: "qwen3-vl:8b".to_string(),
             modified_at: None,
             size: None,
             digest: None,

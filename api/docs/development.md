@@ -9,7 +9,7 @@
 **Hardware:**
 
 - GPU with sufficient memory for the AI models you intend to use
-- Currently tested models: **qwen2-vl:8b** (higher quality, requires more VRAM) and **llava** (faster, lower requirements)
+- Currently tested models: **qwen3-vl:8b** (higher quality, requires more VRAM) and **llava** (faster, lower requirements)
 - Multi-GPU setup supported for concurrent processing
 
 **Supported Systems:**
@@ -97,7 +97,7 @@ cp config.toml.example config.toml
 3. **Pull required Ollama models**
 
 ```bash
-ollama pull qwen2-vl:8b
+ollama pull qwen3-vl:8b
 ollama pull llava
 ```
 
@@ -377,7 +377,7 @@ cargo fmt
 
 ### Model Performance
 
-- **qwen2-vl:8b** produces superior results but slower (use for production)
+- **qwen3-vl:8b** produces superior results but slower (use for production)
 - **llava** good for rapid iteration during development
 - Different models require different prompt engineering for optimal output
 

@@ -108,7 +108,7 @@ pub struct Job {
     /// Reference to the parent Task
     pub task_id: Uuid,
 
-    /// AI model to use for analysis (e.g., "qwen2-vl:8b", "llava")
+    /// AI model to use for analysis (e.g., "qwen3-vl:8b", "llava")
     pub model: String,
 
     /// Current status of the job
@@ -152,7 +152,7 @@ impl Job {
     ///
     /// let job = Job::new(
     ///     Uuid::new_v4(),
-    ///     "qwen2-vl:8b".to_string(),
+    ///     "qwen3-vl:8b".to_string(),
     ///     vec![Uuid::new_v4(), Uuid::new_v4()],
     /// );
     /// assert_eq!(job.status.to_string(), "queued");
@@ -276,7 +276,7 @@ impl Job {
 /// # Example JSON
 /// ```json
 /// {
-///   "model": "qwen2-vl:8b",
+///   "model": "qwen3-vl:8b",
 ///   "photo_ids": null
 /// }
 /// ```
@@ -303,7 +303,7 @@ pub struct CreateJobRequest {
 ///   "job_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440001",
 ///   "status": "queued",
-///   "model": "qwen2-vl:8b",
+///   "model": "qwen3-vl:8b",
 ///   "photo_count": 15,
 ///   "created_at": "2024-01-15T10:35:00Z",
 ///   "started_at": null,
@@ -350,7 +350,7 @@ pub struct JobResponse {
 /// {
 ///   "job_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "status": "completed",
-///   "model": "qwen2-vl:8b",
+///   "model": "qwen3-vl:8b",
 ///   "photo_count": 15,
 ///   "created_at": "2024-01-15T10:35:00Z",
 ///   "completed_at": "2024-01-15T10:45:00Z"
@@ -443,7 +443,7 @@ pub struct JobProgress {
 ///   "job_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440001",
 ///   "status": "processing",
-///   "model": "qwen2-vl:8b",
+///   "model": "qwen3-vl:8b",
 ///   "photo_count": 15,
 ///   "created_at": "2024-01-15T10:35:00Z",
 ///   "started_at": "2024-01-15T10:35:10Z",
@@ -563,7 +563,7 @@ pub struct JobResultsResponse {
 ///   "job_id": "550e8400-e29b-41d4-a716-446655440010",
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440001",
 ///   "status": "queued",
-///   "model": "qwen2-vl:8b",
+///   "model": "qwen3-vl:8b",
 ///   "photo_count": 3,
 ///   "created_at": "2024-01-15T11:00:00Z",
 ///   "parent_job_id": "550e8400-e29b-41d4-a716-446655440000"
@@ -751,7 +751,7 @@ mod tests {
     fn test_job_new_generates_uuid() {
         let task_id = Uuid::new_v4();
         let photo_id = Uuid::new_v4();
-        let job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![photo_id]);
+        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![photo_id]);
         assert!(!job.job_id.is_nil());
     }
 
@@ -776,7 +776,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         assert_eq!(job.photo_count(), 2);
@@ -787,7 +787,7 @@ mod tests {
     #[test]
     fn test_job_lifecycle_start() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         assert_eq!(job.status, JobStatus::Queued);
         assert!(job.started_at.is_none());
@@ -801,7 +801,7 @@ mod tests {
     #[test]
     fn test_job_lifecycle_complete() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         job.start();
         job.complete();
@@ -814,7 +814,7 @@ mod tests {
     #[test]
     fn test_job_lifecycle_fail() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         job.start();
         job.fail();
@@ -826,7 +826,7 @@ mod tests {
     #[test]
     fn test_job_lifecycle_cancel() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         job.cancel();
 
@@ -837,7 +837,7 @@ mod tests {
     #[test]
     fn test_job_is_finished() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
 
         assert!(!job.is_finished()); // Queued
         job.start();
@@ -887,7 +887,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         job.start();
@@ -897,7 +897,7 @@ mod tests {
         assert_eq!(response.job_id, job.job_id);
         assert_eq!(response.task_id, job.task_id);
         assert_eq!(response.status, JobStatus::Processing);
-        assert_eq!(response.model, "qwen2-vl:8b");
+        assert_eq!(response.model, "qwen3-vl:8b");
         assert_eq!(response.photo_count, 2);
         assert!(response.started_at.is_some());
         assert!(response.completed_at.is_none());
@@ -920,10 +920,10 @@ mod tests {
 
     #[test]
     fn test_create_job_request_deserialization() {
-        let json = r#"{"model":"qwen2-vl:8b","photo_ids":null}"#;
+        let json = r#"{"model":"qwen3-vl:8b","photo_ids":null}"#;
         let request: CreateJobRequest = serde_json::from_str(json).unwrap();
 
-        assert_eq!(request.model, "qwen2-vl:8b");
+        assert_eq!(request.model, "qwen3-vl:8b");
         assert!(request.photo_ids.is_none());
     }
 
@@ -941,7 +941,7 @@ mod tests {
     #[test]
     fn test_job_response_skips_none_timestamps() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
         let response: JobResponse = job.into();
         let json = serde_json::to_string(&response).unwrap();
 
@@ -953,7 +953,7 @@ mod tests {
     #[test]
     fn test_job_serialization() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
         let json = serde_json::to_string(&job).unwrap();
 
         assert!(json.contains("job_id"));
@@ -973,7 +973,7 @@ mod tests {
     #[test]
     fn test_job_new_initializes_empty_results() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
         assert!(job.results.is_empty());
     }
 
@@ -982,7 +982,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
 
@@ -1004,7 +1004,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![photo1, photo2, photo3],
         );
         job.start();
@@ -1044,7 +1044,7 @@ mod tests {
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
 
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![photo1, photo2]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![photo1, photo2]);
         job.start();
 
         let progress = job.calculate_progress().unwrap();
@@ -1057,7 +1057,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
 
@@ -1073,7 +1073,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![photo1, photo2, photo3],
         );
 
@@ -1135,7 +1135,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         job.start();
@@ -1145,7 +1145,7 @@ mod tests {
         assert_eq!(response.job_id, job.job_id);
         assert_eq!(response.task_id, job.task_id);
         assert_eq!(response.status, JobStatus::Processing);
-        assert_eq!(response.model, "qwen2-vl:8b");
+        assert_eq!(response.model, "qwen3-vl:8b");
         assert_eq!(response.photo_count, 2);
         assert!(response.started_at.is_some());
         assert!(response.progress.is_some());
@@ -1156,7 +1156,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
 
@@ -1172,7 +1172,7 @@ mod tests {
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
 
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![photo1, photo2]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![photo1, photo2]);
 
         job.results.insert(
             photo1,
@@ -1202,7 +1202,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![photo1, photo2, photo3],
         );
 

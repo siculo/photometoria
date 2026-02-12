@@ -97,7 +97,7 @@ async fn test_list_models_all() {
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "models": [
                 {"name": "llava:latest", "size": 400000000},
-                {"name": "qwen2-vl:8b", "size": 500000000},
+                {"name": "qwen3-vl:8b", "size": 500000000},
                 {"name": "llama3:8b", "size": 500000000}
             ]
         })))
@@ -121,7 +121,7 @@ async fn test_list_models_vision_only() {
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "models": [
                 {"name": "llava:latest", "size": 400000000},
-                {"name": "qwen2-vl:8b", "size": 500000000},
+                {"name": "qwen3-vl:8b", "size": 500000000},
                 {"name": "llama3:8b", "size": 500000000}
             ]
         })))
@@ -131,11 +131,11 @@ async fn test_list_models_vision_only() {
     let provider = create_test_provider(&mock_server.uri());
     let models = provider.list_models(true).await.unwrap();
 
-    // Should only return vision models (llava, qwen2-vl)
+    // Should only return vision models (llava, qwen3-vl)
     assert_eq!(models.len(), 2);
     assert!(models.iter().all(|m| m.supports_vision));
     assert!(models.iter().any(|m| m.id == "llava:latest"));
-    assert!(models.iter().any(|m| m.id == "qwen2-vl:8b"));
+    assert!(models.iter().any(|m| m.id == "qwen3-vl:8b"));
 }
 
 #[tokio::test]

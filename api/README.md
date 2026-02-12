@@ -36,7 +36,7 @@ This is the **REST API server** component of Photometoria, implemented in Rust u
 
 3. **Pull required AI models:**
    ```bash
-   ollama pull qwen2-vl:8b
+   ollama pull qwen3-vl:8b
    ollama pull llava
    ```
 
@@ -102,7 +102,7 @@ See [Architecture Documentation](docs/architecture.md) for detailed design.
 
 Currently tested models:
 
-- **qwen2-vl:8b** - Best quality, slower (recommended for production)
+- **qwen3-vl:8b** - Best quality, slower (recommended for production)
 - **llava** - Faster, good for development iteration
 
 See [Configuration](docs/configuration.md) for model setup details.

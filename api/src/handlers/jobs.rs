@@ -231,7 +231,7 @@ mod tests {
 
         // Create job with all photos (photo_ids = None)
         let request = CreateJobRequest {
-            model: "qwen2-vl:8b".to_string(),
+            model: "qwen3-vl:8b".to_string(),
             photo_ids: None,
         };
 
@@ -240,7 +240,7 @@ mod tests {
         assert!(result.is_ok());
         let Json(job_response) = result.unwrap();
         assert_eq!(job_response.task_id, task_id);
-        assert_eq!(job_response.model, "qwen2-vl:8b");
+        assert_eq!(job_response.model, "qwen3-vl:8b");
         assert_eq!(job_response.photo_count, 2);
         assert_eq!(job_response.status, JobStatus::Queued);
 
@@ -331,7 +331,7 @@ mod tests {
         let nonexistent_task_id = Uuid::new_v4();
 
         let request = CreateJobRequest {
-            model: "qwen2-vl:8b".to_string(),
+            model: "qwen3-vl:8b".to_string(),
             photo_ids: None,
         };
 
@@ -368,7 +368,7 @@ mod tests {
         // Try to create job with a photo_id that doesn't belong to this task
         let invalid_photo_id = Uuid::new_v4();
         let request = CreateJobRequest {
-            model: "qwen2-vl:8b".to_string(),
+            model: "qwen3-vl:8b".to_string(),
             photo_ids: Some(vec![invalid_photo_id]),
         };
 
@@ -392,7 +392,7 @@ mod tests {
 
         // Create job for empty task
         let request = CreateJobRequest {
-            model: "qwen2-vl:8b".to_string(),
+            model: "qwen3-vl:8b".to_string(),
             photo_ids: None,
         };
 
@@ -443,7 +443,7 @@ mod tests {
         ts.state.photo_store.create(photo1).await.unwrap();
 
         // Create multiple jobs
-        let job1 = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![]);
+        let job1 = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![]);
         let job2 = Job::new(task_id, "llava".to_string(), vec![]);
         ts.state.job_store.create(job1.clone()).await.unwrap();
         ts.state.job_store.create(job2.clone()).await.unwrap();
@@ -467,7 +467,7 @@ mod tests {
         ts.state.task_store.create(task).await.unwrap();
 
         // Create jobs with different statuses
-        let mut job1 = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![]);
+        let mut job1 = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![]);
         job1.start();
         let mut job2 = Job::new(task_id, "llava".to_string(), vec![]);
         job2.start();
@@ -502,7 +502,7 @@ mod tests {
 
         let job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         let job_id = job.job_id;
@@ -530,7 +530,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         job.start();
@@ -577,7 +577,7 @@ mod tests {
 
         let job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         let job_id = job.job_id;
@@ -605,7 +605,7 @@ mod tests {
 
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![photo1, photo2]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![photo1, photo2]);
 
         // Add results
         job.results.insert(
@@ -675,7 +675,7 @@ mod tests {
         let photo3 = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
-            "qwen2-vl:8b".to_string(),
+            "qwen3-vl:8b".to_string(),
             vec![photo1, photo2, photo3],
         );
         job.start();
@@ -725,7 +725,7 @@ mod tests {
         assert_ne!(response.job_id, original_job_id); // New job ID
         assert_eq!(response.task_id, task_id);
         assert_eq!(response.status, JobStatus::Queued);
-        assert_eq!(response.model, "qwen2-vl:8b");
+        assert_eq!(response.model, "qwen3-vl:8b");
         assert_eq!(response.photo_count, 2); // Only failed photos
         assert_eq!(response.parent_job_id, original_job_id);
 
@@ -763,7 +763,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
         job.start(); // Start but don't complete
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
@@ -786,7 +786,7 @@ mod tests {
         ts.state.task_store.create(task).await.unwrap();
 
         let photo1 = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![photo1]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![photo1]);
         job.start();
         job.complete();
 
@@ -826,7 +826,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
@@ -851,7 +851,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
         job.start();
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
@@ -877,7 +877,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let mut job = Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
         job.start();
         job.complete();
         let job_id = job.job_id;

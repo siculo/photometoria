@@ -275,7 +275,7 @@ mod tests {
     }
 
     fn create_test_job(task_id: Uuid) -> Job {
-        Job::new(task_id, "qwen2-vl:8b".to_string(), vec![Uuid::new_v4()])
+        Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()])
     }
 
     #[test]

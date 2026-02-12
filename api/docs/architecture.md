@@ -41,7 +41,7 @@ The initial version simplifies this to a single-level tagging system that produc
 
 **Key Findings:**
 
-- **qwen2-vl:8b**: Superior quality for landmark identification and detailed tagging, but slower
+- **qwen3-vl:8b**: Superior quality for landmark identification and detailed tagging, but slower
 - **llava**: Faster iteration for development work, acceptable quality
 
 **Technical Approach:**
@@ -244,7 +244,7 @@ fn select_next_photo(&mut self, min_photos: usize, max_time: Duration) -> Option
 
 #### Performance Analysis
 
-**Scenario:** 1 GPU, 2 jobs (50 photos each), different models (qwen2-vl, llava)
+**Scenario:** 1 GPU, 2 jobs (50 photos each), different models (qwen3-vl, llava)
 
 | Strategy | Time | Overhead | First Result Job B | Fairness |
 |----------|------|----------|-------------------|----------|
@@ -537,7 +537,7 @@ The system uses a provider abstraction layer (`services/ai/`) to support multipl
 
 - **`OllamaProvider`** - Ollama implementation
   - Calls Ollama REST API (`/api/tags`, `/api/generate`)
-  - Supports vision models (llava, qwen2-vl, etc.)
+  - Supports vision models (llava, qwen3-vl, etc.)
   - Configurable timeout and model mappings
 
 **Design Benefits:**

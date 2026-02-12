@@ -83,7 +83,7 @@ impl OllamaProviderConfig {
 /// Configuration for an Ollama model.
 #[derive(Debug, Clone, Deserialize)]
 pub struct OllamaModelConfig {
-    /// The actual Ollama model name (e.g., "qwen2-vl:8b").
+    /// The actual Ollama model name (e.g., "qwen3-vl:8b").
     pub ollama_model: String,
 
     /// The prompt template to use for image analysis.
