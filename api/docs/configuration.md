@@ -33,7 +33,7 @@ timeout_seconds = 120
 devices = []
 
 [ai.providers.ollama.models.qwen3-vl]
-ollama_model = "qwen3-vl"
+ollama_model = "qwen3-vl:8b"
 prompt_template = "Analyze this photo and provide comma-separated tags. Context: {context}"
 description = "Best quality, slower processing"
 supports_vision = true
