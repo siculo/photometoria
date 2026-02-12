@@ -36,6 +36,12 @@ pub mod fixtures {
             vec!["qwen3-vl:8b".to_string(), "llava".to_string()]
         }
 
+        fn configured_model_details(
+            &self,
+        ) -> Vec<crate::services::ai::ConfiguredModelInfo> {
+            vec![]
+        }
+
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {
             Err(AIProviderError::Unavailable {
                 provider: "test".into(),

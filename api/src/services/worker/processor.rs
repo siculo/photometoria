@@ -280,6 +280,11 @@ mod tests {
         fn configured_model_ids(&self) -> Vec<String> {
             vec![]
         }
+        fn configured_model_details(
+            &self,
+        ) -> Vec<crate::services::ai::ConfiguredModelInfo> {
+            vec![]
+        }
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {
             unimplemented!()
         }
@@ -308,6 +313,11 @@ mod tests {
             "mock-fail"
         }
         fn configured_model_ids(&self) -> Vec<String> {
+            vec![]
+        }
+        fn configured_model_details(
+            &self,
+        ) -> Vec<crate::services::ai::ConfiguredModelInfo> {
             vec![]
         }
         async fn check_health(&self) -> AIProviderResult<HealthStatus> {

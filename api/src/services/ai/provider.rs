@@ -80,6 +80,19 @@ pub struct HealthStatus {
     pub available_models: Option<usize>,
 }
 
+/// Information about a model as configured in the provider settings.
+///
+/// Unlike `ModelInfo` (which comes from a live Ollama query), this is derived
+/// purely from the static configuration and requires no network call.
+#[derive(Debug, Clone)]
+pub struct ConfiguredModelInfo {
+    /// The model ID as used in API requests (e.g., "qwen3-vl:8b").
+    pub id: String,
+
+    /// Optional human-readable description from the configuration.
+    pub description: Option<String>,
+}
+
 /// Trait for AI providers that can analyze images and generate metadata.
 ///
 /// This trait defines the interface that all AI providers must implement.
@@ -95,6 +108,11 @@ pub trait AIProvider: Send + Sync {
     /// These are the keys from the provider's model configuration — the IDs
     /// that callers pass to `analyze_image`. No network call is made.
     fn configured_model_ids(&self) -> Vec<String>;
+
+    /// Returns details (id + description) for all configured models.
+    ///
+    /// No network call is made; data comes from static configuration.
+    fn configured_model_details(&self) -> Vec<ConfiguredModelInfo>;
 
     /// Checks the health/availability of the provider.
     ///

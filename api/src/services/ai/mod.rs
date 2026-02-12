@@ -54,6 +54,7 @@ pub mod registry;
 // Re-export main types for convenience
 pub use error::{AIProviderError, AIProviderResult};
 pub use provider::{
-    AIProvider, AnalyzeImageRequest, AnalyzeImageResponse, HealthStatus, ModelInfo, TokenUsage,
+    AIProvider, AnalyzeImageRequest, AnalyzeImageResponse, ConfiguredModelInfo, HealthStatus,
+    ModelInfo, TokenUsage,
 };
 pub use registry::ProviderRegistry;

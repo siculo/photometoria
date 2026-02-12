@@ -99,6 +99,16 @@ impl AIProvider for OllamaProvider {
         self.configured_models.keys().cloned().collect()
     }
 
+    fn configured_model_details(&self) -> Vec<super::super::provider::ConfiguredModelInfo> {
+        self.configured_models
+            .iter()
+            .map(|(id, config)| super::super::provider::ConfiguredModelInfo {
+                id: id.clone(),
+                description: config.description.clone(),
+            })
+            .collect()
+    }
+
     async fn check_health(&self) -> AIProviderResult<HealthStatus> {
         let url = self.api_url("/api/tags");
 
