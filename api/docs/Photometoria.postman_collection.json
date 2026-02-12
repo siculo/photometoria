@@ -919,7 +919,7 @@
 								"{{job_id}}"
 							]
 						},
-						"description": "Returns detailed information about a specific job, including progress when in `processing` status.\n\nThe `progress` field is only present when `status` is `processing`."
+						"description": "Returns detailed information about a specific job, including progress when in `processing` status.\n\n- `started_at` is set as soon as a worker picks up the first photo (before AI analysis begins); omitted while `queued`\n- `completed_at` is set when the job reaches a terminal state; omitted until then\n- `progress` is only present when `status` is `processing`; `current_photo_id` within `progress` may be omitted between photos"
 					},
 					"response": [
 						{
@@ -977,6 +977,62 @@
 								}
 							],
 							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"processing\",\n    \"model\": \"qwen3-vl:8b\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"progress\": {\n        \"completed\": 5,\n        \"failed\": 1,\n        \"remaining\": 9,\n        \"current_photo_id\": \"550e8400-e29b-41d4-a716-446655440003\"\n    }\n}"
+						},
+						{
+							"name": "Success (completed)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"completed\",\n    \"model\": \"qwen3-vl:8b\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:45:00Z\"\n}"
+						},
+						{
+							"name": "Success (cancelled)",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"jobs",
+										"{{job_id}}"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl:8b\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:40:00Z\"\n}"
 						},
 						{
 							"name": "Not Found",
