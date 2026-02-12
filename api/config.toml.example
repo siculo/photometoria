@@ -54,6 +54,11 @@ default_provider = "ollama"
 [ai.providers.ollama]
 type = "ollama"
 base_url = "http://localhost:11434"
+# Timeout for a single AI analysis request, in seconds.
+# Set this to accommodate the slowest model on the slowest GPU in your setup.
+# Larger models (e.g. qwen2-vl:8b) and lower-VRAM cards need more time.
+# If you see timeout errors, increase this value and use the retry endpoint
+# to reprocess the failed photos.
 timeout_seconds = 120
 # GPU devices to use (empty = auto-detect)
 devices = []

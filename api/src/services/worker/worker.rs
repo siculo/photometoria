@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use tokio::sync::Mutex;
-use tracing::{debug, info};
-
-use super::processor::PhotoProcessor;
+use tracing::{debug, error, info};
+use crate::services::worker::ProcessingResult;
+use super::processor::{Outcome, PhotoProcessor};
 use super::queue::{PhotoBuffer, QueuedPhoto};
 
 /// Worker executes photo processing with a hybrid threshold scheduling strategy.
@@ -121,12 +121,41 @@ impl Worker {
                         model = %photo.model,
                         "Dequeued photo"
                     );
-                    self.processor.process(photo).await;
+                    let processing_result = self.processor.process(photo).await;
+                    self.log_processing_result(processing_result);
                 }
                 None => {
                     debug!(worker_id = self.id, "Buffer empty, waiting");
                     tokio::time::sleep(self.idle_sleep).await;
                 }
+            }
+        }
+    }
+
+    fn log_processing_result(&self, processing_result: ProcessingResult) {
+        match processing_result.outcome {
+            Outcome::Success { .. } => {
+                info!(
+                    worker_id = self.id,
+                    photo_id = %processing_result.photo_id,
+                    "Photo analysis completed successfully",
+                );
+            }
+            Outcome::SuccessWithPersistenceError { error, .. } => {
+                error!(
+                    worker_id = self.id,
+                    photo_id = %processing_result.photo_id,
+                    error = %error,
+                    "Photo analysis succeeded but job state could not be persisted",
+                );
+            }
+            Outcome::AnalysisFailed { error } => {
+                error!(
+                    worker_id = self.id,
+                    photo_id = %processing_result.photo_id,
+                    error = %error,
+                    "Photo analysis failed",
+                );
             }
         }
     }
