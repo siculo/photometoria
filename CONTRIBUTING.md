@@ -9,7 +9,7 @@ This document provides coding guidelines for contributing the Photometoria proje
 - **Python Scripts** - AI model testing and prototyping
 - **Future Lightroom Plugin** (Lua) - Desktop integration
 
-**Current Status:** Early development (v0.1.0) - API skeleton only, Python scripts functional
+**Current Status:** Early development (v0.1.0) - Core API functional (Ollama client, Worker Pool, Job endpoints, Models endpoint implemented)
 
 ## Build, Test, and Lint Commands
 
@@ -124,8 +124,9 @@ pub fn load_image(path: &Path) -> Result<Image> {
 
 #### Documentation
 - Document public APIs with `///` doc comments
-- Include examples in doc comments for complex functions
-- Use `//` for implementation notes
+- Use `//!` for module-level doc comments
+- No inline comments inside function bodies — code should be self-explanatory
+- Exception: complex algorithms or necessary workarounds that cannot be made obvious
 
 ### Python
 
@@ -206,14 +207,14 @@ git commit -m "Fixes bug"             # Not descriptive
 - **Modular Design:** Code is organized into modules: `config`, `handlers`, `models`, `routes`, `services`
 - **Abstraction Layers:** Planned for future database/storage evolution (currently in-memory)
 - **Async-First:** Use Tokio runtime for all I/O operations
-- **Future SSE:** Server-Sent Events will be used for real-time job updates
-- **Worker Pool:** GPU management system planned (not yet implemented)
+- **SSE:** Server-Sent Events for real-time job updates (🚧 in development, #11)
+- **Worker Pool:** GPU management system implemented (`src/services/worker/`)
 
 ## Important Context
 
 - **Hardware:** Development on Linux with 2 NVIDIA GPUs (RTX 3060Ti + GTX 1080)
 - **AI Backend:** Ollama for local model inference (qwen3-vl:8b is production model)
-- **License:** Proprietary (Copyright 2026 Fabrizio Di Giuseppe)
+- **License:** Apache License 2.0 (Copyright 2026 Fabrizio Di Giuseppe)
 - **Documentation First:** Maintain comprehensive README.md files in each directory
 
 ## When Making Changes
@@ -227,18 +228,21 @@ git commit -m "Fixes bug"             # Not descriptive
    cargo fmt && cargo clippy && cargo test
    ```
 6. **Keep commits atomic** - one logical change per commit
-7. **Never commit tool-specific config** (CLAUDE.md, .cursor/, etc. - see .gitignore)
+7. **Never commit tool-specific config** (.cursor/, IDE settings, etc. - see .gitignore)
 
 ## Testing Philosophy
 
-- **Integration Tests:** Test HTTP request/response cycles using Tower's `ServiceExt::oneshot`
+- **Handler Tests (primary layer):** Business logic, error handling, and custom validations tested directly in `src/handlers/{module}.rs` — not via HTTP
+- **Router Tests:** Smoke tests only — do NOT duplicate handler logic here
 - **Real Data:** Python scripts use actual photos from `scripts/test_images/`
 - **Comprehensive Coverage:** Test both success and error paths
 - **Async Testing:** All Rust tests must handle async properly with `#[tokio::test]`
+
+📖 Full testing guidelines: `api/docs/development.md` → Testing section
 
 ## References
 
 - Main docs: `README.md` (project overview)
 - API docs: `api/README.md` (comprehensive API specification)
 - Test images: `scripts/test_images/README.md` (copyright notice)
-- License: `LICENSE` (proprietary terms)
+- License: `LICENSE` (Apache License 2.0)
