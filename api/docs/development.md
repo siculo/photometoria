@@ -373,6 +373,54 @@ cargo fmt --check
 cargo fmt
 ```
 
+## Coding Style
+
+### General Principles
+
+- **Clarity > micro-optimizations** — prefer understandable code even if slightly less efficient
+- **Separate execution paths** — clearly divide logical branches (early returns, well-structured `match`)
+- **Short functions** — extract functional units into dedicated methods for readability
+- **DRY** — extract reusable helpers for patterns that repeat across the codebase
+
+### References vs Cloning
+
+Prefer borrowing over cloning. Only clone when ownership transfer is genuinely needed.
+
+```rust
+// Avoid
+fn process(data: MyStruct) { ... }
+let result = process(data.clone());
+
+// Prefer
+fn process(data: &MyStruct) { ... }
+let result = process(&data);
+```
+
+### Comments
+
+- `///` doc comments on all public functions and types
+- `//!` module-level doc comments
+- No inline comments inside function bodies — code should be self-explanatory
+- Exception: complex algorithms or necessary workarounds that cannot be made obvious
+
+**Example:**
+
+```rust
+/// Calculates the total size of photos in a task.
+/// Returns None if the task contains no photos.
+fn calculate_task_size(photos: &[Photo]) -> Option<u64> {
+    if photos.is_empty() {
+        return None;
+    }
+
+    let total = photos.iter()
+        .map(|p| p.file_size)
+        .sum();
+
+    Some(total)
+}
+```
+
 ## Key Learnings
 
 ### Model Performance

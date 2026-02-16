@@ -10,7 +10,7 @@ The project consists of:
 
 - **REST API** : Backend service that orchestrates image analysis using local AI models (Ollama)
 - **Lightroom Plugin** : Lua extension for Adobe Lightroom Classic that allows photographers to send images to the API and receive generated metadata directly in their catalog
-- **Support Scripts** : Python tools for testing and validating AI models
+- **Testing Scripts** : Python tools for testing and validating AI models
 
 The main goal is to automate the photographic keywording process, drastically reducing the time required to catalog images while maintaining high quality and precision in the generated metadata.
 
@@ -19,10 +19,19 @@ The main goal is to automate the photographic keywording process, drastically re
 **Current Version:** 0.1.0 (Early Development)
 
 - ✅ Python testing scripts functional
-- 🚧 REST API server (Rust/Axum) - in development
-- 📋 Lightroom Plugin (Lua) - planned
+- ✅ Ollama service client implemented
+- ✅ Worker pool for job processing implemented
+- ✅ Job endpoints implemented (CRUD, retry, cancel)
+- ✅ Models endpoint implemented (`GET /api/models`)
+- 🚧 SSE streaming for job progress (#11)
+- 🚧 Input validations (#13)
+- 🚧 Configuration system (#5-6)
+- 🚧 CLI subcommands (#15)
+- 📋 Lightroom Plugin (Lua) - planned (#12)
+- 📋 Integration tests expansion (#14)
+- 📋 Storage enhancements (#16-18)
 
-The project is in active development. The API specification is complete, and implementation is underway.
+The project is in active development. Core API functionality is implemented and functional.
 
 ## Getting Started
 
@@ -45,26 +54,26 @@ The project is in active development. The API specification is complete, and imp
 
 ```bash
 # Install Ollama (see https://ollama.ai)
-   ollama serve
+ollama serve
 
-   # Pull recommended model
-   ollama pull qwen3-vl:8b
+# Pull recommended model
+ollama pull qwen3-vl:8b
 ```
 
-1. **Test with Python scripts:**
+2. **Test with Python scripts:**
 
 ```bash
 cd scripts
-   pip install -r requirements.txt
-   python3 test_models.py
+pip install -r requirements.txt
+python3 test_models.py
 ```
 
-1. **Build and run API (when ready):**
+3. **Build and run API:**
 
 ```bash
 cd api
-   cargo build --release
-   cargo run --release
+cargo build --release
+cargo run --release
 ```
 
 ## Documentation
