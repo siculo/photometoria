@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 use std::sync::Arc;
 
 use axum::Json;

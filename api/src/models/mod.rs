@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! Data models for the Photometoria REST API
 //!
 //! This module contains all data structures (entities and DTOs) used throughout

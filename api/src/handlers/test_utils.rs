@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! Test utilities for handler tests
 //!
 //! This module provides common test setup functions and types used across

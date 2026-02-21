@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! AI provider trait and common types.
 
 use async_trait::async_trait;

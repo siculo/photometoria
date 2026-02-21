@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! Task data model and related DTOs
 //!
 //! This module defines the Task entity and all related Data Transfer Objects (DTOs)

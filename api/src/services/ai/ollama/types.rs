@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! Ollama API types.
 //!
 //! These types map to the Ollama REST API responses and requests.

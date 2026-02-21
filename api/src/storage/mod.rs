@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! Storage abstractions for data persistence
 //!
 //! This module provides trait-based abstractions for storing tasks, photos, and jobs.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
 use crate::handlers::tasks::{check_no_active_jobs, get_existing_task};

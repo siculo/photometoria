@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! Filesystem layout abstraction for storage paths
 //!
 //! This module provides a centralized definition of the filesystem directory structure

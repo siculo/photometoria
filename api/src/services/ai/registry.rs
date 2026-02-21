@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! AI provider registry.
 //!
 //! The registry manages multiple AI providers and provides a unified

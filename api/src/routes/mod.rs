@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 use crate::app_state::AppState;
 use crate::handlers::jobs::{
     cancel_job, create_job, delete_job, get_job, get_job_results, list_jobs, retry_job,

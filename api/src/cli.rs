@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 use std::path::PathBuf;
 
 const DEFAULT_CONFIG_PATH: &str = "config.toml";

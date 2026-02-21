@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! Filesystem-backed implementation of JobStore
 //!
 //! This module provides a thread-safe implementation of the JobStore trait

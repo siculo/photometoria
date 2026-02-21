@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 //! Photo storage abstraction layer
 //!
 //! This module provides trait-based abstraction for photo persistence,

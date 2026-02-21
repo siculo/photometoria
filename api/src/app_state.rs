@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
 use crate::services::worker::WorkerPool;

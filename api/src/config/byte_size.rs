@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+
 use serde::{Deserialize, Deserializer};
 use std::fmt;
 use std::str::FromStr;
