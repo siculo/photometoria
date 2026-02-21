@@ -87,6 +87,37 @@ let result = process(&data);
 - ❌ **NO comments in method body** → Code should be self-explanatory
 - ✅ Exception: Complex algorithms or necessary workarounds
 
+### File Headers (SPDX)
+
+**REQUIRED:** All source files MUST include SPDX headers at the top.
+
+- **License:** Apache-2.0
+- **Copyright holder:** The Photometoria contributors
+- **When to add:** Newly created files OR existing files missing headers
+
+**Comment syntax by file type:**
+```rust
+// Rust (.rs)
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 The Photometoria contributors
+```
+
+```python
+# Python (.py), TOML (.toml), Shell scripts (.sh)
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Photometoria contributors
+```
+
+```lua
+-- Lua (.lua)
+-- SPDX-License-Identifier: Apache-2.0
+-- SPDX-FileCopyrightText: 2026 The Photometoria contributors
+```
+
+**Special cases:**
+- Python files with shebang: Place shebang first, then SPDX headers
+- Always include blank line after SPDX headers before code
+
 ### Preferred Example
 ```rust
 /// Calculates the total size of photos in a task.
