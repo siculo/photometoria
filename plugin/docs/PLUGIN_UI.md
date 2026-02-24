@@ -1,201 +1,201 @@
-# Photometoria – Interfaccia Plugin Lightroom Classic
+# Photometoria – Lightroom Classic Plugin Interface
 
-## Panoramica
+## Overview
 
-Il plugin si articola in tre finestre principali (modeless dialog) più due finestre modali di sistema usate per le operazioni distruttive. La navigazione tra le finestre principali segue un flusso naturale: si parte dal Setup Server, si entra nella gestione dei Task, e da lì si può aprire la finestra di aggiunta foto. Le modali appaiono in risposta ad azioni specifiche dell'utente senza abbandonare il contesto corrente.
+The plugin consists of three main windows (modeless dialogs) plus two system modal dialogs used for destructive operations. Navigation between main windows follows a natural flow: starting from Server Setup, moving to Task management, and from there opening the photo addition window. Modals appear in response to specific user actions without leaving the current context.
 
 ```
-Setup Server → Task (master-detail) → [modale] Crea Job
-                                     → [modale] Conferma Eliminazione Task
-                                     → [modale] Conferma Annullamento Job
+Setup Server → Task (master-detail) → [modal] Create Job
+                                     → [modal] Confirm Task Deletion
+                                     → [modal] Confirm Job Cancellation
                     ↘
-                  Aggiunta Foto
+                  Add Photos
 ```
 
 ---
 
-## Finestra 1 – Setup Server
+## Window 1 – Server Setup
 
-Punto di ingresso del plugin. Permette di configurare l'indirizzo del server e visualizzarne lo stato.
+The plugin's entry point. Allows configuring the server address and viewing its status.
 
-### Sezione Connessione
+### Connection Section
 
-Un campo di testo libero raccoglie host e porta del server nel formato `host:porta` (es. `192.168.1.50:8080`). Il valore viene salvato nelle preferenze di Lightroom tra una sessione e l'altra.
+A free-text field collects the server host and port in the format `host:port` (e.g. `192.168.1.50:8080`). The value is saved in Lightroom preferences between sessions.
 
-Affiancato al campo compare un pulsante **Verifica**. Il pulsante rimane disabilitato finché il campo è vuoto; si abilita non appena viene digitato qualcosa.
+Next to the field a **Verify** button appears. The button remains disabled while the field is empty; it becomes enabled as soon as something is typed.
 
-Al click su Verifica il plugin tenta una connessione al server. Durante l'attesa compare una pill di stato "Verifica…". L'esito produce due comportamenti distinti:
+When Verify is clicked the plugin attempts a connection to the server. While waiting, a "Verifying…" status pill appears. The outcome produces two distinct behaviors:
 
-- **Connessione riuscita**: pill verde "Online", la sezione Dettagli Server appare sotto, i pulsanti Salva e "Vai ai Task" si abilitano.
-- **Connessione fallita**: pill rossa "Non raggiungibile", i dettagli rimangono nascosti, Salva e "Vai ai Task" restano disabilitati.
+- **Successful connection**: green "Online" pill, the Server Details section appears below, the Save and "Go to Tasks" buttons become enabled.
+- **Failed connection**: red "Unreachable" pill, the details remain hidden, Save and "Go to Tasks" stay disabled.
 
-Se l'utente modifica il campo host dopo una verifica andata a buon fine, lo stato si azzera e i dettagli si nascondono di nuovo, richiedendo una nuova verifica. Questo evita che vengano salvate configurazioni non più valide.
+If the user modifies the host field after a successful verification, the state resets and the details are hidden again, requiring a new verification. This prevents saving configurations that are no longer valid.
 
-### Sezione Dettagli Server
+### Server Details Section
 
-Visibile solo dopo una verifica con esito positivo. Mostra le informazioni restituite dal server:
+Visible only after a successful verification. Shows information returned by the server:
 
-- **Spazio allocato**: barra orizzontale con etichette numeriche (GB allocati su GB totali).
-- **Spazio utilizzato dalle foto**: seconda barra che mostra l'occupazione reale dei dati caricati.
-- **Provider disponibili**: lista dei provider configurati sul server, mostrati come chip testuali.
-- **Provider di default**: evidenziato con colore accentuato tra i chip dei provider.
-- **Versione server**, **numero di task attivi**, **job in coda**: valori testuali.
+- **Allocated storage**: horizontal bar with numerical labels (allocated GB out of total GB).
+- **Storage used by photos**: second bar showing the actual usage of uploaded data.
+- **Available providers**: list of providers configured on the server, shown as text chips.
+- **Default provider**: highlighted with accent color among the provider chips.
+- **Server version**, **number of active tasks**, **queued jobs**: text values.
 
-### Pulsanti
+### Buttons
 
-- **Annulla**: chiude senza salvare.
-- **Vai ai Task**: porta alla finestra Task (abilitato solo dopo verifica riuscita).
-- **Salva**: salva l'host nelle preferenze (abilitato solo dopo verifica riuscita).
-
----
-
-## Finestra 2 – Task
-
-Finestra principale del plugin. Raccoglie in un unico pannello la lista dei task (colonna sinistra) e il dettaglio del task selezionato (colonna destra), seguendo il pattern master-detail.
-
-### Colonna sinistra – Lista Task
-
-Ogni elemento della lista mostra il nome del task, un sommario sintetico (numero di foto e peso in GB) e una pill colorata che indica lo stato corrente:
-
-| Stato | Significato |
-|-------|-------------|
-| Arancione "Attivo" | Almeno un job in corso |
-| Verde "Completato" | Tutti i job terminati con successo |
-| Rosso "Errori" | Job terminati con foto fallite |
-
-La selezione di un task aggiorna immediatamente il pannello di destra senza navigazione aggiuntiva.
-
-In cima alla colonna si trova il pulsante **+ Aggiungi foto**, che apre la finestra Aggiunta Foto. In fondo alla colonna:
-
-- **Mostra in Libreria**: seleziona nel catalogo Lightroom le foto appartenenti al task selezionato.
-- **Elimina**: rimuove il task e tutti i suoi dati dal server. Disabilitato se il task ha job attivi; in quel caso un testo esplicativo informa l'utente del motivo. Il click apre la modale di conferma (vedi sotto).
-
-### Colonna destra – Dettaglio Task
-
-Divisa internamente in due parti affiancate.
-
-**Parte sinistra – Contesto**
-
-Un'area di testo modificabile a tutta altezza contiene la descrizione del task, cioè le informazioni di contesto che il modello utilizzerà durante l'analisi delle foto (luogo, evento, periodo, stile, ecc.).
-
-I pulsanti **Salva** e **Annulla** compaiono in fondo al campo solo quando il testo viene modificato, scompaiono dopo il salvataggio o l'annullamento. Annulla ripristina il testo salvato in precedenza.
-
-**Parte destra – Job**
-
-Lista dei job del task selezionato. Per ogni job è visibile:
-
-- Provider e modello usato (es. `Ollama · qwen2-vl:8b`).
-- Avanzamento: barra di progresso con contatore foto e stima del tempo rimanente per i job in corso; oppure riepilogo finale (foto totali, tempo impiegato, eventuali errori) per i job terminati.
-- Pill di stato: In corso (arancione), Completato (verde), Con errori (rosso), Annullato (grigio).
-
-In fondo alla colonna job si trovano i pulsanti di azione, abilitati dinamicamente in base al job selezionato:
-
-| Pulsante | Condizione di attivazione |
-|----------|--------------------------|
-| Riprova Fallite | Job terminato con almeno una foto fallita |
-| Applica Tag alle Foto | Job terminato con successo |
-| Annulla Job | Job in stato "In corso" |
-| + Nuovo Job | Sempre disponibile |
+- **Cancel**: closes without saving.
+- **Go to Tasks**: navigates to the Task window (enabled only after successful verification).
+- **Save**: saves the host in preferences (enabled only after successful verification).
 
 ---
 
-## Finestra 3 – Aggiunta Foto
+## Window 2 – Tasks
 
-Aperta tramite il pulsante "+ Aggiungi foto" nella finestra Task. Guida l'utente nella scelta di quali foto aggiungere e a quale task destinarle.
+The plugin's main window. Combines the task list (left column) and the details of the selected task (right column) in a single panel, following the master-detail pattern.
 
-### Scelta delle foto
+### Left Column – Task List
 
-Due opzioni radio:
+Each list item shows the task name, a brief summary (number of photos and size in GB) and a colored pill indicating the current status:
 
-- **Solo selezionate** (default, disponibile solo se esiste una selezione attiva nel catalogo): aggiunge solo le foto selezionate in Lightroom al momento dell'apertura.
-- **Tutte**: aggiunge tutte le foto del catalogo o della collezione attiva.
+| Status | Meaning |
+|--------|---------|
+| Orange "Active" | At least one job in progress |
+| Green "Completed" | All jobs finished successfully |
+| Red "Errors" | Jobs finished with failed photos |
 
-Sotto le opzioni, un riquadro di riepilogo aggiornato in tempo reale mostra il numero di foto che verrebbero aggiunte e il peso stimato.
+Selecting a task immediately updates the right panel without additional navigation.
 
-### Scelta della destinazione
+At the top of the column is the **+ Add photos** button, which opens the Add Photos window. At the bottom of the column:
 
-Due opzioni radio alternative:
+- **Show in Library**: selects in the Lightroom catalog the photos belonging to the selected task.
+- **Delete**: removes the task and all its data from the server. Disabled if the task has active jobs; in that case an explanatory text informs the user of the reason. The click opens the confirmation modal (see below).
 
-**Nuovo task**: mostra due campi:
-- *Nome* (obbligatorio): identificatore del task nel plugin.
-- *Contesto* (facoltativo): descrizione delle foto per orientare il modello.
+### Right Column – Task Detail
 
-Un'annotazione informativa ricorda che un contesto ben compilato migliora la qualità dei tag generati.
+Divided internally into two side-by-side parts.
 
-**Task esistente**: mostra un menu a tendina con i task presenti sul server e un riquadro di riepilogo che mostra il numero di foto già presenti nel task selezionato e la stima dopo l'aggiunta.
+**Left part – Context**
 
-### Pulsanti
+A full-height editable text area contains the task description, i.e. the context information the model will use during photo analysis (location, event, period, style, etc.).
 
-- **Annulla**: chiude senza fare nulla.
-- **Conferma e Vai al Task**: crea il task (se nuovo) o aggiunge le foto al task esistente, poi porta direttamente alla finestra Task con il task interessato già selezionato. Rimane disabilitato finché si è in modalità "Nuovo task" e il campo Nome è vuoto.
+The **Save** and **Cancel** buttons appear at the bottom of the field only when the text is modified, and disappear after saving or cancelling. Cancel restores the previously saved text.
 
----
+**Right part – Jobs**
 
-## Modale – Crea Job
+List of jobs for the selected task. For each job the following is visible:
 
-Aperta tramite il pulsante "+ Nuovo Job" nella finestra Task.
+- Provider and model used (e.g. `Ollama · qwen2-vl:8b`).
+- Progress: progress bar with photo counter and estimated remaining time for running jobs; or final summary (total photos, time taken, any errors) for completed jobs.
+- Status pill: In progress (orange), Completed (green), With errors (red), Cancelled (grey).
 
-### Scelta del modello
+At the bottom of the job column are the action buttons, dynamically enabled based on the selected job:
 
-Due menu a tendina in cascata: il primo seleziona il provider, il secondo mostra i modelli disponibili per quel provider (la lista si aggiorna dinamicamente al cambio di provider).
-
-Per i provider cloud (es. OpenAI, Anthropic) compare una riga informativa che riporta la stima del costo per l'analisi dell'intero batch di foto, calcolata prima dell'avvio.
-
-### Opzioni
-
-Una checkbox permette di attivare l'**applicazione automatica dei tag** al termine del job: se selezionata, al completamento i tag vengono scritti nel campo Keywords di Lightroom senza richiedere ulteriori azioni da parte dell'utente.
-
-### Riepilogo
-
-Un pannello in fondo alla modale mostra, in sola lettura, un riassunto della configurazione prima di avviare: numero di foto, modello selezionato, stato dell'opzione di applicazione automatica.
-
-### Pulsanti
-
-- **Annulla**: chiude senza creare il job.
-- **▶ Avvia Job**: crea il job e lo mette in coda sul server.
+| Button | Activation condition |
+|--------|---------------------|
+| Retry Failed | Job completed with at least one failed photo |
+| Apply Tags to Photos | Job completed successfully |
+| Cancel Job | Job in "In progress" state |
+| + New Job | Always available |
 
 ---
 
-## Modale – Conferma Eliminazione Task
+## Window 3 – Add Photos
 
-Aperta dal pulsante Elimina nella finestra Task.
+Opened via the "+ Add photos" button in the Task window. Guides the user in choosing which photos to add and to which task.
 
-Mostra il nome del task che si sta per eliminare e i suoi dati sintetici (numero di foto, peso, numero di job). Un avviso rosso precisa che verranno eliminati dal server tutti i dati del task (job e foto caricate) e che le foto originali nel catalogo Lightroom non verranno toccate. L'operazione è irreversibile.
+### Photo selection
 
-**Pulsanti:**
-- **Annulla**: chiude senza eliminare.
-- **Elimina definitivamente**: procede con l'eliminazione.
+Two radio options:
 
-La modale si chiude anche cliccando fuori di essa.
+- **Selected only** (default, available only if an active selection exists in the catalog): adds only the photos selected in Lightroom at the time of opening.
+- **All**: adds all photos from the active catalog or collection.
 
----
+Below the options, a summary box updated in real time shows the number of photos that would be added and the estimated size.
 
-## Modale – Conferma Annullamento Job
+### Destination selection
 
-Aperta dal pulsante Annulla Job nella finestra Task.
+Two alternative radio options:
 
-Mostra il provider e il modello del job selezionato e il suo stato corrente. Un avviso ambra informa che il job si interromperà al termine dell'elaborazione della foto in corso e che i risultati parziali già ottenuti resteranno disponibili.
+**New task**: shows two fields:
+- *Name* (required): task identifier in the plugin.
+- *Context* (optional): description of the photos to orient the model.
 
-**Pulsanti:**
-- **Indietro**: chiude senza annullare (il termine "Indietro" è intenzionale per evitare ambiguità con "Annulla il job").
-- **Annulla il job**: procede con l'interruzione.
+An informational note reminds that a well-filled context improves the quality of the generated tags.
 
-La modale si chiude anche cliccando fuori di essa.
+**Existing task**: shows a dropdown menu with the tasks present on the server and a summary box showing the number of photos already in the selected task and the estimated count after addition.
 
----
+### Buttons
 
-## Note di progettazione
-
-**Pattern master-detail per la finestra Task.** La scelta di unire lista task e dettaglio in un'unica finestra deriva dall'osservazione che le due schermate separate erano troppo legate per vivere autonomamente: la navigazione avanti-indietro con il pulsante "Torna ai Task" era un segnale di accoppiamento eccessivo. Il pattern master-detail permette di vedere sempre il contesto completo senza cambiare schermata.
-
-**Conferme prima delle operazioni distruttive.** Sia l'eliminazione del task che l'annullamento del job richiedono una conferma esplicita tramite modale dedicata. Il testo dei pulsanti di conferma è deliberatamente descrittivo ("Elimina definitivamente", "Annulla il job") per ridurre il rischio di click accidentali. La modale di eliminazione usa il rosso, quella di annullamento job usa l'ambra, perché le conseguenze sono asimmetriche: l'eliminazione è irreversibile, l'annullamento lascia disponibili i risultati parziali.
-
-**Dettagli server condizionali.** Le informazioni sul server vengono mostrate solo dopo una verifica esplicita della connessione. Questo evita di mostrare dati potenzialmente non aggiornati e rende evidente all'utente quando la configurazione non è stata ancora validata.
-
-**Pulsante Conferma disabilitato senza nome task.** Nella finestra di aggiunta foto, il pulsante di conferma è disabilitato finché si è in modalità "Nuovo task" e il campo Nome è vuoto. Il campo Contesto non è bloccante perché può essere compilato in seguito dalla finestra Task.
-
-**Applicazione automatica dei tag come opt-in.** La checkbox nella creazione job è deselezionata di default: scrivere metadati nel catalogo Lightroom è un'azione significativa e l'utente potrebbe voler revisionare i risultati prima. Chi vuole il comportamento automatico può attivarlo esplicitamente.
+- **Cancel**: closes without doing anything.
+- **Confirm and Go to Task**: creates the task (if new) or adds the photos to the existing task, then navigates directly to the Task window with the relevant task already selected. Remains disabled while in "New task" mode and the Name field is empty.
 
 ---
 
-*Documento aggiornato in concomitanza con il prototipo `PLUGIN_UI_PROTOTYPE.html`.*
+## Modal – Create Job
+
+Opened via the "+ New Job" button in the Task window.
+
+### Model selection
+
+Two cascading dropdown menus: the first selects the provider, the second shows the available models for that provider (the list updates dynamically when the provider changes).
+
+For cloud providers (e.g. OpenAI, Anthropic) an informational row appears showing the estimated cost for analyzing the entire photo batch, calculated before starting.
+
+### Options
+
+A checkbox allows enabling **automatic tag application** at the end of the job: if selected, upon completion the tags are written to the Lightroom Keywords field without requiring further user action.
+
+### Summary
+
+A panel at the bottom of the modal shows, in read-only form, a summary of the configuration before starting: number of photos, selected model, status of the auto-apply option.
+
+### Buttons
+
+- **Cancel**: closes without creating the job.
+- **▶ Start Job**: creates the job and queues it on the server.
+
+---
+
+## Modal – Confirm Task Deletion
+
+Opened from the Delete button in the Task window.
+
+Shows the name of the task about to be deleted and its summary data (number of photos, size, number of jobs). A red warning states that all task data will be deleted from the server (jobs and uploaded photos) and that the original photos in the Lightroom catalog will not be affected. The operation is irreversible.
+
+**Buttons:**
+- **Cancel**: closes without deleting.
+- **Delete permanently**: proceeds with the deletion.
+
+The modal also closes when clicking outside it.
+
+---
+
+## Modal – Confirm Job Cancellation
+
+Opened from the Cancel Job button in the Task window.
+
+Shows the provider and model of the selected job and its current status. An amber warning informs that the job will be stopped after the current photo finishes processing and that partial results already obtained will remain available.
+
+**Buttons:**
+- **Back**: closes without cancelling (the term "Back" is intentional to avoid ambiguity with "Cancel the job").
+- **Cancel the job**: proceeds with the interruption.
+
+The modal also closes when clicking outside it.
+
+---
+
+## Design Notes
+
+**Master-detail pattern for the Task window.** The choice to combine the task list and detail in a single window stems from the observation that the two separate screens were too tightly coupled to live independently: the back-and-forth navigation with the "Back to Tasks" button was a signal of excessive coupling. The master-detail pattern allows always seeing the full context without changing screens.
+
+**Confirmations before destructive operations.** Both task deletion and job cancellation require explicit confirmation via a dedicated modal. The text of the confirmation buttons is deliberately descriptive ("Delete permanently", "Cancel the job") to reduce the risk of accidental clicks. The deletion modal uses red, the job cancellation modal uses amber, because the consequences are asymmetric: deletion is irreversible, cancellation leaves partial results available.
+
+**Conditional server details.** Server information is shown only after an explicit connection verification. This avoids showing potentially stale data and makes it clear to the user when the configuration has not yet been validated.
+
+**Confirm button disabled without task name.** In the add photos window, the confirm button is disabled while in "New task" mode and the Name field is empty. The Context field is not blocking because it can be filled in later from the Task window.
+
+**Automatic tag application as opt-in.** The checkbox in job creation is unchecked by default: writing metadata to the Lightroom catalog is a significant action and the user may want to review the results first. Those who want the automatic behavior can enable it explicitly.
+
+---
+
+*Document updated in conjunction with the `PLUGIN_UI_PROTOTYPE.html` prototype.*

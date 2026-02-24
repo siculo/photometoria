@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -524,9 +524,9 @@
 </head>
 <body>
 
-<button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" aria-label="Cambia tema">
+<button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" aria-label="Toggle theme">
   <div class="toggle-track" id="toggle-track"><div class="toggle-thumb"></div></div>
-  <span id="theme-label">Tema chiaro</span>
+  <span id="theme-label">Light theme</span>
 </button>
 
 <div class="desktop">
@@ -534,8 +534,8 @@
   <!-- Navigation -->
   <div class="nav-bar">
     <button class="nav-btn active" onclick="showScreen('setup')">Setup Server</button>
-    <button class="nav-btn" onclick="showScreen('tasks')">Task</button>
-    <button class="nav-btn" onclick="showScreen('add-photos')">Aggiunta Foto</button>
+    <button class="nav-btn" onclick="showScreen('tasks')">Tasks</button>
+    <button class="nav-btn" onclick="showScreen('add-photos')">Add Photos</button>
   </div>
 
   <!-- ════════════════════════════════════════
@@ -550,11 +550,11 @@
 
       <!-- Server connection -->
       <div class="section">
-        <div class="section-title">Connessione</div>
+        <div class="section-title">Connection</div>
         <div class="field-row">
-          <span class="field-label">Host : Porta</span>
-          <input class="field-input" id="server-host" style="font-family:var(--mono)" value="" placeholder="es. 192.168.1.50:8080" oninput="onHostChange()">
-          <button class="btn btn-default" id="btn-verify" onclick="verifyConnection()" style="flex-shrink:0; padding:5px 12px; font-size:11px" disabled>Verifica</button>
+          <span class="field-label">Host : Port</span>
+          <input class="field-input" id="server-host" style="font-family:var(--mono)" value="" placeholder="e.g. 192.168.1.50:8080" oninput="onHostChange()">
+          <button class="btn btn-default" id="btn-verify" onclick="verifyConnection()" style="flex-shrink:0; padding:5px 12px; font-size:11px" disabled>Verify</button>
         </div>
         <div class="field-row" style="margin-top:2px" id="conn-status-row">
           <span class="field-label"></span>
@@ -563,27 +563,27 @@
         </div>
       </div>
 
-      <!-- Server details — visibili solo dopo verifica OK -->
+      <!-- Server details — visible only after successful verification -->
       <div id="server-details" style="display:none">
         <div class="section">
-          <div class="section-title">Dettagli Server</div>
+          <div class="section-title">Server Details</div>
 
           <div class="storage-bar-wrap" style="margin-bottom:14px">
             <div class="storage-bar-labels">
-              <span>Spazio allocato</span>
+              <span>Allocated storage</span>
               <span>62.4 GB / 100 GB</span>
             </div>
             <div class="storage-bar"><div class="storage-bar-fill warn" style="width:62.4%"></div></div>
             <div class="storage-bar-labels" style="margin-top:8px">
-              <span>Spazio utilizzato (foto)</span>
+              <span>Used storage (photos)</span>
               <span>23.5 GB / 100 GB</span>
             </div>
             <div class="storage-bar"><div class="storage-bar-fill small" style="width:23.5%"></div></div>
-            <div class="help-text" style="margin-top:4px">62.4 GB allocati • 23.5 GB effettivamente usati da foto • 76.5 GB disponibili</div>
+            <div class="help-text" style="margin-top:4px">62.4 GB allocated • 23.5 GB actually used by photos • 76.5 GB available</div>
           </div>
 
           <div class="field-row">
-            <span class="field-label">Provider</span>
+            <span class="field-label">Providers</span>
             <div class="chip-row">
               <span class="chip">Ollama</span>
               <span class="chip">LocalAI</span>
@@ -597,15 +597,15 @@
             </div>
           </div>
           <div class="field-row" style="margin-top:8px">
-            <span class="field-label">Versione</span>
+            <span class="field-label">Version</span>
             <span style="font-family:var(--mono);font-size:11px;color:var(--text2)">v0.3.1</span>
           </div>
           <div class="field-row" style="margin-top:6px">
-            <span class="field-label">Task attivi</span>
+            <span class="field-label">Active tasks</span>
             <span style="font-family:var(--mono);font-size:11px;color:var(--text0)">2</span>
           </div>
           <div class="field-row">
-            <span class="field-label">Job in coda</span>
+            <span class="field-label">Queued jobs</span>
             <span style="font-family:var(--mono);font-size:11px;color:var(--accent)">1</span>
           </div>
         </div>
@@ -613,71 +613,71 @@
 
     </div>
     <div class="btn-row right">
-      <button class="btn btn-ghost">Annulla</button>
-      <button class="btn btn-default" id="btn-goto-tasks" onclick="showScreen('tasks')" disabled>Vai ai Task →</button>
-      <button class="btn btn-primary" id="btn-save-server" disabled>Salva</button>
+      <button class="btn btn-ghost">Cancel</button>
+      <button class="btn btn-default" id="btn-goto-tasks" onclick="showScreen('tasks')" disabled>Go to Tasks →</button>
+      <button class="btn btn-primary" id="btn-save-server" disabled>Save</button>
     </div>
   </div>
 
   <!-- ════════════════════════════════════════
-       SCREEN 2 – TASK + DETTAGLIO (master-detail)
+       SCREEN 2 – TASKS (master-detail)
   ════════════════════════════════════════ -->
   <div class="dialog" id="screen-tasks" style="display:none; flex-direction:column">
     <div class="dialog-titlebar">
       <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-      <span>Photometoria – Task</span>
+      <span>Photometoria – Tasks</span>
     </div>
 
     <!-- Master-detail body -->
     <div style="flex:1; display:flex; flex-direction:row; overflow:hidden; min-height:380px">
 
-      <!-- ── LEFT: lista task ── -->
+      <!-- ── LEFT: task list ── -->
       <div style="width:240px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0">
         <div style="padding:10px 14px 6px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
-          <div class="section-title" style="margin:0">Task</div>
-          <button class="btn btn-primary" style="padding:3px 10px; font-size:10px" onclick="showScreen('add-photos')">+ Aggiungi foto</button>
+          <div class="section-title" style="margin:0">Tasks</div>
+          <button class="btn btn-primary" style="padding:3px 10px; font-size:10px" onclick="showScreen('add-photos')">+ Add photos</button>
         </div>
         <div style="flex:1; overflow-y:auto">
           <div class="list" style="border:none; border-radius:0">
             <div class="list-item selected" id="task-item-1" onclick="selectTask(1)">
               <div>
-                <div class="list-item-name">Vacanze Islanda 2024</div>
-                <div class="list-item-sub">72 foto · 1.8 GB</div>
+                <div class="list-item-name">Iceland Vacation 2024</div>
+                <div class="list-item-sub">72 photos · 1.8 GB</div>
               </div>
-              <span class="pill running">Attivo</span>
+              <span class="pill running">Active</span>
             </div>
             <div class="list-item" id="task-item-2" onclick="selectTask(2)">
               <div>
-                <div class="list-item-name">Workshop Milano – Marzo</div>
-                <div class="list-item-sub">148 foto · 3.2 GB</div>
+                <div class="list-item-name">Milan Workshop – March</div>
+                <div class="list-item-sub">148 photos · 3.2 GB</div>
               </div>
-              <span class="pill done">Fatto</span>
+              <span class="pill done">Done</span>
             </div>
             <div class="list-item" id="task-item-3" onclick="selectTask(3)">
               <div>
-                <div class="list-item-name">Ritratti Studio Q1</div>
-                <div class="list-item-sub">31 foto · 0.7 GB</div>
+                <div class="list-item-name">Studio Portraits Q1</div>
+                <div class="list-item-sub">31 photos · 0.7 GB</div>
               </div>
-              <span class="pill error">Errori</span>
+              <span class="pill error">Errors</span>
             </div>
           </div>
         </div>
         <!-- Bottom actions -->
         <div style="padding:10px 12px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:6px">
-          <button class="btn btn-ghost" style="width:100%; font-size:11px" onclick="alert('Mostra in Libreria')">Mostra in Libreria</button>
+          <button class="btn btn-ghost" style="width:100%; font-size:11px" onclick="alert('Show in Library')">Show in Library</button>
           <div style="display:flex; gap:6px">
-            <button class="btn btn-danger" id="btn-delete-task" onclick="openDeleteModal()" disabled style="flex:1; font-size:11px">Elimina</button>
+            <button class="btn btn-danger" id="btn-delete-task" onclick="openDeleteModal()" disabled style="flex:1; font-size:11px">Delete</button>
           </div>
-          <span class="help-text" id="delete-help" style="margin:0; display:none">Task con job attivo — non eliminabile</span>
+          <span class="help-text" id="delete-help" style="margin:0; display:none">Task with active job — cannot delete</span>
         </div>
       </div>
 
-      <!-- ── RIGHT: dettaglio task ── -->
+      <!-- ── RIGHT: task detail ── -->
       <div style="flex:1; display:flex; flex-direction:column; min-width:0">
 
         <!-- empty state -->
         <div id="detail-empty" style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:12px; display:none">
-          Seleziona un task dalla lista
+          Select a task from the list
         </div>
 
         <!-- detail content -->
@@ -685,25 +685,25 @@
 
           <!-- Task name header -->
           <div style="padding:10px 16px 8px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
-            <div id="detail-task-name" style="font-size:13px; font-weight:600; color:var(--text0)">Vacanze Islanda 2024</div>
+            <div id="detail-task-name" style="font-size:13px; font-weight:600; color:var(--text0)">Iceland Vacation 2024</div>
             <div id="detail-task-badge"></div>
           </div>
 
-          <!-- Two-col: contesto | job -->
+          <!-- Two-col: context | jobs -->
           <div style="flex:1; display:flex; flex-direction:row; overflow:hidden; min-height:0">
 
-            <!-- Contesto -->
+            <!-- Context -->
             <div style="width:260px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0">
               <div style="padding:8px 14px 5px; border-bottom:1px solid var(--border)">
-                <div class="section-title" style="margin:0">Contesto</div>
+                <div class="section-title" style="margin:0">Context</div>
               </div>
               <div style="flex:1; display:flex; flex-direction:column; padding:10px 14px; gap:6px">
                 <textarea class="field-input" id="task-context-field"
                   style="flex:1; resize:none; min-height:0"
-                >Viaggio in Islanda, agosto 2024. Paesaggi vulcanici, aurora boreale, cascate e piccoli villaggi di pescatori lungo la costa sud.</textarea>
+                >Trip to Iceland, August 2024. Volcanic landscapes, northern lights, waterfalls and small fishing villages along the south coast.</textarea>
                 <div class="inline-actions" id="context-actions" style="display:none">
-                  <button class="btn-xs cancel" onclick="cancelContextEdit()">Annulla</button>
-                  <button class="btn-xs save" onclick="saveContextEdit()">Salva</button>
+                  <button class="btn-xs cancel" onclick="cancelContextEdit()">Cancel</button>
+                  <button class="btn-xs save" onclick="saveContextEdit()">Save</button>
                 </div>
               </div>
             </div>
@@ -711,7 +711,7 @@
             <!-- Job list -->
             <div style="flex:1; display:flex; flex-direction:column; min-width:0">
               <div style="padding:8px 14px 5px; border-bottom:1px solid var(--border)">
-                <div class="section-title" style="margin:0">Job</div>
+                <div class="section-title" style="margin:0">Jobs</div>
               </div>
               <div style="flex:1; overflow-y:auto">
                 <div class="list" style="border:none; border-radius:0">
@@ -720,33 +720,33 @@
                       <div class="list-item-name">Ollama · qwen2-vl:8b</div>
                       <div class="progress-wrap">
                         <div class="progress-bar"><div class="progress-fill" style="width:44%"></div></div>
-                        <div class="progress-text">32 / 72 foto · ~18 min rimanenti</div>
+                        <div class="progress-text">32 / 72 photos · ~18 min remaining</div>
                       </div>
                     </div>
-                    <span class="pill running" style="flex-shrink:0">In corso</span>
+                    <span class="pill running" style="flex-shrink:0">In progress</span>
                   </div>
                   <div class="list-item" id="job-item-2" onclick="selectJob(2)">
                     <div style="flex:1;min-width:0">
                       <div class="list-item-name">Ollama · llava:latest</div>
-                      <div class="list-item-sub">72 / 72 foto · completato in 41 min</div>
+                      <div class="list-item-sub">72 / 72 photos · completed in 41 min</div>
                     </div>
-                    <span class="pill done" style="flex-shrink:0">Completato</span>
+                    <span class="pill done" style="flex-shrink:0">Completed</span>
                   </div>
                   <div class="list-item" id="job-item-3" onclick="selectJob(3)">
                     <div style="flex:1;min-width:0">
                       <div class="list-item-name">OpenAI · gpt-4o</div>
-                      <div class="list-item-sub">58 / 72 foto · 14 fallite</div>
+                      <div class="list-item-sub">58 / 72 photos · 14 failed</div>
                     </div>
-                    <span class="pill error" style="flex-shrink:0">Con errori</span>
+                    <span class="pill error" style="flex-shrink:0">With errors</span>
                   </div>
                 </div>
               </div>
               <!-- Job actions -->
               <div style="padding:8px 12px; border-top:1px solid var(--border); background:var(--bg0); display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end">
-                <button class="btn btn-default" id="btn-retry-job" disabled style="font-size:11px">Riprova Fallite</button>
-                <button class="btn btn-default" id="btn-apply-tags" disabled style="font-size:11px">Applica Tag</button>
-                <button class="btn btn-danger" id="btn-cancel-job" onclick="openCancelJobModal()" style="font-size:11px">Annulla Job</button>
-                <button class="btn btn-primary" onclick="openJobModal()" style="font-size:11px">+ Nuovo Job</button>
+                <button class="btn btn-default" id="btn-retry-job" disabled style="font-size:11px">Retry Failed</button>
+                <button class="btn btn-default" id="btn-apply-tags" disabled style="font-size:11px">Apply Tags</button>
+                <button class="btn btn-danger" id="btn-cancel-job" onclick="openCancelJobModal()" style="font-size:11px">Cancel Job</button>
+                <button class="btn btn-primary" onclick="openJobModal()" style="font-size:11px">+ New Job</button>
               </div>
             </div>
 
@@ -758,12 +758,12 @@
   </div>
 
   <!-- ════════════════════════════════════════
-       SCREEN 4 – ADD PHOTOS
+       SCREEN 3 – ADD PHOTOS
   ════════════════════════════════════════ -->
   <div class="dialog" id="screen-add-photos" style="display:none">
     <div class="dialog-titlebar">
       <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-      <span>Aggiunta Foto al Task</span>
+      <span>Add Photos to Task</span>
     </div>
     <div class="dialog-body">
 
@@ -772,32 +772,32 @@
         <div class="col-left">
 
           <div class="section">
-            <div class="section-title">Foto da aggiungere</div>
+            <div class="section-title">Photos to add</div>
             <div class="radio-group">
               <div class="radio-row selected" onclick="selectPhotoChoice(this, 'selected')">
                 <div class="radio-dot"><div class="radio-dot-inner"></div></div>
-                <span class="radio-label">Solo selezionate</span>
+                <span class="radio-label">Selected only</span>
               </div>
               <div class="radio-row" onclick="selectPhotoChoice(this, 'all')">
                 <div class="radio-dot"><div class="radio-dot-inner"></div></div>
-                <span class="radio-label">Tutte</span>
+                <span class="radio-label">All</span>
               </div>
             </div>
             <div class="summary-box" style="margin-top:8px">
-              <strong id="photo-count">47</strong> foto selezionate · <strong id="photo-size">1.2 GB</strong> stimati
+              <strong id="photo-count">47</strong> photos selected · <strong id="photo-size">1.2 GB</strong> estimated
             </div>
           </div>
 
           <div class="section">
-            <div class="section-title">Destinazione</div>
+            <div class="section-title">Destination</div>
             <div class="radio-group">
               <div class="radio-row selected" onclick="selectTaskChoice(this, 'new')" id="radio-new-task">
                 <div class="radio-dot"><div class="radio-dot-inner"></div></div>
-                <span class="radio-label">Nuovo task</span>
+                <span class="radio-label">New task</span>
               </div>
               <div class="radio-row" onclick="selectTaskChoice(this, 'existing')" id="radio-existing-task">
                 <div class="radio-dot"><div class="radio-dot-inner"></div></div>
-                <span class="radio-label">Task esistente</span>
+                <span class="radio-label">Existing task</span>
               </div>
             </div>
           </div>
@@ -809,34 +809,34 @@
 
           <!-- New task form -->
           <div class="section cond-section visible" id="new-task-form">
-            <div class="section-title">Nuovo Task</div>
+            <div class="section-title">New Task</div>
             <div class="field-row">
-              <span class="field-label">Nome</span>
-              <input class="field-input" id="new-task-name" placeholder="es. Estate Toscana 2025" value="" oninput="checkConfirmBtn()">
+              <span class="field-label">Name</span>
+              <input class="field-input" id="new-task-name" placeholder="e.g. Tuscany Summer 2025" value="" oninput="checkConfirmBtn()">
             </div>
             <div class="field-row" style="align-items:flex-start">
-              <span class="field-label" style="padding-top:5px">Contesto</span>
-              <textarea class="field-input" rows="4" placeholder="Descrivi le foto: luogo, evento, periodo, stile…"></textarea>
+              <span class="field-label" style="padding-top:5px">Context</span>
+              <textarea class="field-input" rows="4" placeholder="Describe the photos: location, event, period, style…"></textarea>
             </div>
-            <div class="info-row">Il contesto aiuta il modello a generare tag più precisi e contestualizzati.</div>
+            <div class="info-row">Context helps the model generate more precise and contextual tags.</div>
           </div>
 
           <!-- Existing task picker -->
           <div class="section cond-section" id="existing-task-form">
-            <div class="section-title">Scegli Task Esistente</div>
+            <div class="section-title">Choose Existing Task</div>
             <div class="field-row">
               <span class="field-label">Task</span>
               <select class="field-input">
-                <option>Vacanze Islanda 2024</option>
-                <option>Workshop Milano – Marzo</option>
-                <option>Ritratti Studio Q1</option>
+                <option>Iceland Vacation 2024</option>
+                <option>Milan Workshop – March</option>
+                <option>Studio Portraits Q1</option>
               </select>
             </div>
             <div class="summary-box" style="margin-top:10px">
-              Task selezionato:<br>
-              <strong>Vacanze Islanda 2024</strong><br>
-              72 foto già presenti · 1.8 GB occupati<br>
-              <span style="color:var(--text2)">Dopo aggiunta: ~119 foto · ~3.0 GB stimati</span>
+              Selected task:<br>
+              <strong>Iceland Vacation 2024</strong><br>
+              72 photos already present · 1.8 GB used<br>
+              <span style="color:var(--text2)">After adding: ~119 photos · ~3.0 GB estimated</span>
             </div>
           </div>
 
@@ -845,13 +845,13 @@
 
     </div>
     <div class="btn-row right">
-      <button class="btn btn-ghost">Annulla</button>
-      <button class="btn btn-primary" id="btn-confirm-add" onclick="showScreen('tasks')" disabled>Conferma e Vai al Task →</button>
+      <button class="btn btn-ghost">Cancel</button>
+      <button class="btn btn-primary" id="btn-confirm-add" onclick="showScreen('tasks')" disabled>Confirm and Go to Task →</button>
     </div>
   </div>
 
   <!-- ════════════════════════════════════════
-       MODAL – CREA JOB
+       MODAL – CREATE JOB
   ════════════════════════════════════════ -->
   <div id="modal-overlay" style="
     display:none; position:fixed; inset:0;
@@ -861,13 +861,13 @@
     <div class="dialog visible" style="width:420px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
       <div class="dialog-titlebar">
         <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-        <span>Nuovo Job – Vacanze Islanda 2024</span>
+        <span>New Job – Iceland Vacation 2024</span>
       </div>
       <div class="dialog-body">
 
-        <!-- Provider / Modello -->
+        <!-- Provider / Model -->
         <div class="section">
-          <div class="section-title">Modello</div>
+          <div class="section-title">Model</div>
           <div class="field-row">
             <span class="field-label">Provider</span>
             <select class="field-input" id="job-provider" onchange="updateModelList()">
@@ -877,19 +877,19 @@
             </select>
           </div>
           <div class="field-row">
-            <span class="field-label">Modello</span>
+            <span class="field-label">Model</span>
             <select class="field-input" id="job-model"></select>
           </div>
 
-          <!-- Info costo (visibile solo per provider cloud) -->
+          <!-- Cost info (visible only for cloud providers) -->
           <div class="info-row" id="cost-warning" style="display:none">
-            Stima costo: <strong id="cost-estimate" style="margin-left:4px;color:var(--yellow)">~€ 0.72</strong> per 72 foto
+            Estimated cost: <strong id="cost-estimate" style="margin-left:4px;color:var(--yellow)">~€ 0.72</strong> for 72 photos
           </div>
         </div>
 
-        <!-- Opzioni -->
+        <!-- Options -->
         <div class="section">
-          <div class="section-title">Opzioni</div>
+          <div class="section-title">Options</div>
           <div style="display:flex; align-items:center; gap:10px; padding:4px 0; cursor:pointer" onclick="toggleAutoApply(this)">
             <div id="checkbox-auto" style="
               width:16px; height:16px; border-radius:3px;
@@ -898,40 +898,40 @@
               display:flex; align-items:center; justify-content:center;
               transition:all .15s;
             "></div>
-            <span style="font-size:12px; color:var(--text1)">Applica tag alle foto automaticamente al termine</span>
+            <span style="font-size:12px; color:var(--text1)">Automatically apply tags to photos when done</span>
           </div>
           <div class="help-text" style="padding-left:26px; margin-top:2px">
-            Scrive i tag nel campo Keywords di Lightroom non appena il job è completato.
+            Writes tags to the Lightroom Keywords field as soon as the job is completed.
           </div>
         </div>
 
-        <!-- Sommario -->
+        <!-- Summary -->
         <div class="section" style="background:var(--bg0)">
           <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text2)">
-            <span>Foto da processare</span>
-            <span style="font-family:var(--mono); color:var(--text0)">72 foto</span>
+            <span>Photos to process</span>
+            <span style="font-family:var(--mono); color:var(--text0)">72 photos</span>
           </div>
           <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text2); margin-top:5px">
-            <span>Modello selezionato</span>
+            <span>Selected model</span>
             <span id="summary-model" style="font-family:var(--mono); color:var(--text0)">qwen2-vl:8b</span>
           </div>
           <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text2); margin-top:5px">
-            <span>Applica tag automatico</span>
+            <span>Auto-apply tags</span>
             <span id="summary-autoapply" style="font-family:var(--mono); color:var(--text0)">No</span>
           </div>
         </div>
 
       </div>
       <div class="btn-row right">
-        <button class="btn btn-ghost" onclick="closeJobModal()">Annulla</button>
-        <button class="btn btn-primary" onclick="closeJobModal(); selectJob(1)">▶ Avvia Job</button>
+        <button class="btn btn-ghost" onclick="closeJobModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="closeJobModal(); selectJob(1)">▶ Start Job</button>
       </div>
     </div>
   </div>
 
 
   <!-- ════════════════════════════════════════
-       MODAL – CONFERMA ELIMINAZIONE TASK
+       MODAL – CONFIRM TASK DELETION
   ════════════════════════════════════════ -->
   <div id="delete-modal-overlay" style="
     display:none; position:fixed; inset:0;
@@ -941,12 +941,12 @@
     <div class="dialog visible" style="width:380px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
       <div class="dialog-titlebar">
         <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-        <span>Conferma eliminazione</span>
+        <span>Confirm deletion</span>
       </div>
       <div class="dialog-body">
         <div class="section">
           <div style="font-size:12px; color:var(--text1); line-height:1.6; margin-bottom:10px">
-            Stai per eliminare il task:
+            You are about to delete the task:
           </div>
           <div style="
             background:var(--bg0); border:1px solid var(--border);
@@ -961,20 +961,20 @@
             border-radius:3px; font-size:10px; color:var(--red); line-height:1.5;
           ">
             <span style="font-size:14px; flex-shrink:0">⚠</span>
-            <span>Verranno eliminati dal server tutti i dati del task: job e foto caricate. Le foto originali in Lightroom non verranno toccate. L'operazione è irreversibile.</span>
+            <span>All task data will be deleted from the server: jobs and uploaded photos. Original photos in Lightroom will not be affected. This operation is irreversible.</span>
           </div>
         </div>
       </div>
       <div class="btn-row right">
-        <button class="btn btn-ghost" onclick="closeDeleteModal()">Annulla</button>
-        <button class="btn btn-danger" onclick="confirmDeleteTask()" style="background:var(--red);color:#fff;border-color:var(--red)">Elimina definitivamente</button>
+        <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmDeleteTask()" style="background:var(--red);color:#fff;border-color:var(--red)">Delete permanently</button>
       </div>
     </div>
   </div>
 
 
   <!-- ════════════════════════════════════════
-       MODAL – CONFERMA ANNULLAMENTO JOB
+       MODAL – CONFIRM JOB CANCELLATION
   ════════════════════════════════════════ -->
   <div id="cancel-job-modal-overlay" style="
     display:none; position:fixed; inset:0;
@@ -984,12 +984,12 @@
     <div class="dialog visible" style="width:380px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
       <div class="dialog-titlebar">
         <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-        <span>Conferma annullamento job</span>
+        <span>Confirm job cancellation</span>
       </div>
       <div class="dialog-body">
         <div class="section">
           <div style="font-size:12px; color:var(--text1); line-height:1.6; margin-bottom:10px">
-            Stai per annullare il job:
+            You are about to cancel the job:
           </div>
           <div style="
             background:var(--bg0); border:1px solid var(--border);
@@ -1004,13 +1004,13 @@
             border-radius:3px; font-size:10px; color:var(--accent); line-height:1.5;
           ">
             <span style="font-size:14px; flex-shrink:0">⚠</span>
-            <span>Il job verrà interrotto al termine della foto in elaborazione. I risultati parziali già ottenuti resteranno disponibili.</span>
+            <span>The job will be stopped after the current photo finishes processing. Partial results already obtained will remain available.</span>
           </div>
         </div>
       </div>
       <div class="btn-row right">
-        <button class="btn btn-ghost" onclick="closeCancelJobModal()">Indietro</button>
-        <button class="btn btn-danger" onclick="confirmCancelJob()">Annulla il job</button>
+        <button class="btn btn-ghost" onclick="closeCancelJobModal()">Back</button>
+        <button class="btn btn-danger" onclick="confirmCancelJob()">Cancel the job</button>
       </div>
     </div>
   </div>
@@ -1046,25 +1046,25 @@
     if (idx >= 0) document.querySelectorAll('.nav-btn')[idx].classList.add('active');
   }
 
-  // ── Task selection (screen 2) ─────────────────────
+  // ── Task selection ────────────────────────────────
   const taskData = {
     1: {
-      name: 'Vacanze Islanda 2024',
-      desc: 'Viaggio in Islanda, agosto 2024. Paesaggi vulcanici, aurora boreale, cascate e piccoli villaggi di pescatori lungo la costa sud.',
+      name: 'Iceland Vacation 2024',
+      desc: 'Trip to Iceland, August 2024. Volcanic landscapes, northern lights, waterfalls and small fishing villages along the south coast.',
       hasActiveJob: true,
-      badge: '<span class="pill running">Job attivo</span>'
+      badge: '<span class="pill running">Active job</span>'
     },
     2: {
-      name: 'Workshop Milano – Marzo',
-      desc: 'Workshop fotografico a Milano, marzo 2025. Sessioni di ritratto in studio e shooting urbano nel centro storico.',
+      name: 'Milan Workshop – March',
+      desc: 'Photography workshop in Milan, March 2025. Studio portrait sessions and urban shooting in the historic city center.',
       hasActiveJob: false,
-      badge: '<span class="pill done">Completato</span>'
+      badge: '<span class="pill done">Completed</span>'
     },
     3: {
-      name: 'Ritratti Studio Q1',
-      desc: 'Sessioni ritratto primo trimestre 2025. Studio con sfondo bianco e nero, luce naturale + flash.',
+      name: 'Studio Portraits Q1',
+      desc: 'Portrait sessions Q1 2025. Studio with white and black backgrounds, natural light + flash.',
       hasActiveJob: false,
-      badge: '<span class="pill error">Con errori</span>'
+      badge: '<span class="pill error">With errors</span>'
     }
   };
 
@@ -1093,7 +1093,7 @@
     selectJob(1);
   }
 
-  // ── Job selection (screen 3) ──────────────────────
+  // ── Job selection ─────────────────────────────────
   const jobData = {
     1: { canRetry: false, canApply: false, canCancel: true },
     2: { canRetry: false, canApply: true,  canCancel: false },
@@ -1116,7 +1116,7 @@
   // init job button state
   selectJob(1);
 
-  // ── Context edit (screen 3) ───────────────────────
+  // ── Context edit ──────────────────────────────────
   const textarea = document.getElementById('task-context-field');
   const actions  = document.getElementById('context-actions');
 
@@ -1163,7 +1163,7 @@
     document.getElementById('btn-confirm-add').disabled = isNew && name.length === 0;
   }
 
-  // ── Crea Job modal ────────────────────────────────
+  // ── Create Job modal ──────────────────────────────
   const modelsByProvider = {
     ollama:    ['qwen2-vl:8b', 'llava:latest'],
     openai:    ['gpt-4o', 'gpt-4-vision-preview'],
@@ -1222,7 +1222,7 @@
       box.style.borderColor = 'var(--border-light)';
       box.innerHTML = '';
     }
-    document.getElementById('summary-autoapply').textContent = autoApply ? 'Sì' : 'No';
+    document.getElementById('summary-autoapply').textContent = autoApply ? 'Yes' : 'No';
   }
 
   document.getElementById('modal-overlay').addEventListener('click', function(e) {
@@ -1231,7 +1231,7 @@
 
   updateModelList();
 
-  // ── Setup Server – verifica connessione ──────────
+  // ── Setup Server – verify connection ──────────────
   const VALID_HOST = '192.168.1.50:8080';
 
   function onHostChange() {
@@ -1251,14 +1251,14 @@
       pill.className = ''; pill.textContent = '';
       text.textContent = '';
     } else if (state === 'checking') {
-      pill.className = 'pill queued'; pill.textContent = 'Verifica…';
+      pill.className = 'pill queued'; pill.textContent = 'Verifying…';
       text.textContent = '';
     } else if (state === 'ok') {
       pill.className = 'pill online'; pill.textContent = 'Online';
-      text.textContent = 'Connessione riuscita';
+      text.textContent = 'Connection successful';
     } else if (state === 'fail') {
-      pill.className = 'pill offline'; pill.textContent = 'Non raggiungibile';
-      text.textContent = 'Nessuna risposta dal server';
+      pill.className = 'pill offline'; pill.textContent = 'Unreachable';
+      text.textContent = 'No response from server';
     }
   }
 
@@ -1269,7 +1269,7 @@
     document.getElementById('btn-goto-tasks').disabled = true;
     document.getElementById('btn-save-server').disabled = true;
 
-    // Simula latenza di rete
+    // Simulate network latency
     setTimeout(() => {
       if (val === VALID_HOST) {
         setConnStatus('ok');
@@ -1283,11 +1283,11 @@
   }
 
 
-  // ── Elimina Task – conferma ───────────────────────
+  // ── Delete Task – confirmation ────────────────────
   const taskMeta = {
-    1: { name: 'Vacanze Islanda 2024',    meta: '72 foto · 1.8 GB · 1 job' },
-    2: { name: 'Workshop Milano – Marzo', meta: '148 foto · 3.2 GB · 3 job' },
-    3: { name: 'Ritratti Studio Q1',      meta: '31 foto · 0.7 GB · 2 job' },
+    1: { name: 'Iceland Vacation 2024',    meta: '72 photos · 1.8 GB · 1 job' },
+    2: { name: 'Milan Workshop – March',   meta: '148 photos · 3.2 GB · 3 jobs' },
+    3: { name: 'Studio Portraits Q1',      meta: '31 photos · 0.7 GB · 2 jobs' },
   };
 
   function openDeleteModal() {
@@ -1303,7 +1303,7 @@
 
   function confirmDeleteTask() {
     closeDeleteModal();
-    // Rimuove l'item dalla lista (simulazione)
+    // Remove item from list (simulation)
     const el = document.getElementById('task-item-' + selectedTask);
     if (el) {
       el.style.transition = 'opacity .3s';
@@ -1322,11 +1322,11 @@
   });
 
 
-  // ── Annulla Job – conferma ────────────────────────
+  // ── Cancel Job – confirmation ─────────────────────
   const jobInfo = {
-    1: { name: 'Ollama · qwen2-vl:8b',         meta: '32 / 72 foto elaborate · in corso' },
-    2: { name: 'Ollama · llava:latest',         meta: '72 / 72 foto · completato' },
-    3: { name: 'OpenAI · gpt-4o',              meta: '58 / 72 foto · 14 fallite' },
+    1: { name: 'Ollama · qwen2-vl:8b',         meta: '32 / 72 photos processed · in progress' },
+    2: { name: 'Ollama · llava:latest',         meta: '72 / 72 photos · completed' },
+    3: { name: 'OpenAI · gpt-4o',              meta: '58 / 72 photos · 14 failed' },
   };
 
 
@@ -1346,7 +1346,7 @@
     const el = document.getElementById('job-item-' + selectedJob);
     if (el) {
       el.querySelector('.pill').className = 'pill';
-      el.querySelector('.pill').textContent = 'Annullato';
+      el.querySelector('.pill').textContent = 'Cancelled';
       el.querySelector('.pill').style.cssText = 'background:rgba(80,80,80,.2);color:var(--text2);';
     }
     document.getElementById('btn-cancel-job').disabled = true;
@@ -1364,7 +1364,7 @@
     lightMode = !lightMode;
     document.body.classList.toggle('light', lightMode);
     document.getElementById('toggle-track').classList.toggle('on', lightMode);
-    document.getElementById('theme-label').textContent = lightMode ? 'Tema scuro' : 'Tema chiaro';
+    document.getElementById('theme-label').textContent = lightMode ? 'Dark theme' : 'Light theme';
   }
 
 </script>
