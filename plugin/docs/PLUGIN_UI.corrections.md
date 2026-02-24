@@ -2,11 +2,12 @@
 
 ## Menu
 
-The tabs at the top should be replaced with a menu providing access to three windows corresponding to the current "setup server", "task", and "add photos" panels. The menu can be presented as a simple list of items.
+The tabs at the top should be replaced with a menu providing access to three windows corresponding to the current "setup server", "task", and "add photos" panels. The menu can be presented as a simple list of items arranged vertically.
 
 The windows are initially closed and are opened when the corresponding menu item is selected.
 
 The menu items are:
+
 - Photomemoria Setup
 - Task
 - Add Photos

@@ -38,11 +38,52 @@
     font-size: 13px;
     color: var(--text0);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     min-height: 100vh;
-    padding: 30px;
+    padding: 60px 30px 30px;
+    gap: 20px;
   }
+
+  /* ── MENU ────────────────────────────────────── */
+  .menu {
+    width: 180px;
+    background: var(--bg1);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-top: 40px;
+  }
+  .menu-title {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 6px 8px 4px;
+  }
+  .menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    color: var(--text1);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 3px;
+    text-align: left;
+    transition: all .15s;
+  }
+  .menu-item:hover:not(:disabled) { background: var(--bg3); color: var(--text0); }
+  .menu-item.active { background: var(--accent-glow); color: var(--accent); border-left: 2px solid var(--accent); padding-left: 8px; }
+  .menu-item:disabled { opacity: 0.3; cursor: not-allowed; }
 
   /* ── DESKTOP SHELL ─────────────────────────────── */
   .desktop {
@@ -50,34 +91,6 @@
     width: 900px;
     min-height: 600px;
   }
-
-  /* ── NAVIGATION BAR ────────────────────────────── */
-  .nav-bar {
-    display: flex;
-    gap: 2px;
-    margin-bottom: 12px;
-    background: var(--bg1);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 4px;
-  }
-  .nav-btn {
-    flex: 1;
-    padding: 6px 12px;
-    border: none;
-    background: transparent;
-    color: var(--text2);
-    font-family: var(--sans);
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    cursor: pointer;
-    border-radius: 3px;
-    transition: all .15s;
-  }
-  .nav-btn:hover { background: var(--bg3); color: var(--text1); }
-  .nav-btn.active { background: var(--bg3); color: var(--accent); border: 1px solid var(--accent-dim); }
 
   /* ── DIALOG WINDOW ─────────────────────────────── */
   .dialog {
@@ -107,7 +120,25 @@
     width: 8px; height: 8px; border-radius: 50%;
     background: var(--bg4);
   }
-  .dialog-titlebar span { color: var(--text1); margin-left: 2px; }
+  .dialog-titlebar span { color: var(--text1); margin-left: 2px; flex: 1; }
+
+  .close-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text2);
+    font-size: 14px;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all .15s;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .close-btn:hover { background: var(--bg3); color: var(--text0); border-color: var(--border-light); }
 
   .dialog-body {
     padding: 0;
@@ -159,6 +190,7 @@
   }
   .field-input:focus { border-color: var(--accent-dim); }
   .field-input.readonly { color: var(--text2); }
+  .field-input.invalid { border-color: var(--red); }
   textarea.field-input { resize: vertical; min-height: 52px; line-height: 1.5; }
 
   /* ── STATUS PILL ───────────────────────────────── */
@@ -190,6 +222,8 @@
   .pill.error::before { background: var(--red); }
   .pill.queued { background: rgba(90,159,212,.12); color: var(--blue); }
   .pill.queued::before { background: var(--blue); }
+  .pill.cancelled { background: rgba(80,80,80,.2); color: var(--text2); }
+  .pill.cancelled::before { background: var(--text2); }
   @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
 
   /* ── STORAGE BAR ───────────────────────────────── */
@@ -448,6 +482,15 @@
   .list-scroll::-webkit-scrollbar-track { background: var(--bg0); }
   .list-scroll::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
 
+  /* ── VALIDATION MESSAGE ────────────────────────── */
+  .validation-msg {
+    font-size: 10px;
+    color: var(--red);
+    margin-top: 2px;
+    display: none;
+  }
+  .validation-msg.visible { display: block; }
+
   /* ── LIGHT THEME ───────────────────────────────── */
   body.light {
     background: #d0d0d0;
@@ -529,22 +572,24 @@
   <span id="theme-label">Light theme</span>
 </button>
 
+<!-- ── VERTICAL MENU ──────────────────────────── -->
+<div class="menu">
+  <div class="menu-title">Photometoria</div>
+  <button class="menu-item" id="menu-setup" onclick="openWindow('setup')">Photomemoria Setup</button>
+  <button class="menu-item" id="menu-tasks" onclick="openWindow('tasks')" disabled>Task</button>
+  <button class="menu-item" id="menu-add-photos" onclick="openWindow('add-photos')" disabled>Add Photos</button>
+</div>
+
 <div class="desktop">
 
-  <!-- Navigation -->
-  <div class="nav-bar">
-    <button class="nav-btn active" onclick="showScreen('setup')">Setup Server</button>
-    <button class="nav-btn" onclick="showScreen('tasks')">Tasks</button>
-    <button class="nav-btn" onclick="showScreen('add-photos')">Add Photos</button>
-  </div>
-
   <!-- ════════════════════════════════════════
-       SCREEN 1 – SETUP SERVER
+       WINDOW 1 – PHOTOMEMORIA SETUP
   ════════════════════════════════════════ -->
-  <div class="dialog visible" id="screen-setup">
+  <div class="dialog" id="screen-setup">
     <div class="dialog-titlebar">
       <div class="dot"></div><div class="dot"></div><div class="dot"></div>
       <span>Photometoria – Setup Server</span>
+      <button class="close-btn" onclick="closeWindow('setup')" title="Close">×</button>
     </div>
     <div class="dialog-body">
 
@@ -553,8 +598,11 @@
         <div class="section-title">Connection</div>
         <div class="field-row">
           <span class="field-label">Host : Port</span>
-          <input class="field-input" id="server-host" style="font-family:var(--mono)" value="" placeholder="e.g. 192.168.1.50:8080" oninput="onHostChange()">
-          <button class="btn btn-default" id="btn-verify" onclick="verifyConnection()" style="flex-shrink:0; padding:5px 12px; font-size:11px" disabled>Verify</button>
+          <input class="field-input" id="server-host" style="font-family:var(--mono)" value="" placeholder="e.g. 192.168.1.50:8080 or localhost:8080" oninput="onHostChange()">
+          <button class="btn btn-default" id="btn-connect" onclick="connectToServer()" style="flex-shrink:0; padding:5px 12px; font-size:11px" disabled>Connect</button>
+        </div>
+        <div id="host-validation-msg" class="validation-msg" style="margin-left:98px">
+          Invalid format. Use host:port (e.g. 192.168.1.50:8080 or localhost:8080)
         </div>
         <div class="field-row" style="margin-top:2px" id="conn-status-row">
           <span class="field-label"></span>
@@ -563,7 +611,7 @@
         </div>
       </div>
 
-      <!-- Server details — visible only after successful verification -->
+      <!-- Server details — visible only after successful connection -->
       <div id="server-details" style="display:none">
         <div class="section">
           <div class="section-title">Server Details</div>
@@ -613,19 +661,19 @@
 
     </div>
     <div class="btn-row right">
-      <button class="btn btn-ghost">Cancel</button>
-      <button class="btn btn-default" id="btn-goto-tasks" onclick="showScreen('tasks')" disabled>Go to Tasks →</button>
-      <button class="btn btn-primary" id="btn-save-server" disabled>Save</button>
+      <button class="btn btn-ghost" onclick="closeWindow('setup')">Cancel</button>
+      <button class="btn btn-primary" id="btn-save-server" onclick="saveAndCloseSetup()" disabled>Save</button>
     </div>
   </div>
 
   <!-- ════════════════════════════════════════
-       SCREEN 2 – TASKS (master-detail)
+       WINDOW 2 – TASKS (master-detail)
   ════════════════════════════════════════ -->
   <div class="dialog" id="screen-tasks" style="display:none; flex-direction:column">
     <div class="dialog-titlebar">
       <div class="dot"></div><div class="dot"></div><div class="dot"></div>
       <span>Photometoria – Tasks</span>
+      <button class="close-btn" onclick="closeWindow('tasks')" title="Close">×</button>
     </div>
 
     <!-- Master-detail body -->
@@ -635,10 +683,9 @@
       <div style="width:240px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0">
         <div style="padding:10px 14px 6px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
           <div class="section-title" style="margin:0">Tasks</div>
-          <button class="btn btn-primary" style="padding:3px 10px; font-size:10px" onclick="showScreen('add-photos')">+ Add photos</button>
         </div>
         <div style="flex:1; overflow-y:auto">
-          <div class="list" style="border:none; border-radius:0">
+          <div class="list" id="task-list" style="border:none; border-radius:0">
             <div class="list-item selected" id="task-item-1" onclick="selectTask(1)">
               <div>
                 <div class="list-item-name">Iceland Vacation 2024</div>
@@ -664,7 +711,7 @@
         </div>
         <!-- Bottom actions -->
         <div style="padding:10px 12px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:6px">
-          <button class="btn btn-ghost" style="width:100%; font-size:11px" onclick="alert('Show in Library')">Show in Library</button>
+          <button class="btn btn-ghost" style="width:100%; font-size:11px" onclick="showPhotosInLibrary()">Show Photos in Library</button>
           <div style="display:flex; gap:6px">
             <button class="btn btn-danger" id="btn-delete-task" onclick="openDeleteModal()" disabled style="flex:1; font-size:11px">Delete</button>
           </div>
@@ -714,37 +761,14 @@
                 <div class="section-title" style="margin:0">Jobs</div>
               </div>
               <div style="flex:1; overflow-y:auto">
-                <div class="list" style="border:none; border-radius:0">
-                  <div class="list-item selected" id="job-item-1" onclick="selectJob(1)">
-                    <div style="flex:1;min-width:0">
-                      <div class="list-item-name">Ollama · qwen2-vl:8b</div>
-                      <div class="progress-wrap">
-                        <div class="progress-bar"><div class="progress-fill" style="width:44%"></div></div>
-                        <div class="progress-text">32 / 72 photos · ~18 min remaining</div>
-                      </div>
-                    </div>
-                    <span class="pill running" style="flex-shrink:0">In progress</span>
-                  </div>
-                  <div class="list-item" id="job-item-2" onclick="selectJob(2)">
-                    <div style="flex:1;min-width:0">
-                      <div class="list-item-name">Ollama · llava:latest</div>
-                      <div class="list-item-sub">72 / 72 photos · completed in 41 min</div>
-                    </div>
-                    <span class="pill done" style="flex-shrink:0">Completed</span>
-                  </div>
-                  <div class="list-item" id="job-item-3" onclick="selectJob(3)">
-                    <div style="flex:1;min-width:0">
-                      <div class="list-item-name">OpenAI · gpt-4o</div>
-                      <div class="list-item-sub">58 / 72 photos · 14 failed</div>
-                    </div>
-                    <span class="pill error" style="flex-shrink:0">With errors</span>
-                  </div>
+                <div class="list" id="job-list" style="border:none; border-radius:0">
                 </div>
               </div>
               <!-- Job actions -->
               <div style="padding:8px 12px; border-top:1px solid var(--border); background:var(--bg0); display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end">
-                <button class="btn btn-default" id="btn-retry-job" disabled style="font-size:11px">Retry Failed</button>
-                <button class="btn btn-default" id="btn-apply-tags" disabled style="font-size:11px">Apply Tags</button>
+                <button class="btn btn-ghost" id="btn-remove-completed" onclick="removeCompletedJobs()" style="font-size:11px; margin-right:auto">Remove Completed</button>
+                <button class="btn btn-default" id="btn-retry-job" onclick="retryFailedJob()" disabled style="font-size:11px">Retry Failed</button>
+                <button class="btn btn-default" id="btn-apply-tags" onclick="applyTagsConfirm()" disabled style="font-size:11px">Apply Tags</button>
                 <button class="btn btn-danger" id="btn-cancel-job" onclick="openCancelJobModal()" style="font-size:11px">Cancel Job</button>
                 <button class="btn btn-primary" onclick="openJobModal()" style="font-size:11px">+ New Job</button>
               </div>
@@ -758,12 +782,13 @@
   </div>
 
   <!-- ════════════════════════════════════════
-       SCREEN 3 – ADD PHOTOS
+       WINDOW 3 – ADD PHOTOS
   ════════════════════════════════════════ -->
   <div class="dialog" id="screen-add-photos" style="display:none">
     <div class="dialog-titlebar">
       <div class="dot"></div><div class="dot"></div><div class="dot"></div>
       <span>Add Photos to Task</span>
+      <button class="close-btn" onclick="closeWindow('add-photos')" title="Close">×</button>
     </div>
     <div class="dialog-body">
 
@@ -816,7 +841,7 @@
             </div>
             <div class="field-row" style="align-items:flex-start">
               <span class="field-label" style="padding-top:5px">Context</span>
-              <textarea class="field-input" rows="4" placeholder="Describe the photos: location, event, period, style…"></textarea>
+              <textarea class="field-input" id="new-task-context" rows="4" placeholder="Describe the photos: location, event, period, style…"></textarea>
             </div>
             <div class="info-row">Context helps the model generate more precise and contextual tags.</div>
           </div>
@@ -845,8 +870,8 @@
 
     </div>
     <div class="btn-row right">
-      <button class="btn btn-ghost">Cancel</button>
-      <button class="btn btn-primary" id="btn-confirm-add" onclick="showScreen('tasks')" disabled>Confirm and Go to Task →</button>
+      <button class="btn btn-ghost" onclick="closeWindow('add-photos')">Cancel</button>
+      <button class="btn btn-primary" id="btn-confirm-add" onclick="confirmAddPhotos()" disabled>Confirm and Go to Task →</button>
     </div>
   </div>
 
@@ -924,7 +949,7 @@
       </div>
       <div class="btn-row right">
         <button class="btn btn-ghost" onclick="closeJobModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="closeJobModal(); selectJob(1)">▶ Start Job</button>
+        <button class="btn btn-primary" onclick="startNewJob()">▶ Start Job</button>
       </div>
     </div>
   </div>
@@ -1015,35 +1040,229 @@
     </div>
   </div>
 
+
+  <!-- ════════════════════════════════════════
+       MODAL – CONFIRM RETRY FAILED
+  ════════════════════════════════════════ -->
+  <div id="retry-modal-overlay" style="
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.65); backdrop-filter:blur(2px);
+    z-index:100; align-items:center; justify-content:center;
+  ">
+    <div class="dialog visible" style="width:380px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
+      <div class="dialog-titlebar">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Confirm retry</span>
+      </div>
+      <div class="dialog-body">
+        <div class="section">
+          <div style="font-size:12px; color:var(--text1); line-height:1.6; margin-bottom:10px">
+            A new job will be created to retry the failed photos from:
+          </div>
+          <div style="
+            background:var(--bg0); border:1px solid var(--border);
+            border-radius:3px; padding:10px 12px; margin-bottom:12px;
+          ">
+            <div style="font-size:13px; font-weight:600; color:var(--text0)" id="retry-job-name">—</div>
+            <div style="font-size:10px; color:var(--text2); font-family:var(--mono); margin-top:3px" id="retry-job-meta">—</div>
+          </div>
+          <div class="info-row">
+            The failed photos will be reprocessed using the same model and settings.
+          </div>
+        </div>
+      </div>
+      <div class="btn-row right">
+        <button class="btn btn-ghost" onclick="closeRetryModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmRetryFailed()">Retry Failed Photos</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════
+       MODAL – CONFIRM APPLY TAGS
+  ════════════════════════════════════════ -->
+  <div id="apply-tags-modal-overlay" style="
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.65); backdrop-filter:blur(2px);
+    z-index:100; align-items:center; justify-content:center;
+  ">
+    <div class="dialog visible" style="width:380px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
+      <div class="dialog-titlebar">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Confirm apply tags</span>
+      </div>
+      <div class="dialog-body">
+        <div class="section">
+          <div style="font-size:12px; color:var(--text1); line-height:1.6; margin-bottom:10px">
+            You are about to apply generated tags to photos in Lightroom from:
+          </div>
+          <div style="
+            background:var(--bg0); border:1px solid var(--border);
+            border-radius:3px; padding:10px 12px; margin-bottom:12px;
+          ">
+            <div style="font-size:13px; font-weight:600; color:var(--text0)" id="apply-job-name">—</div>
+            <div style="font-size:10px; color:var(--text2); font-family:var(--mono); margin-top:3px" id="apply-job-meta">—</div>
+          </div>
+          <div style="
+            display:flex; gap:8px; padding:8px 10px;
+            background:rgba(212,130,10,.08); border:1px solid rgba(212,130,10,.25);
+            border-radius:3px; font-size:10px; color:var(--accent); line-height:1.5;
+          ">
+            <span style="font-size:14px; flex-shrink:0">⚠</span>
+            <span>Tags will be written to the Lightroom Keywords field. This action will modify your catalog metadata.</span>
+          </div>
+        </div>
+      </div>
+      <div class="btn-row right">
+        <button class="btn btn-ghost" onclick="closeApplyTagsModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmApplyTags()">Apply Tags to Photos</button>
+      </div>
+    </div>
+  </div>
+
 </div><!-- /.desktop -->
 
 <script>
-  // ── Screen switching ──────────────────────────────
-  const screens = {
+  // ── State ──────────────────────────────────────
+  let serverConfigured = false;
+  let savedHost = '';
+  let connectedHost = '';
+  let nextJobId = 7;
+  let nextTaskId = 4;
+
+  // ── Window management (replaces screen switching) ──
+  const windowIds = {
     'setup':       'screen-setup',
     'tasks':       'screen-tasks',
     'add-photos':  'screen-add-photos',
   };
+  const menuIds = {
+    'setup':       'menu-setup',
+    'tasks':       'menu-tasks',
+    'add-photos':  'menu-add-photos',
+  };
+  const flexWindows = new Set(['tasks']);
 
-  // screens that need display:flex instead of display:block
-  const flexScreens = new Set(['tasks']);
-
-  function showScreen(key) {
-    Object.values(screens).forEach(id => {
-      const el = document.getElementById(id);
+  function openWindow(key) {
+    Object.keys(windowIds).forEach(k => {
+      const el = document.getElementById(windowIds[k]);
       el.classList.remove('visible');
       el.style.display = 'none';
+      document.getElementById(menuIds[k]).classList.remove('active');
     });
-    const target = document.getElementById(screens[key]);
-    target.style.display = flexScreens.has(key) ? 'flex' : 'block';
-    target.classList.add('visible');
 
-    document.querySelectorAll('.nav-btn').forEach((btn, i) => {
-      btn.classList.remove('active');
-    });
-    const labels = ['setup','tasks','add-photos'];
-    const idx = labels.indexOf(key);
-    if (idx >= 0) document.querySelectorAll('.nav-btn')[idx].classList.add('active');
+    const target = document.getElementById(windowIds[key]);
+    target.style.display = flexWindows.has(key) ? 'flex' : 'block';
+    target.classList.add('visible');
+    document.getElementById(menuIds[key]).classList.add('active');
+  }
+
+  function closeWindow(key) {
+    const el = document.getElementById(windowIds[key]);
+    el.classList.remove('visible');
+    el.style.display = 'none';
+    document.getElementById(menuIds[key]).classList.remove('active');
+  }
+
+  function enableMenuItems() {
+    document.getElementById('menu-tasks').disabled = false;
+    document.getElementById('menu-add-photos').disabled = false;
+  }
+
+  function disableMenuItems() {
+    document.getElementById('menu-tasks').disabled = true;
+    document.getElementById('menu-add-photos').disabled = true;
+  }
+
+  // ── Host:port validation ──────────────────────────
+  function isValidHostPort(value) {
+    const hostnamePattern = /^[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?)*:\d{1,5}$/;
+    const ipPattern = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}$/;
+    if (!hostnamePattern.test(value) && !ipPattern.test(value)) return false;
+    const port = parseInt(value.split(':').pop(), 10);
+    return port >= 1 && port <= 65535;
+  }
+
+  // ── Setup Server ──────────────────────────────────
+  const VALID_HOST = '192.168.1.50:8080';
+
+  function onHostChange() {
+    const val = document.getElementById('server-host').value.trim();
+    const validationMsg = document.getElementById('host-validation-msg');
+    const hostInput = document.getElementById('server-host');
+
+    if (val.length === 0) {
+      document.getElementById('btn-connect').disabled = true;
+      validationMsg.classList.remove('visible');
+      hostInput.classList.remove('invalid');
+    } else if (!isValidHostPort(val)) {
+      document.getElementById('btn-connect').disabled = true;
+      validationMsg.classList.add('visible');
+      hostInput.classList.add('invalid');
+    } else {
+      document.getElementById('btn-connect').disabled = false;
+      validationMsg.classList.remove('visible');
+      hostInput.classList.remove('invalid');
+    }
+
+    setConnStatus('idle');
+    document.getElementById('server-details').style.display = 'none';
+    connectedHost = '';
+    updateSaveButton();
+  }
+
+  function updateSaveButton() {
+    const isConnected = connectedHost.length > 0;
+    const isModified = connectedHost !== savedHost;
+    document.getElementById('btn-save-server').disabled = !(isConnected && isModified);
+  }
+
+  function setConnStatus(state) {
+    const pill = document.getElementById('conn-status-pill');
+    const text = document.getElementById('conn-status-text');
+    if (state === 'idle') {
+      pill.className = ''; pill.textContent = '';
+      text.textContent = '';
+    } else if (state === 'checking') {
+      pill.className = 'pill queued'; pill.textContent = 'Connecting…';
+      text.textContent = '';
+    } else if (state === 'ok') {
+      pill.className = 'pill online'; pill.textContent = 'Online';
+      text.textContent = 'Connection successful';
+    } else if (state === 'fail') {
+      pill.className = 'pill offline'; pill.textContent = 'Unreachable';
+      text.textContent = 'No response from server';
+    }
+  }
+
+  function connectToServer() {
+    const val = document.getElementById('server-host').value.trim();
+    setConnStatus('checking');
+    document.getElementById('server-details').style.display = 'none';
+    connectedHost = '';
+    updateSaveButton();
+
+    setTimeout(() => {
+      if (val === VALID_HOST) {
+        setConnStatus('ok');
+        document.getElementById('server-details').style.display = 'block';
+        connectedHost = val;
+        serverConfigured = true;
+        enableMenuItems();
+        updateSaveButton();
+      } else {
+        setConnStatus('fail');
+        connectedHost = '';
+        updateSaveButton();
+      }
+    }, 900);
+  }
+
+  function saveAndCloseSetup() {
+    savedHost = connectedHost;
+    updateSaveButton();
+    closeWindow('setup');
   }
 
   // ── Task selection ────────────────────────────────
@@ -1068,53 +1287,104 @@
     }
   };
 
+  const taskMeta = {
+    1: { name: 'Iceland Vacation 2024',    meta: '72 photos · 1.8 GB · 1 job' },
+    2: { name: 'Milan Workshop – March',   meta: '148 photos · 3.2 GB · 3 jobs' },
+    3: { name: 'Studio Portraits Q1',      meta: '31 photos · 0.7 GB · 2 jobs' },
+  };
+
   let selectedTask = 1;
 
   function selectTask(id) {
     selectedTask = id;
-    [1,2,3].forEach(i => {
-      document.getElementById('task-item-'+i).classList.toggle('selected', i === id);
+    document.querySelectorAll('#task-list .list-item').forEach(el => {
+      const elId = parseInt(el.id.replace('task-item-', ''), 10);
+      el.classList.toggle('selected', elId === id);
     });
     const t = taskData[id];
+    if (!t) return;
 
-    // populate detail panel
     document.getElementById('detail-task-name').textContent = t.name;
     document.getElementById('detail-task-badge').innerHTML = t.badge;
     document.getElementById('task-context-field').value = t.desc;
     document.getElementById('context-actions').style.display = 'none';
 
-    // delete button
     const btn = document.getElementById('btn-delete-task');
     const help = document.getElementById('delete-help');
     btn.disabled = t.hasActiveJob;
     help.style.display = t.hasActiveJob ? 'block' : 'none';
 
-    // reset job selection
-    selectJob(1);
+    renderJobList(id);
   }
 
-  // ── Job selection ─────────────────────────────────
+  // ── Job data (per task) ─────────────────────────────
   const jobData = {
-    1: { canRetry: false, canApply: false, canCancel: true },
-    2: { canRetry: false, canApply: true,  canCancel: false },
-    3: { canRetry: true,  canApply: false, canCancel: false },
+    1: { taskId: 1, canRetry: false, canApply: false, canCancel: true,  name: 'Ollama · qwen2-vl:8b',   meta: '32 / 72 photos processed · in progress', status: 'running', progress: 44, progressText: '32 / 72 photos · ~18 min remaining' },
+    2: { taskId: 1, canRetry: false, canApply: true,  canCancel: false, name: 'Ollama · llava:latest',   meta: '72 / 72 photos · completed in 41 min', status: 'done', progress: null, progressText: null },
+    3: { taskId: 1, canRetry: true,  canApply: false, canCancel: false, name: 'OpenAI · gpt-4o',         meta: '58 / 72 photos · 14 failed', status: 'error', progress: null, progressText: null },
+    4: { taskId: 2, canRetry: false, canApply: true,  canCancel: false, name: 'Ollama · qwen2-vl:8b',    meta: '148 / 148 photos · completed in 1h 12min', status: 'done', progress: null, progressText: null },
+    5: { taskId: 2, canRetry: false, canApply: true,  canCancel: false, name: 'Ollama · llava:latest',    meta: '148 / 148 photos · completed in 58 min', status: 'done', progress: null, progressText: null },
+    6: { taskId: 3, canRetry: true,  canApply: false, canCancel: false, name: 'Ollama · qwen2-vl:8b',    meta: '24 / 31 photos · 7 failed', status: 'error', progress: null, progressText: null },
   };
 
-  let selectedJob = 1;
+  let selectedJob = null;
+
+  function getJobsForTask(taskId) {
+    return Object.keys(jobData)
+      .map(Number)
+      .filter(id => jobData[id].taskId === taskId);
+  }
+
+  function renderJobList(taskId) {
+    const listEl = document.getElementById('job-list');
+    listEl.innerHTML = '';
+    const jobIds = getJobsForTask(taskId);
+
+    jobIds.forEach(id => {
+      const j = jobData[id];
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.id = 'job-item-' + id;
+      item.onclick = function() { selectJob(id); };
+
+      const pillClass = j.status === 'running' ? 'running' : j.status === 'done' ? 'done' : j.status === 'error' ? 'error' : 'cancelled';
+      const pillLabel = j.status === 'running' ? 'In progress' : j.status === 'done' ? 'Completed' : j.status === 'error' ? 'With errors' : 'Cancelled';
+
+      let contentHtml;
+      if (j.progress !== null) {
+        contentHtml = '<div style="flex:1;min-width:0"><div class="list-item-name">' + escapeHtml(j.name) + '</div><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:' + j.progress + '%"></div></div><div class="progress-text">' + escapeHtml(j.progressText) + '</div></div></div>';
+      } else {
+        contentHtml = '<div style="flex:1;min-width:0"><div class="list-item-name">' + escapeHtml(j.name) + '</div><div class="list-item-sub">' + escapeHtml(j.meta) + '</div></div>';
+      }
+
+      item.innerHTML = contentHtml + '<span class="pill ' + pillClass + '" style="flex-shrink:0">' + pillLabel + '</span>';
+      listEl.appendChild(item);
+    });
+
+    if (jobIds.length > 0) {
+      selectJob(jobIds[0]);
+    } else {
+      selectedJob = null;
+      document.getElementById('btn-retry-job').disabled = true;
+      document.getElementById('btn-apply-tags').disabled = true;
+      document.getElementById('btn-cancel-job').disabled = true;
+    }
+  }
 
   function selectJob(id) {
     selectedJob = id;
-    [1,2,3].forEach(i => {
-      document.getElementById('job-item-'+i).classList.toggle('selected', i === id);
+    document.querySelectorAll('#job-list .list-item').forEach(el => {
+      const elId = parseInt(el.id.replace('job-item-', ''), 10);
+      el.classList.toggle('selected', elId === id);
     });
     const j = jobData[id];
+    if (!j) return;
     document.getElementById('btn-retry-job').disabled = !j.canRetry;
     document.getElementById('btn-apply-tags').disabled = !j.canApply;
     document.getElementById('btn-cancel-job').disabled = !j.canCancel;
   }
 
-  // init job button state
-  selectJob(1);
+  renderJobList(1);
 
   // ── Context edit ──────────────────────────────────
   const textarea = document.getElementById('task-context-field');
@@ -1133,6 +1403,11 @@
   function saveContextEdit() {
     if (taskData[selectedTask]) taskData[selectedTask].desc = textarea.value;
     actions.style.display = 'none';
+  }
+
+  // ── Show Photos in Library ─────────────────────────
+  function showPhotosInLibrary() {
+    closeWindow('tasks');
   }
 
   // ── Add photos – photo choice ─────────────────────
@@ -1161,6 +1436,54 @@
     const isNew = document.getElementById('radio-new-task').classList.contains('selected');
     const name  = document.getElementById('new-task-name').value.trim();
     document.getElementById('btn-confirm-add').disabled = isNew && name.length === 0;
+  }
+
+  // ── Confirm Add Photos ────────────────────────────
+  function confirmAddPhotos() {
+    const isNew = document.getElementById('radio-new-task').classList.contains('selected');
+
+    if (isNew) {
+      const name = document.getElementById('new-task-name').value.trim();
+      const context = document.getElementById('new-task-context').value.trim();
+      const photoCount = document.getElementById('photo-count').textContent;
+      const photoSize = document.getElementById('photo-size').textContent;
+
+      const id = nextTaskId++;
+      taskData[id] = {
+        name: name,
+        desc: context,
+        hasActiveJob: false,
+        badge: '<span class="pill done">New</span>'
+      };
+      taskMeta[id] = {
+        name: name,
+        meta: photoCount + ' photos · ' + photoSize
+      };
+
+      const listEl = document.getElementById('task-list');
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.id = 'task-item-' + id;
+      item.onclick = function() { selectTask(id); };
+      item.innerHTML = '<div><div class="list-item-name">' + escapeHtml(name) + '</div><div class="list-item-sub">' + photoCount + ' photos · ' + photoSize + '</div></div><span class="pill done">New</span>';
+      listEl.appendChild(item);
+
+      document.getElementById('new-task-name').value = '';
+      document.getElementById('new-task-context').value = '';
+
+      closeWindow('add-photos');
+      openWindow('tasks');
+      selectTask(id);
+    } else {
+      closeWindow('add-photos');
+      openWindow('tasks');
+    }
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   // ── Create Job modal ──────────────────────────────
@@ -1231,65 +1554,81 @@
 
   updateModelList();
 
-  // ── Setup Server – verify connection ──────────────
-  const VALID_HOST = '192.168.1.50:8080';
+  // ── Start New Job (from modal) ────────────────────
+  function startNewJob() {
+    const provider = document.getElementById('job-provider').value;
+    const model = document.getElementById('job-model').value;
+    const id = nextJobId++;
 
-  function onHostChange() {
-    const val = document.getElementById('server-host').value.trim();
-    document.getElementById('btn-verify').disabled = val.length === 0;
-    // reset if host changes after a previous verify
-    setConnStatus('idle');
-    document.getElementById('server-details').style.display = 'none';
-    document.getElementById('btn-goto-tasks').disabled = true;
-    document.getElementById('btn-save-server').disabled = true;
+    jobData[id] = { taskId: selectedTask, canRetry: false, canApply: false, canCancel: true, name: provider.charAt(0).toUpperCase() + provider.slice(1) + ' · ' + model, meta: '0 / 72 photos · in progress', status: 'running', progress: 0, progressText: '0 / 72 photos · starting…' };
+
+    closeJobModal();
+    renderJobList(selectedTask);
+    selectJob(id);
   }
 
-  function setConnStatus(state) {
-    const pill = document.getElementById('conn-status-pill');
-    const text = document.getElementById('conn-status-text');
-    if (state === 'idle') {
-      pill.className = ''; pill.textContent = '';
-      text.textContent = '';
-    } else if (state === 'checking') {
-      pill.className = 'pill queued'; pill.textContent = 'Verifying…';
-      text.textContent = '';
-    } else if (state === 'ok') {
-      pill.className = 'pill online'; pill.textContent = 'Online';
-      text.textContent = 'Connection successful';
-    } else if (state === 'fail') {
-      pill.className = 'pill offline'; pill.textContent = 'Unreachable';
-      text.textContent = 'No response from server';
-    }
+  // ── Retry Failed ──────────────────────────────────
+  function retryFailedJob() {
+    const j = jobData[selectedJob];
+    if (!j) return;
+    document.getElementById('retry-job-name').textContent = j.name;
+    document.getElementById('retry-job-meta').textContent = j.meta;
+    document.getElementById('retry-modal-overlay').style.display = 'flex';
   }
 
-  function verifyConnection() {
-    const val = document.getElementById('server-host').value.trim();
-    setConnStatus('checking');
-    document.getElementById('server-details').style.display = 'none';
-    document.getElementById('btn-goto-tasks').disabled = true;
-    document.getElementById('btn-save-server').disabled = true;
+  function closeRetryModal() {
+    document.getElementById('retry-modal-overlay').style.display = 'none';
+  }
 
-    // Simulate network latency
-    setTimeout(() => {
-      if (val === VALID_HOST) {
-        setConnStatus('ok');
-        document.getElementById('server-details').style.display = 'block';
-        document.getElementById('btn-goto-tasks').disabled = false;
-        document.getElementById('btn-save-server').disabled = false;
-      } else {
-        setConnStatus('fail');
+  function confirmRetryFailed() {
+    closeRetryModal();
+    const j = jobData[selectedJob];
+    const id = nextJobId++;
+
+    jobData[id] = { taskId: selectedTask, canRetry: false, canApply: false, canCancel: true, name: j.name + ' (retry)', meta: '0 / 14 photos · in progress', status: 'running', progress: 0, progressText: '0 / 14 photos · retrying failed…' };
+
+    renderJobList(selectedTask);
+    selectJob(id);
+  }
+
+  document.getElementById('retry-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeRetryModal();
+  });
+
+  // ── Apply Tags ────────────────────────────────────
+  function applyTagsConfirm() {
+    const j = jobData[selectedJob];
+    if (!j) return;
+    document.getElementById('apply-job-name').textContent = j.name;
+    document.getElementById('apply-job-meta').textContent = j.meta;
+    document.getElementById('apply-tags-modal-overlay').style.display = 'flex';
+  }
+
+  function closeApplyTagsModal() {
+    document.getElementById('apply-tags-modal-overlay').style.display = 'none';
+  }
+
+  function confirmApplyTags() {
+    closeApplyTagsModal();
+  }
+
+  document.getElementById('apply-tags-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeApplyTagsModal();
+  });
+
+  // ── Remove Completed Jobs ─────────────────────────
+  function removeCompletedJobs() {
+    const jobIds = getJobsForTask(selectedTask);
+    jobIds.forEach(id => {
+      const j = jobData[id];
+      if (j && j.status === 'done') {
+        delete jobData[id];
       }
-    }, 900);
+    });
+    renderJobList(selectedTask);
   }
-
 
   // ── Delete Task – confirmation ────────────────────
-  const taskMeta = {
-    1: { name: 'Iceland Vacation 2024',    meta: '72 photos · 1.8 GB · 1 job' },
-    2: { name: 'Milan Workshop – March',   meta: '148 photos · 3.2 GB · 3 jobs' },
-    3: { name: 'Studio Portraits Q1',      meta: '31 photos · 0.7 GB · 2 jobs' },
-  };
-
   function openDeleteModal() {
     const t = taskMeta[selectedTask];
     document.getElementById('delete-task-name').textContent = t.name;
@@ -1303,14 +1642,12 @@
 
   function confirmDeleteTask() {
     closeDeleteModal();
-    // Remove item from list (simulation)
     const el = document.getElementById('task-item-' + selectedTask);
     if (el) {
       el.style.transition = 'opacity .3s';
       el.style.opacity = '0';
       setTimeout(() => {
         el.remove();
-
         document.getElementById('btn-delete-task').disabled = true;
         document.getElementById('delete-help').style.display = 'none';
       }, 300);
@@ -1331,7 +1668,7 @@
 
 
   function openCancelJobModal() {
-    const j = jobInfo[selectedJob];
+    const j = jobInfo[selectedJob] || jobData[selectedJob];
     document.getElementById('cancel-job-name').textContent = j.name;
     document.getElementById('cancel-job-meta').textContent = j.meta;
     document.getElementById('cancel-job-modal-overlay').style.display = 'flex';
@@ -1343,14 +1680,16 @@
 
   function confirmCancelJob() {
     closeCancelJobModal();
-    const el = document.getElementById('job-item-' + selectedJob);
-    if (el) {
-      el.querySelector('.pill').className = 'pill';
-      el.querySelector('.pill').textContent = 'Cancelled';
-      el.querySelector('.pill').style.cssText = 'background:rgba(80,80,80,.2);color:var(--text2);';
+    if (jobData[selectedJob]) {
+      jobData[selectedJob].canCancel = false;
+      jobData[selectedJob].canApply = false;
+      jobData[selectedJob].canRetry = false;
+      jobData[selectedJob].status = 'cancelled';
+      jobData[selectedJob].progress = null;
+      jobData[selectedJob].progressText = null;
     }
-    document.getElementById('btn-cancel-job').disabled = true;
-    document.getElementById('btn-apply-tags').disabled = true;
+    renderJobList(selectedTask);
+    selectJob(selectedJob);
   }
 
   document.getElementById('cancel-job-modal-overlay').addEventListener('click', function(e) {
