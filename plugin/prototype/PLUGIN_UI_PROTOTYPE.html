@@ -767,7 +767,7 @@
               </div>
               <!-- Job actions -->
               <div style="padding:8px 12px; border-top:1px solid var(--border); background:var(--bg0); display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end">
-                <button class="btn btn-ghost" id="btn-remove-completed" onclick="removeCompletedJobs()" style="font-size:11px; margin-right:auto">Remove Completed</button>
+                <button class="btn btn-danger" id="btn-remove-job" onclick="removeSelectedJob()" disabled style="font-size:11px; margin-right:auto">Remove Job</button>
                 <button class="btn btn-default" id="btn-retry-job" onclick="retryFailedJob()" disabled style="font-size:11px">Retry Failed</button>
                 <button class="btn btn-default" id="btn-apply-tags" onclick="applyTagsConfirm()" disabled style="font-size:11px">Apply Tags</button>
                 <button class="btn btn-danger" id="btn-cancel-job" onclick="openCancelJobModal()" style="font-size:11px">Cancel Job</button>
@@ -1369,6 +1369,7 @@
       document.getElementById('btn-retry-job').disabled = true;
       document.getElementById('btn-apply-tags').disabled = true;
       document.getElementById('btn-cancel-job').disabled = true;
+      document.getElementById('btn-remove-job').disabled = true;
     }
   }
 
@@ -1383,6 +1384,7 @@
     document.getElementById('btn-retry-job').disabled = !j.canRetry;
     document.getElementById('btn-apply-tags').disabled = !j.canApply;
     document.getElementById('btn-cancel-job').disabled = !j.canCancel;
+    document.getElementById('btn-remove-job').disabled = j.status === 'running';
   }
 
   renderJobList(1);
@@ -1617,15 +1619,12 @@
     if (e.target === this) closeApplyTagsModal();
   });
 
-  // ── Remove Completed Jobs ─────────────────────────
-  function removeCompletedJobs() {
-    const jobIds = getJobsForTask(selectedTask);
-    jobIds.forEach(id => {
-      const j = jobData[id];
-      if (j && j.status === 'done') {
-        delete jobData[id];
-      }
-    });
+  // ── Remove Selected Job ─────────────────────────
+  function removeSelectedJob() {
+    if (selectedJob === null) return;
+    const j = jobData[selectedJob];
+    if (!j || j.status === 'running') return;
+    delete jobData[selectedJob];
     renderJobList(selectedTask);
   }
 
