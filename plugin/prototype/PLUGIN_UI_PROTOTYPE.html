@@ -350,6 +350,32 @@
   }
   .btn-ghost:not(:disabled):hover { color: var(--text1); border-color: var(--border-light); }
 
+  /* ── INLINE JOB ACTIONS ─────────────────────────── */
+  .job-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .job-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: transparent;
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    color: var(--text2);
+  }
+  .job-action-btn:hover { background: var(--bg3); color: var(--text0); border-color: var(--border-light); }
+  .job-action-btn.danger { color: var(--red); border-color: var(--red); }
+  .job-action-btn.danger:hover { background: rgba(212,90,74,.15); }
+
   /* ── TWO-COLUMN LAYOUT ─────────────────────────── */
   .two-col { display: flex; gap: 0; }
   .col-left { width: 220px; border-right: 1px solid var(--border); flex-shrink: 0; }
@@ -765,12 +791,8 @@
                 <div class="list" id="job-list" style="border:none; border-radius:0">
                 </div>
               </div>
-              <!-- Job actions -->
-              <div style="padding:8px 12px; border-top:1px solid var(--border); background:var(--bg0); display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end">
-                <button class="btn btn-danger" id="btn-remove-job" onclick="removeSelectedJob()" disabled style="font-size:11px; margin-right:auto">Remove Job</button>
-                <button class="btn btn-default" id="btn-retry-job" onclick="retryFailedJob()" disabled style="font-size:11px">Retry Failed</button>
-                <button class="btn btn-default" id="btn-apply-tags" onclick="applyTagsConfirm()" disabled style="font-size:11px">Apply Tags</button>
-                <button class="btn btn-danger" id="btn-cancel-job" onclick="openCancelJobModal()" style="font-size:11px">Cancel Job</button>
+              <!-- New job button -->
+              <div style="padding:8px 12px; border-top:1px solid var(--border); background:var(--bg0); display:flex; justify-content:flex-end">
                 <button class="btn btn-primary" onclick="openJobModal()" style="font-size:11px">+ New Job</button>
               </div>
             </div>
@@ -1336,6 +1358,24 @@
       .filter(id => jobData[id].taskId === taskId);
   }
 
+  function buildJobActions(id, j) {
+    const actions = [];
+    if (j.canCancel) {
+      actions.push('<button class="job-action-btn danger" onclick="event.stopPropagation(); openCancelJobModal(' + id + ')" title="Cancel job">✕ Cancel</button>');
+    }
+    if (j.canRetry) {
+      actions.push('<button class="job-action-btn" onclick="event.stopPropagation(); retryFailedJob(' + id + ')" title="Retry failed photos">↻ Retry</button>');
+    }
+    if (j.canApply) {
+      actions.push('<button class="job-action-btn" onclick="event.stopPropagation(); applyTagsConfirm(' + id + ')" title="Apply tags to Lightroom">✓ Apply Tags</button>');
+    }
+    if (j.status !== 'running') {
+      actions.push('<button class="job-action-btn danger" onclick="event.stopPropagation(); removeSelectedJob(' + id + ')" title="Remove job">🗑 Remove</button>');
+    }
+    if (actions.length === 0) return '';
+    return '<div class="job-actions">' + actions.join('') + '</div>';
+  }
+
   function renderJobList(taskId) {
     const listEl = document.getElementById('job-list');
     listEl.innerHTML = '';
@@ -1345,20 +1385,22 @@
       const j = jobData[id];
       const item = document.createElement('div');
       item.className = 'list-item';
+      item.style.flexDirection = 'column';
+      item.style.alignItems = 'stretch';
       item.id = 'job-item-' + id;
       item.onclick = function() { selectJob(id); };
 
       const pillClass = j.status === 'running' ? 'running' : j.status === 'done' ? 'done' : j.status === 'error' ? 'error' : 'cancelled';
       const pillLabel = j.status === 'running' ? 'In progress' : j.status === 'done' ? 'Completed' : j.status === 'error' ? 'With errors' : 'Cancelled';
 
-      let contentHtml;
+      let topRow;
       if (j.progress !== null) {
-        contentHtml = '<div style="flex:1;min-width:0"><div class="list-item-name">' + escapeHtml(j.name) + '</div><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:' + j.progress + '%"></div></div><div class="progress-text">' + escapeHtml(j.progressText) + '</div></div></div>';
+        topRow = '<div style="display:flex; align-items:center; gap:8px"><div style="flex:1;min-width:0"><div class="list-item-name">' + escapeHtml(j.name) + '</div><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:' + j.progress + '%"></div></div><div class="progress-text">' + escapeHtml(j.progressText) + '</div></div></div><span class="pill ' + pillClass + '" style="flex-shrink:0">' + pillLabel + '</span></div>';
       } else {
-        contentHtml = '<div style="flex:1;min-width:0"><div class="list-item-name">' + escapeHtml(j.name) + '</div><div class="list-item-sub">' + escapeHtml(j.meta) + '</div></div>';
+        topRow = '<div style="display:flex; align-items:center; gap:8px"><div style="flex:1;min-width:0"><div class="list-item-name">' + escapeHtml(j.name) + '</div><div class="list-item-sub">' + escapeHtml(j.meta) + '</div></div><span class="pill ' + pillClass + '" style="flex-shrink:0">' + pillLabel + '</span></div>';
       }
 
-      item.innerHTML = contentHtml + '<span class="pill ' + pillClass + '" style="flex-shrink:0">' + pillLabel + '</span>';
+      item.innerHTML = topRow + buildJobActions(id, j);
       listEl.appendChild(item);
     });
 
@@ -1366,10 +1408,6 @@
       selectJob(jobIds[0]);
     } else {
       selectedJob = null;
-      document.getElementById('btn-retry-job').disabled = true;
-      document.getElementById('btn-apply-tags').disabled = true;
-      document.getElementById('btn-cancel-job').disabled = true;
-      document.getElementById('btn-remove-job').disabled = true;
     }
   }
 
@@ -1379,12 +1417,6 @@
       const elId = parseInt(el.id.replace('job-item-', ''), 10);
       el.classList.toggle('selected', elId === id);
     });
-    const j = jobData[id];
-    if (!j) return;
-    document.getElementById('btn-retry-job').disabled = !j.canRetry;
-    document.getElementById('btn-apply-tags').disabled = !j.canApply;
-    document.getElementById('btn-cancel-job').disabled = !j.canCancel;
-    document.getElementById('btn-remove-job').disabled = j.status === 'running';
   }
 
   renderJobList(1);
@@ -1571,8 +1603,9 @@
   }
 
   // ── Retry Failed ──────────────────────────────────
-  function retryFailedJob() {
-    const j = jobData[selectedJob];
+  function retryFailedJob(jobId) {
+    selectedJob = jobId;
+    const j = jobData[jobId];
     if (!j) return;
     document.getElementById('retry-job-name').textContent = j.name;
     document.getElementById('retry-job-meta').textContent = j.meta;
@@ -1599,8 +1632,9 @@
   });
 
   // ── Apply Tags ────────────────────────────────────
-  function applyTagsConfirm() {
-    const j = jobData[selectedJob];
+  function applyTagsConfirm(jobId) {
+    selectedJob = jobId;
+    const j = jobData[jobId];
     if (!j) return;
     document.getElementById('apply-job-name').textContent = j.name;
     document.getElementById('apply-job-meta').textContent = j.meta;
@@ -1613,6 +1647,10 @@
 
   function confirmApplyTags() {
     closeApplyTagsModal();
+    if (selectedJob !== null && jobData[selectedJob]) {
+      delete jobData[selectedJob];
+      renderJobList(selectedTask);
+    }
   }
 
   document.getElementById('apply-tags-modal-overlay').addEventListener('click', function(e) {
@@ -1620,11 +1658,10 @@
   });
 
   // ── Remove Selected Job ─────────────────────────
-  function removeSelectedJob() {
-    if (selectedJob === null) return;
-    const j = jobData[selectedJob];
+  function removeSelectedJob(jobId) {
+    const j = jobData[jobId];
     if (!j || j.status === 'running') return;
-    delete jobData[selectedJob];
+    delete jobData[jobId];
     renderJobList(selectedTask);
   }
 
@@ -1667,8 +1704,9 @@
   };
 
 
-  function openCancelJobModal() {
-    const j = jobInfo[selectedJob] || jobData[selectedJob];
+  function openCancelJobModal(jobId) {
+    selectedJob = jobId;
+    const j = jobInfo[jobId] || jobData[jobId];
     document.getElementById('cancel-job-name').textContent = j.name;
     document.getElementById('cancel-job-meta').textContent = j.meta;
     document.getElementById('cancel-job-modal-overlay').style.display = 'flex';
