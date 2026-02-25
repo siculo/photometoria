@@ -1837,12 +1837,16 @@
     closeCancelJobModal();
     if (jobData[selectedJob]) {
       stopJobSimulation(selectedJob);
-      jobData[selectedJob].canCancel = false;
-      jobData[selectedJob].canApply = false;
-      jobData[selectedJob].canRetry = false;
-      jobData[selectedJob].status = 'cancelled';
-      jobData[selectedJob].progress = null;
-      jobData[selectedJob].progressText = null;
+      const j = jobData[selectedJob];
+      j.canCancel = false;
+      j.canApply = false;
+      j.status = 'cancelled';
+      j.progress = null;
+      j.progressText = null;
+      const remaining = (j.totalPhotos || 0) - (j.processed || 0);
+      j.failed = remaining;
+      j.canRetry = remaining > 0;
+      j.meta = (j.processed || 0) + ' / ' + (j.totalPhotos || 0) + ' photos · cancelled';
       updateTaskBadge(jobData[selectedJob].taskId);
     }
     renderJobList(selectedTask);
