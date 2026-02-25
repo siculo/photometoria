@@ -1294,19 +1294,22 @@
       name: 'Iceland Vacation 2024',
       desc: 'Trip to Iceland, August 2024. Volcanic landscapes, northern lights, waterfalls and small fishing villages along the south coast.',
       hasActiveJob: true,
-      badge: '<span class="pill running">Active job</span>'
+      badge: '<span class="pill running">Active job</span>',
+      photoCount: 72
     },
     2: {
       name: 'Milan Workshop – March',
       desc: 'Photography workshop in Milan, March 2025. Studio portrait sessions and urban shooting in the historic city center.',
       hasActiveJob: false,
-      badge: '<span class="pill done">Completed</span>'
+      badge: '<span class="pill done">Completed</span>',
+      photoCount: 148
     },
     3: {
       name: 'Studio Portraits Q1',
       desc: 'Portrait sessions Q1 2025. Studio with white and black backgrounds, natural light + flash.',
       hasActiveJob: false,
-      badge: '<span class="pill error">With errors</span>'
+      badge: '<span class="pill error">With errors</span>',
+      photoCount: 31
     }
   };
 
@@ -1341,14 +1344,118 @@
   }
 
   // ── Job data (per task) ─────────────────────────────
+  const PHOTO_PROCESS_TIME = 5000;
+  const FAIL_JOB_PROBABILITY = 0.25;
+  const FAIL_PHOTO_PROBABILITY = 0.20;
+
   const jobData = {
-    1: { taskId: 1, canRetry: false, canApply: false, canCancel: true,  name: 'Ollama · qwen2-vl:8b',   meta: '32 / 72 photos processed · in progress', status: 'running', progress: 44, progressText: '32 / 72 photos · ~18 min remaining' },
+    1: { taskId: 1, canRetry: false, canApply: false, canCancel: true,  name: 'Ollama · qwen2-vl:8b',   meta: '', status: 'running', progress: 44, progressText: '', totalPhotos: 72, processed: 32, failed: 0, hasFails: false, timerId: null },
     2: { taskId: 1, canRetry: false, canApply: true,  canCancel: false, name: 'Ollama · llava:latest',   meta: '72 / 72 photos · completed in 41 min', status: 'done', progress: null, progressText: null },
-    3: { taskId: 1, canRetry: true,  canApply: false, canCancel: false, name: 'OpenAI · gpt-4o',         meta: '58 / 72 photos · 14 failed', status: 'error', progress: null, progressText: null },
+    3: { taskId: 1, canRetry: true,  canApply: false, canCancel: false, name: 'OpenAI · gpt-4o',         meta: '58 / 72 photos · 14 failed', status: 'error', progress: null, progressText: null, failed: 14 },
     4: { taskId: 2, canRetry: false, canApply: true,  canCancel: false, name: 'Ollama · qwen2-vl:8b',    meta: '148 / 148 photos · completed in 1h 12min', status: 'done', progress: null, progressText: null },
     5: { taskId: 2, canRetry: false, canApply: true,  canCancel: false, name: 'Ollama · llava:latest',    meta: '148 / 148 photos · completed in 58 min', status: 'done', progress: null, progressText: null },
-    6: { taskId: 3, canRetry: true,  canApply: false, canCancel: false, name: 'Ollama · qwen2-vl:8b',    meta: '24 / 31 photos · 7 failed', status: 'error', progress: null, progressText: null },
+    6: { taskId: 3, canRetry: true,  canApply: false, canCancel: false, name: 'Ollama · qwen2-vl:8b',    meta: '24 / 31 photos · 7 failed', status: 'error', progress: null, progressText: null, failed: 7 },
   };
+
+  function formatRemaining(seconds) {
+    if (seconds < 60) return '< 1 min remaining';
+    const m = Math.ceil(seconds / 60);
+    return '~' + m + ' min remaining';
+  }
+
+  function updateJobProgress(j) {
+    const pct = Math.round((j.processed / j.totalPhotos) * 100);
+    j.progress = pct;
+    const remaining = (j.totalPhotos - j.processed) * (PHOTO_PROCESS_TIME / 1000);
+    j.progressText = j.processed + ' / ' + j.totalPhotos + ' photos · ' + formatRemaining(remaining);
+    j.meta = j.processed + ' / ' + j.totalPhotos + ' photos · in progress';
+  }
+
+  function finishJob(id) {
+    const j = jobData[id];
+    if (!j) return;
+    if (j.timerId) { clearInterval(j.timerId); j.timerId = null; }
+    j.canCancel = false;
+    j.progress = null;
+    j.progressText = null;
+    if (j.failed > 0) {
+      j.status = 'error';
+      j.canRetry = true;
+      j.canApply = false;
+      j.meta = (j.processed - j.failed) + ' / ' + j.totalPhotos + ' photos · ' + j.failed + ' failed';
+    } else {
+      j.status = 'done';
+      j.canRetry = false;
+      j.canApply = true;
+      const elapsed = j.totalPhotos * (PHOTO_PROCESS_TIME / 1000);
+      const mins = Math.round(elapsed / 60);
+      j.meta = j.totalPhotos + ' / ' + j.totalPhotos + ' photos · completed in ' + mins + ' min';
+    }
+    updateTaskBadge(j.taskId);
+    refreshJobListIfVisible(j.taskId);
+  }
+
+  function startJobSimulation(id) {
+    const j = jobData[id];
+    if (!j) return;
+    j.hasFails = Math.random() < FAIL_JOB_PROBABILITY;
+    updateJobProgress(j);
+    j.timerId = setInterval(function() {
+      if (!jobData[id]) return;
+      j.processed++;
+      if (j.hasFails && Math.random() < FAIL_PHOTO_PROBABILITY) {
+        j.failed++;
+      }
+      if (j.processed >= j.totalPhotos) {
+        finishJob(id);
+        return;
+      }
+      updateJobProgress(j);
+      refreshJobListIfVisible(j.taskId);
+    }, PHOTO_PROCESS_TIME);
+  }
+
+  function stopJobSimulation(id) {
+    const j = jobData[id];
+    if (j && j.timerId) { clearInterval(j.timerId); j.timerId = null; }
+  }
+
+  function updateTaskBadge(taskId) {
+    const t = taskData[taskId];
+    if (!t) return;
+    const jobs = getJobsForTask(taskId);
+    const hasRunning = jobs.some(id => jobData[id] && jobData[id].status === 'running');
+    const hasError = jobs.some(id => jobData[id] && jobData[id].status === 'error');
+    if (hasRunning) {
+      t.hasActiveJob = true;
+      t.badge = '<span class="pill running">Active job</span>';
+    } else {
+      t.hasActiveJob = false;
+      if (hasError) {
+        t.badge = '<span class="pill error">With errors</span>';
+      } else {
+        t.badge = '<span class="pill done">Completed</span>';
+      }
+    }
+    const itemEl = document.getElementById('task-item-' + taskId);
+    if (itemEl) {
+      const pillEl = itemEl.querySelector('.pill');
+      if (pillEl) pillEl.outerHTML = t.badge;
+    }
+    const btn = document.getElementById('btn-delete-task');
+    const help = document.getElementById('delete-help');
+    if (btn && selectedTask === taskId) {
+      btn.disabled = t.hasActiveJob;
+      help.style.display = t.hasActiveJob ? 'block' : 'none';
+    }
+  }
+
+  function refreshJobListIfVisible(taskId) {
+    if (selectedTask !== taskId) return;
+    const screen = document.getElementById('screen-tasks');
+    if (!screen || !screen.classList.contains('visible')) return;
+    renderJobList(taskId);
+  }
 
   let selectedJob = null;
 
@@ -1420,6 +1527,7 @@
   }
 
   renderJobList(1);
+  startJobSimulation(1);
 
   // ── Context edit ──────────────────────────────────
   const textarea = document.getElementById('task-context-field');
@@ -1488,7 +1596,8 @@
         name: name,
         desc: context,
         hasActiveJob: false,
-        badge: '<span class="pill done">New</span>'
+        badge: '<span class="pill done">New</span>',
+        photoCount: parseInt(photoCount, 10) || 24
       };
       taskMeta[id] = {
         name: name,
@@ -1594,12 +1703,15 @@
     const provider = document.getElementById('job-provider').value;
     const model = document.getElementById('job-model').value;
     const id = nextJobId++;
+    const total = taskData[selectedTask] ? taskData[selectedTask].photoCount : 72;
 
-    jobData[id] = { taskId: selectedTask, canRetry: false, canApply: false, canCancel: true, name: provider.charAt(0).toUpperCase() + provider.slice(1) + ' · ' + model, meta: '0 / 72 photos · in progress', status: 'running', progress: 0, progressText: '0 / 72 photos · starting…' };
+    jobData[id] = { taskId: selectedTask, canRetry: false, canApply: false, canCancel: true, name: provider.charAt(0).toUpperCase() + provider.slice(1) + ' · ' + model, meta: '', status: 'running', progress: 0, progressText: '', totalPhotos: total, processed: 0, failed: 0, hasFails: false, timerId: null };
 
+    updateTaskBadge(selectedTask);
     closeJobModal();
     renderJobList(selectedTask);
     selectJob(id);
+    startJobSimulation(id);
   }
 
   // ── Retry Failed ──────────────────────────────────
@@ -1620,11 +1732,14 @@
     closeRetryModal();
     const j = jobData[selectedJob];
     const id = nextJobId++;
+    const retryCount = j.failed || 14;
 
-    jobData[id] = { taskId: selectedTask, canRetry: false, canApply: false, canCancel: true, name: j.name + ' (retry)', meta: '0 / 14 photos · in progress', status: 'running', progress: 0, progressText: '0 / 14 photos · retrying failed…' };
+    jobData[id] = { taskId: selectedTask, canRetry: false, canApply: false, canCancel: true, name: j.name + ' (retry)', meta: '', status: 'running', progress: 0, progressText: '', totalPhotos: retryCount, processed: 0, failed: 0, hasFails: false, timerId: null };
 
+    updateTaskBadge(selectedTask);
     renderJobList(selectedTask);
     selectJob(id);
+    startJobSimulation(id);
   }
 
   document.getElementById('retry-modal-overlay').addEventListener('click', function(e) {
@@ -1661,7 +1776,9 @@
   function removeSelectedJob(jobId) {
     const j = jobData[jobId];
     if (!j || j.status === 'running') return;
+    stopJobSimulation(jobId);
     delete jobData[jobId];
+    updateTaskBadge(j.taskId);
     renderJobList(selectedTask);
   }
 
@@ -1719,12 +1836,14 @@
   function confirmCancelJob() {
     closeCancelJobModal();
     if (jobData[selectedJob]) {
+      stopJobSimulation(selectedJob);
       jobData[selectedJob].canCancel = false;
       jobData[selectedJob].canApply = false;
       jobData[selectedJob].canRetry = false;
       jobData[selectedJob].status = 'cancelled';
       jobData[selectedJob].progress = null;
       jobData[selectedJob].progressText = null;
+      updateTaskBadge(jobData[selectedJob].taskId);
     }
     renderJobList(selectedTask);
     selectJob(selectedJob);
