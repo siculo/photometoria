@@ -687,7 +687,7 @@
 
     </div>
     <div class="btn-row right">
-      <button class="btn btn-ghost" onclick="closeWindow('setup')">Cancel</button>
+      <button class="btn btn-ghost" onclick="cancelSetup()">Cancel</button>
       <button class="btn btn-primary" id="btn-save-server" onclick="saveAndCloseSetup()" disabled>Save</button>
     </div>
   </div>
@@ -1271,8 +1271,6 @@
         setConnStatus('ok');
         document.getElementById('server-details').style.display = 'block';
         connectedHost = val;
-        serverConfigured = true;
-        enableMenuItems();
         updateSaveButton();
       } else {
         setConnStatus('fail');
@@ -1282,8 +1280,21 @@
     }, 900);
   }
 
+  function cancelSetup() {
+    connectedHost = '';
+    if (savedHost) {
+      document.getElementById('server-host').value = savedHost;
+    }
+    setConnStatus('idle');
+    document.getElementById('server-details').style.display = 'none';
+    updateSaveButton();
+    closeWindow('setup');
+  }
+
   function saveAndCloseSetup() {
     savedHost = connectedHost;
+    serverConfigured = true;
+    enableMenuItems();
     updateSaveButton();
     closeWindow('setup');
   }
@@ -1512,7 +1523,8 @@
     });
 
     if (jobIds.length > 0) {
-      selectJob(jobIds[0]);
+      const keepSelection = selectedJob !== null && jobIds.includes(selectedJob);
+      selectJob(keepSelection ? selectedJob : jobIds[0]);
     } else {
       selectedJob = null;
     }
