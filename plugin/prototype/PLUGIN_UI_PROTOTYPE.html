@@ -227,6 +227,37 @@
   .pill.cancelled::before { background: var(--text2); }
   @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
 
+  /* ── TASK STATUS ICONS ──────────────────────────── */
+  .task-status-icons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .task-status-icon {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .task-status-icon.icon-done {
+    background: rgba(76,175,110,.15);
+    color: var(--green);
+  }
+  .task-status-icon.icon-error {
+    background: rgba(212,90,74,.15);
+    color: var(--red);
+  }
+  .task-status-icon.icon-running {
+    background: rgba(212,130,10,.15);
+    color: var(--accent);
+    animation: pulse 1.2s infinite;
+  }
+
   /* ── STORAGE BAR ───────────────────────────────── */
   .storage-bar-wrap { margin-top: 4px; }
   .storage-bar-labels {
@@ -603,8 +634,8 @@
 <div class="menu">
   <div class="menu-title">Photometoria</div>
   <button class="menu-item" id="menu-setup" onclick="openWindow('setup')">Photomemoria Setup</button>
-  <button class="menu-item" id="menu-tasks" onclick="openWindow('tasks')" disabled>Task</button>
   <button class="menu-item" id="menu-add-photos" onclick="openWindow('add-photos')" disabled>Add Photos</button>
+  <button class="menu-item" id="menu-tasks" onclick="openWindow('tasks')" disabled>Task</button>
 </div>
 
 <div class="desktop">
@@ -707,7 +738,7 @@
       <!-- ── LEFT: task list ── -->
       <div style="width:240px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0">
         <div style="padding:10px 14px 6px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
-          <div class="section-title" style="margin:0">Tasks</div>
+          <div class="section-title" style="margin:0">Current server tasks</div>
         </div>
         <div style="flex:1; overflow-y:auto">
           <div class="list" id="task-list" style="border:none; border-radius:0">
@@ -716,21 +747,29 @@
                 <div class="list-item-name">Iceland Vacation 2024</div>
                 <div class="list-item-sub">72 photos · 1.8 GB</div>
               </div>
-              <span class="pill running">Active</span>
+              <div class="task-status-icons">
+                <span class="task-status-icon icon-done" title="Completed jobs">✓</span>
+                <span class="task-status-icon icon-error" title="Jobs with errors">✕</span>
+                <span class="task-status-icon icon-running" title="Running jobs">⟳</span>
+              </div>
             </div>
             <div class="list-item" id="task-item-2" onclick="selectTask(2)">
               <div>
                 <div class="list-item-name">Milan Workshop – March</div>
                 <div class="list-item-sub">148 photos · 3.2 GB</div>
               </div>
-              <span class="pill done">Done</span>
+              <div class="task-status-icons">
+                <span class="task-status-icon icon-done" title="Completed jobs">✓</span>
+              </div>
             </div>
             <div class="list-item" id="task-item-3" onclick="selectTask(3)">
               <div>
                 <div class="list-item-name">Studio Portraits Q1</div>
                 <div class="list-item-sub">31 photos · 0.7 GB</div>
               </div>
-              <span class="pill error">Errors</span>
+              <div class="task-status-icons">
+                <span class="task-status-icon icon-error" title="Jobs with errors">✕</span>
+              </div>
             </div>
           </div>
         </div>
@@ -756,9 +795,8 @@
         <div id="detail-content" style="flex:1; display:flex; flex-direction:column; min-height:0">
 
           <!-- Task name header -->
-          <div style="padding:10px 16px 8px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
+          <div style="padding:10px 16px 8px; border-bottom:1px solid var(--border)">
             <div id="detail-task-name" style="font-size:13px; font-weight:600; color:var(--text0)">Iceland Vacation 2024</div>
-            <div id="detail-task-badge"></div>
           </div>
 
           <!-- Two-col: context | jobs -->
@@ -791,7 +829,7 @@
               </div>
               <!-- New job button -->
               <div style="padding:8px 12px; border-top:1px solid var(--border); background:var(--bg0); display:flex; justify-content:flex-end">
-                <button class="btn btn-primary" onclick="openJobModal()" style="font-size:11px">+ New Job</button>
+                <button class="btn btn-primary" onclick="openJobModal()" style="font-size:11px">+ Start New Job</button>
               </div>
             </div>
 
@@ -811,7 +849,7 @@
   <div class="dialog" id="screen-add-photos" style="display:none">
     <div class="dialog-titlebar">
       <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-      <span>Add Photos to Task</span>
+      <span>Add Photos to Task for processing</span>
     </div>
     <div class="dialog-body">
 
@@ -1305,21 +1343,18 @@
       name: 'Iceland Vacation 2024',
       desc: 'Trip to Iceland, August 2024. Volcanic landscapes, northern lights, waterfalls and small fishing villages along the south coast.',
       hasActiveJob: true,
-      badge: '<span class="pill running">Active job</span>',
       photoCount: 72
     },
     2: {
       name: 'Milan Workshop – March',
       desc: 'Photography workshop in Milan, March 2025. Studio portrait sessions and urban shooting in the historic city center.',
       hasActiveJob: false,
-      badge: '<span class="pill done">Completed</span>',
       photoCount: 148
     },
     3: {
       name: 'Studio Portraits Q1',
       desc: 'Portrait sessions Q1 2025. Studio with white and black backgrounds, natural light + flash.',
       hasActiveJob: false,
-      badge: '<span class="pill error">With errors</span>',
       photoCount: 31
     }
   };
@@ -1341,8 +1376,10 @@
     const t = taskData[id];
     if (!t) return;
 
+    document.getElementById('detail-empty').style.display = 'none';
+    document.getElementById('detail-content').style.display = 'flex';
+
     document.getElementById('detail-task-name').textContent = t.name;
-    document.getElementById('detail-task-badge').innerHTML = t.badge;
     document.getElementById('task-context-field').value = t.desc;
     document.getElementById('context-actions').style.display = 'none';
 
@@ -1431,27 +1468,31 @@
     if (j && j.timerId) { clearInterval(j.timerId); j.timerId = null; }
   }
 
+  function buildTaskStatusIcons(taskId) {
+    const jobs = getJobsForTask(taskId);
+    const hasDone = jobs.some(id => jobData[id] && jobData[id].status === 'done');
+    const hasError = jobs.some(id => jobData[id] && jobData[id].status === 'error');
+    const hasRunning = jobs.some(id => jobData[id] && jobData[id].status === 'running');
+    let html = '';
+    if (hasDone)    html += '<span class="task-status-icon icon-done" title="Completed jobs">✓</span>';
+    if (hasError)   html += '<span class="task-status-icon icon-error" title="Jobs with errors">✕</span>';
+    if (hasRunning) html += '<span class="task-status-icon icon-running" title="Running jobs">⟳</span>';
+    return html;
+  }
+
   function updateTaskBadge(taskId) {
     const t = taskData[taskId];
     if (!t) return;
     const jobs = getJobsForTask(taskId);
     const hasRunning = jobs.some(id => jobData[id] && jobData[id].status === 'running');
-    const hasError = jobs.some(id => jobData[id] && jobData[id].status === 'error');
-    if (hasRunning) {
-      t.hasActiveJob = true;
-      t.badge = '<span class="pill running">Active job</span>';
-    } else {
-      t.hasActiveJob = false;
-      if (hasError) {
-        t.badge = '<span class="pill error">With errors</span>';
-      } else {
-        t.badge = '<span class="pill done">Completed</span>';
-      }
-    }
+    t.hasActiveJob = hasRunning;
+
     const itemEl = document.getElementById('task-item-' + taskId);
     if (itemEl) {
-      const pillEl = itemEl.querySelector('.pill');
-      if (pillEl) pillEl.outerHTML = t.badge;
+      const iconsEl = itemEl.querySelector('.task-status-icons');
+      if (iconsEl) {
+        iconsEl.innerHTML = buildTaskStatusIcons(taskId);
+      }
     }
     const btn = document.getElementById('btn-delete-task');
     const help = document.getElementById('delete-help');
@@ -1608,7 +1649,6 @@
         name: name,
         desc: context,
         hasActiveJob: false,
-        badge: '<span class="pill done">New</span>',
         photoCount: parseInt(photoCount, 10) || 24
       };
       taskMeta[id] = {
@@ -1621,7 +1661,7 @@
       item.className = 'list-item';
       item.id = 'task-item-' + id;
       item.onclick = function() { selectTask(id); };
-      item.innerHTML = '<div><div class="list-item-name">' + escapeHtml(name) + '</div><div class="list-item-sub">' + photoCount + ' photos · ' + photoSize + '</div></div><span class="pill done">New</span>';
+      item.innerHTML = '<div><div class="list-item-name">' + escapeHtml(name) + '</div><div class="list-item-sub">' + photoCount + ' photos · ' + photoSize + '</div></div><div class="task-status-icons"></div>';
       listEl.appendChild(item);
 
       document.getElementById('new-task-name').value = '';
@@ -1808,14 +1848,22 @@
 
   function confirmDeleteTask() {
     closeDeleteModal();
-    const el = document.getElementById('task-item-' + selectedTask);
+    const deletedId = selectedTask;
+    const el = document.getElementById('task-item-' + deletedId);
     if (el) {
       el.style.transition = 'opacity .3s';
       el.style.opacity = '0';
       setTimeout(() => {
         el.remove();
+        delete taskData[deletedId];
+        delete taskMeta[deletedId];
         document.getElementById('btn-delete-task').disabled = true;
         document.getElementById('delete-help').style.display = 'none';
+
+        document.getElementById('detail-content').style.display = 'none';
+        document.getElementById('detail-empty').style.display = 'flex';
+        document.getElementById('job-list').innerHTML = '';
+        selectedTask = null;
       }, 300);
     }
   }
