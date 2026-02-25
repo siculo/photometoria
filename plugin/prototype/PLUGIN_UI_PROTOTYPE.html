@@ -38,25 +38,25 @@
     font-size: 13px;
     color: var(--text0);
     display: flex;
-    align-items: flex-start;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     min-height: 100vh;
     padding: 60px 30px 30px;
-    gap: 20px;
+    gap: 16px;
   }
 
   /* ── MENU ────────────────────────────────────── */
   .menu {
-    width: 180px;
+    width: 900px;
     background: var(--bg1);
     border: 1px solid var(--border);
     border-radius: 5px;
     padding: 6px;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     gap: 2px;
     flex-shrink: 0;
-    margin-top: 40px;
   }
   .menu-title {
     font-size: 10px;
@@ -65,10 +65,10 @@
     text-transform: uppercase;
     color: var(--text3);
     padding: 6px 8px 4px;
+    margin-right: 8px;
   }
   .menu-item {
     display: block;
-    width: 100%;
     padding: 8px 10px;
     border: none;
     background: transparent;
@@ -80,9 +80,10 @@
     border-radius: 3px;
     text-align: left;
     transition: all .15s;
+    white-space: nowrap;
   }
   .menu-item:hover:not(:disabled) { background: var(--bg3); color: var(--text0); }
-  .menu-item.active { background: var(--accent-glow); color: var(--accent); border-left: 2px solid var(--accent); padding-left: 8px; }
+  .menu-item.active { background: var(--accent-glow); color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: 6px; }
   .menu-item:disabled { opacity: 0.3; cursor: not-allowed; }
 
   /* ── DESKTOP SHELL ─────────────────────────────── */
@@ -572,7 +573,7 @@
   <span id="theme-label">Light theme</span>
 </button>
 
-<!-- ── VERTICAL MENU ──────────────────────────── -->
+<!-- ── TOP MENU ──────────────────────────────── -->
 <div class="menu">
   <div class="menu-title">Photometoria</div>
   <button class="menu-item" id="menu-setup" onclick="openWindow('setup')">Photomemoria Setup</button>
