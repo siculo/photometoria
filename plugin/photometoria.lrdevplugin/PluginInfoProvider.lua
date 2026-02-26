@@ -3,6 +3,7 @@
 
 local LrView = import 'LrView'
 local LrColor = import 'LrColor'
+local LrPrefs = import 'LrPrefs'
 
 local ServerConnection = require 'ServerConnection'
 
@@ -54,7 +55,9 @@ local function showDetails(propTable, data)
 end
 
 local function sectionsForTopOfDialog(f, propertyTable)
-	propertyTable.serverHost = ''
+	local prefs = LrPrefs.prefsForPlugin()
+
+	propertyTable.serverHost = prefs.serverHost or ''
 	propertyTable.connectEnabled = false
 	propertyTable.validationMessage = ''
 	propertyTable.connecting = false
@@ -66,7 +69,9 @@ local function sectionsForTopOfDialog(f, propertyTable)
 
 	hideDetails(propertyTable)
 
-	propertyTable:addObserver('serverHost', function(propTable, key, value)
+	local function onServerHostChanged(propTable, key, value)
+		prefs.serverHost = value
+
 		hideStatus(propTable)
 		hideDetails(propTable)
 		propTable.synopsis = ''
@@ -84,7 +89,9 @@ local function sectionsForTopOfDialog(f, propertyTable)
 			propTable.connectEnabled = false
 			propTable.validationMessage = LOC "$$$/Photometoria/Validation/InvalidHostPort=Invalid format. Use host:port (e.g. 192.168.1.50:8080)"
 		end
-	end)
+	end
+
+	propertyTable:addObserver('serverHost', onServerHostChanged)
 
 	local function onConnect()
 		local host = propertyTable.serverHost
@@ -122,6 +129,10 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				propertyTable.connectEnabled = true
 			end
 		end)
+	end
+
+	if ServerConnection.isValidHostPort(propertyTable.serverHost) then
+		onConnect()
 	end
 
 	return {
