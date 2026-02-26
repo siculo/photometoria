@@ -59,7 +59,7 @@ function ServerConnection.simulateConnect(host, callback)
 			})
 		else
 			callback(false, {
-				message = 'Could not reach server at ' .. host,
+				message = LOC("$$$/Photometoria/Status/CannotReach=Could not reach server at ^1", host),
 			})
 		end
 	end)

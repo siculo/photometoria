@@ -7,7 +7,7 @@ local LrColor = import 'LrColor'
 local ServerConnection = require 'ServerConnection'
 
 local bind = LrView.bind
-local LABEL_WIDTH = 110
+local LABEL_WIDTH = 130
 
 local function hideStatus(propTable)
 	propTable.statusLabel = ''
@@ -35,21 +35,21 @@ local function hideDetails(propTable)
 end
 
 local function showDetails(propTable, data)
-	propTable.detailStorageAllocLabel = 'Storage allocated:'
+	propTable.detailStorageAllocLabel = LOC "$$$/Photometoria/Detail/StorageAllocated=Storage allocated:"
 	propTable.detailStorageAllocValue = data.storageAllocated
-	propTable.detailStorageUsedLabel = 'Storage used:'
+	propTable.detailStorageUsedLabel = LOC "$$$/Photometoria/Detail/StorageUsed=Storage used:"
 	propTable.detailStorageUsedValue = data.storageUsed
-	propTable.detailStorageFreeLabel = 'Storage free:'
+	propTable.detailStorageFreeLabel = LOC "$$$/Photometoria/Detail/StorageFree=Storage free:"
 	propTable.detailStorageFreeValue = data.storageFree
-	propTable.detailProvidersLabel = 'Providers:'
+	propTable.detailProvidersLabel = LOC "$$$/Photometoria/Detail/Providers=Providers:"
 	propTable.detailProvidersValue = data.providers
-	propTable.detailDefaultLabel = 'Default provider:'
+	propTable.detailDefaultLabel = LOC "$$$/Photometoria/Detail/DefaultProvider=Default provider:"
 	propTable.detailDefaultValue = data.defaultProvider
-	propTable.detailVersionLabel = 'Server version:'
+	propTable.detailVersionLabel = LOC "$$$/Photometoria/Detail/ServerVersion=Server version:"
 	propTable.detailVersionValue = data.version
-	propTable.detailTasksLabel = 'Active tasks:'
+	propTable.detailTasksLabel = LOC "$$$/Photometoria/Detail/ActiveTasks=Active tasks:"
 	propTable.detailTasksValue = tostring(data.activeTasks)
-	propTable.detailJobsLabel = 'Queued jobs:'
+	propTable.detailJobsLabel = LOC "$$$/Photometoria/Detail/QueuedJobs=Queued jobs:"
 	propTable.detailJobsValue = tostring(data.queuedJobs)
 end
 
@@ -82,7 +82,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 			propTable.validationMessage = ''
 		else
 			propTable.connectEnabled = false
-			propTable.validationMessage = 'Invalid format. Use host:port (e.g. 192.168.1.50:8080)'
+			propTable.validationMessage = LOC "$$$/Photometoria/Validation/InvalidHostPort=Invalid format. Use host:port (e.g. 192.168.1.50:8080)"
 		end
 	end)
 
@@ -96,23 +96,26 @@ local function sectionsForTopOfDialog(f, propertyTable)
 		propertyTable.connectEnabled = false
 		hideDetails(propertyTable)
 
-		propertyTable.statusLabel = 'Status:'
-		propertyTable.statusText = 'Connecting...'
+		local connectingStr = LOC "$$$/Photometoria/Status/Connecting=Connecting..."
+		propertyTable.statusLabel = LOC "$$$/Photometoria/Label/Status=Status:"
+		propertyTable.statusText = connectingStr
 		propertyTable.statusMessage = ''
-		propertyTable.synopsis = 'Connecting...'
+		propertyTable.synopsis = connectingStr
 
 		ServerConnection.simulateConnect(host, function(success, data)
 			propertyTable.connecting = false
 
 			if success then
-				propertyTable.statusText = 'Online'
-				propertyTable.statusMessage = 'Connected to ' .. host
-				propertyTable.synopsis = 'Online'
+				local onlineStr = LOC "$$$/Photometoria/Status/Online=Online"
+				propertyTable.statusText = onlineStr
+				propertyTable.statusMessage = LOC("$$$/Photometoria/Status/ConnectedTo=Connected to ^1", host)
+				propertyTable.synopsis = onlineStr
 				showDetails(propertyTable, data)
 			else
-				propertyTable.statusText = 'Unreachable'
+				local unreachableStr = LOC "$$$/Photometoria/Status/Unreachable=Unreachable"
+				propertyTable.statusText = unreachableStr
 				propertyTable.statusMessage = data.message
-				propertyTable.synopsis = 'Unreachable'
+				propertyTable.synopsis = unreachableStr
 			end
 
 			if ServerConnection.isValidHostPort(propertyTable.serverHost) then
@@ -123,7 +126,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 
 	return {
 		{
-			title = 'Photometoria — Setup Server',
+			title = LOC "$$$/Photometoria/SectionTitle/SetupServer=Photometoria — Setup Server",
 			synopsis = bind { key = 'synopsis', object = propertyTable },
 
 			f:column {
@@ -134,7 +137,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 					spacing = f:control_spacing(),
 
 					f:static_text {
-						title = 'Server:',
+						title = LOC "$$$/Photometoria/Label/Server=Server:",
 						alignment = 'right',
 						width = LABEL_WIDTH,
 					},
@@ -146,7 +149,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 					},
 
 					f:push_button {
-						title = 'Connect',
+						title = LOC "$$$/Photometoria/Button/Connect=Connect",
 						enabled = bind 'connectEnabled',
 						action = onConnect,
 					},

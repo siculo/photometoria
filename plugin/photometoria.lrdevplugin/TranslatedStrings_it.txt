@@ -1,0 +1,21 @@
+"$$$/Photometoria/SectionTitle/SetupServer=Photometoria — Configurazione server"
+
+"$$$/Photometoria/Label/Server=Server:"
+"$$$/Photometoria/Button/Connect=Connetti"
+"$$$/Photometoria/Validation/InvalidHostPort=Formato non valido. Usa host:porta (es. 192.168.1.50:8080)"
+
+"$$$/Photometoria/Label/Status=Stato:"
+"$$$/Photometoria/Status/Connecting=Connessione..."
+"$$$/Photometoria/Status/Online=Online"
+"$$$/Photometoria/Status/Unreachable=Non raggiungibile"
+"$$$/Photometoria/Status/ConnectedTo=Connesso a ^1"
+"$$$/Photometoria/Status/CannotReach=Impossibile raggiungere il server ^1"
+
+"$$$/Photometoria/Detail/StorageAllocated=Spazio allocato:"
+"$$$/Photometoria/Detail/StorageUsed=Spazio utilizzato:"
+"$$$/Photometoria/Detail/StorageFree=Spazio libero:"
+"$$$/Photometoria/Detail/Providers=Provider:"
+"$$$/Photometoria/Detail/DefaultProvider=Provider predefinito:"
+"$$$/Photometoria/Detail/ServerVersion=Versione server:"
+"$$$/Photometoria/Detail/ActiveTasks=Task attivi:"
+"$$$/Photometoria/Detail/QueuedJobs=Job in coda:"
