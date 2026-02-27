@@ -27,7 +27,7 @@ The main goal is to automate the photographic keywording process, drastically re
 - 🚧 Input validations (#13)
 - 🚧 Configuration system (#5-6)
 - 🚧 CLI subcommands (#15)
-- 📋 Lightroom Plugin (Lua) - planned (#12)
+- 🚧 Lightroom Plugin (Lua) - planned (#12)
 - 📋 Integration tests expansion (#14)
 - 📋 Storage enhancements (#16-18)
 
