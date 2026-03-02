@@ -1,14 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
-use std::collections::HashSet;
-
 use axum::Json;
 use axum::extract::State;
 use serde::Serialize;
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::app_state::AppState;
-use crate::handlers::app_error::AppError;
+use crate::handlers::app_error::{AppError, AppPath};
+use crate::services::ai::AIProvider;
+
+#[derive(Serialize)]
+pub struct ProviderEntry {
+    pub name: String,
+}
+
+#[derive(Serialize)]
+pub struct ProvidersResponse {
+    pub providers: Vec<ProviderEntry>,
+}
 
 #[derive(Serialize)]
 pub struct ModelEntry {
@@ -19,32 +30,63 @@ pub struct ModelEntry {
 }
 
 #[derive(Serialize)]
-pub struct ModelsResponse {
+pub struct ProviderDetailsResponse {
+    pub name: String,
     pub models: Vec<ModelEntry>,
 }
 
-/// Returns all configured AI models with their current availability in Ollama.
-///
-/// Each entry corresponds to a model from the static provider configuration.
-/// `available` is `true` only if the model is also currently installed in
-/// Ollama (matched by backend model name). If Ollama is unreachable all
-/// models are returned with `available: false`.
-pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsResponse>, AppError> {
+pub async fn list_providers(
+    State(state): State<AppState>,
+) -> Result<Json<ProvidersResponse>, AppError> {
+    let providers: Vec<ProviderEntry> = state
+        .ai_providers
+        .providers()
+        .iter()
+        .map(|provider| ProviderEntry {
+            name: provider.name().to_string(),
+        })
+        .collect();
+    Ok(Json(ProvidersResponse { providers }))
+}
+
+pub async fn provider_details(
+    State(state): State<AppState>,
+    AppPath(provider_name): AppPath<String>,
+) -> Result<Json<ProviderDetailsResponse>, AppError> {
+    let provider = state
+        .ai_providers
+        .get(&provider_name)
+        .map_err(|e| AppError::internal_error(e.to_string()))?;
+
+    let models = provider_models(&provider).await;
+
+    Ok(Json(ProviderDetailsResponse {
+        name: provider.name().to_string(),
+        models,
+    }))
+}
+
+#[deprecated]
+pub async fn list_default_provider_models(
+    State(state): State<AppState>,
+) -> Result<Json<ProviderDetailsResponse>, AppError> {
     let provider = state
         .ai_providers
         .default_provider()
         .map_err(|e| AppError::internal_error(e.to_string()))?;
 
+    let models = provider_models(&provider).await;
+
+    Ok(Json(ProviderDetailsResponse {
+        name: provider.name().to_string(),
+        models
+    }))
+}
+
+async fn provider_models(provider: &Arc<dyn AIProvider>) -> Vec<ModelEntry> {
     let configured = provider.configured_model_details();
 
-    // Query Ollama for installed model names. On failure treat all as unavailable.
-    let installed: HashSet<String> = provider
-        .list_models(false)
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(|m| m.name)
-        .collect();
+    let installed: HashSet<String> = available_models(provider).await;
 
     let models = configured
         .into_iter()
@@ -57,10 +99,26 @@ pub async fn list_models(State(state): State<AppState>) -> Result<Json<ModelsRes
             }
         })
         .collect();
-
-    Ok(Json(ModelsResponse { models }))
+    models
 }
 
+/// Query provider for installed model names. On failure treat all as unavailable.
+/// NOTE: the only model currently supported is Ollama.
+///
+/// TODO: other providers should be supported
+async fn available_models(provider: &Arc<dyn AIProvider>) -> HashSet<String> {
+    if provider.name().eq("ollama") {
+        HashSet::new()
+    } else {
+        provider
+            .list_models(false)
+            .await
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| m.name)
+            .collect()
+    }
+}
 // ============================================================================
 // Tests
 // ============================================================================

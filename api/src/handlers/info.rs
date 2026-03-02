@@ -18,7 +18,7 @@ pub async fn info(State(state): State<AppState>) -> Result<Json<InfoResult>, App
         .total_size()
         .await
         .map_err(|e| AppError::internal_error(e.to_string()))?;
-    let available_providers: Vec<String> = state.ai_providers.get_names();
+    let available_providers: Vec<String> = state.ai_providers.provider_names();
     let default_provider = state.ai_providers.default_provider_name().map(String::from);
     let active_tasks_count = state
         .task_store

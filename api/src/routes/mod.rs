@@ -6,7 +6,7 @@ use crate::handlers::info::info;
 use crate::handlers::jobs::{
     cancel_job, create_job, delete_job, get_job, get_job_results, list_jobs, retry_job,
 };
-use crate::handlers::models::list_models;
+use crate::handlers::models::{list_default_provider_models, list_providers, provider_details};
 use crate::handlers::photos::{delete_photo, get_photo, task_photos};
 use crate::handlers::tasks::{create_task, delete_task, get_task, list_tasks, update_task};
 use crate::handlers::upload_photos::upload_photos;
@@ -25,6 +25,8 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         .route("/version", get(version))
         .route("/api/info", get(info))
+        .route("/api/providers", get(list_providers))
+        .route("/api/providers/{provider_name}", get(provider_details))
         .route("/api/tasks", post(create_task).get(list_tasks))
         .route(
             "/api/tasks/{task_id}",
@@ -46,7 +48,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/jobs/{job_id}/results", get(get_job_results))
         .route("/api/jobs/{job_id}/cancel", post(cancel_job))
         .route("/api/jobs/{job_id}/retry", post(retry_job))
-        .route("/api/models", get(list_models))
+        .route("/api/models", get(list_default_provider_models))
         .with_state(state)
 }
 
