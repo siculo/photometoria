@@ -125,14 +125,34 @@ Returns server configuration and limits relevant to the client.
 
 **Note:** `max_tasks: null` indicates that task count limits are not currently enforced. Future versions may introduce configurable quotas. All size values are in bytes for consistency with other API responses.
 
-### GET /api/models
+## Provider Endpoints
 
-Returns list of supported AI models that are currently available (both configured and installed in Ollama).
+### GET /api/providers
 
-**Response:**
+Returns the list of registered AI providers.
+
+**Response:** `200 OK`
 
 ```json
 {
+  "providers": [
+    { "name": "ollama" }
+  ],
+  "default": "ollama"
+}
+```
+
+- `default` — name of the default provider, or omitted if none is configured
+
+### GET /api/providers/{provider_name}
+
+Returns details for a specific provider, including its configured models and their current availability on the backend.
+
+**Response:** `200 OK`
+
+```json
+{
+  "name": "ollama",
   "models": [
     {
       "name": "qwen3-vl",
@@ -147,6 +167,16 @@ Returns list of supported AI models that are currently available (both configure
   ]
 }
 ```
+
+**Errors:**
+
+- `404` - Provider not found
+
+### GET /api/models *(deprecated)*
+
+> **Deprecated:** use `GET /api/providers/{provider_name}` instead. Scheduled for removal in #32.
+
+Returns models for the default provider. The response format matches `GET /api/providers/{provider_name}`.
 
 ## Task Endpoints
 

@@ -6,8 +6,8 @@ use crate::handlers::info::info;
 use crate::handlers::jobs::{
     cancel_job, create_job, delete_job, get_job, get_job_results, list_jobs, retry_job,
 };
-use crate::handlers::models::{list_default_provider_models, list_providers, provider_details};
 use crate::handlers::photos::{delete_photo, get_photo, task_photos};
+use crate::handlers::providers::{list_default_provider_models, list_providers, provider_details};
 use crate::handlers::tasks::{create_task, delete_task, get_task, list_tasks, update_task};
 use crate::handlers::upload_photos::upload_photos;
 use axum::{

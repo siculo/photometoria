@@ -104,10 +104,134 @@
 			]
 		},
 		{
-			"name": "Models",
+			"name": "Providers",
 			"item": [
 				{
-					"name": "List Available Models",
+					"name": "List Providers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/providers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"providers"
+							]
+						},
+						"description": "Returns the list of registered AI providers."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/providers",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"providers"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"providers\": [\n        {\n            \"name\": \"ollama\"\n        }\n    ],\n    \"default\": \"ollama\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Provider Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/providers/ollama",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"providers",
+								"ollama"
+							]
+						},
+						"description": "Returns details for a specific provider, including its configured models and their current availability.\n\nReplace `ollama` in the URL with the desired provider name from `GET /api/providers`."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/providers/ollama",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"providers",
+										"ollama"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"name\": \"ollama\",\n    \"models\": [\n        {\n            \"name\": \"qwen3-vl\",\n            \"description\": \"Best quality, slower processing\",\n            \"available\": true\n        },\n        {\n            \"name\": \"llava\",\n            \"description\": \"Faster, good for testing\",\n            \"available\": true\n        }\n    ]\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/providers/nonexistent",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"providers",
+										"nonexistent"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Provider 'nonexistent' not found\"\n}"
+						}
+					]
+				},
+				{
+					"name": "List Models (deprecated)",
 					"request": {
 						"method": "GET",
 						"header": [],
@@ -121,37 +245,9 @@
 								"models"
 							]
 						},
-						"description": "Returns the list of AI models that are configured and currently available in Ollama.\n\nUseful to discover which model IDs can be passed to the `model` field when creating a job."
+						"description": "**Deprecated:** use `GET /api/providers/{provider_name}` instead. Scheduled for removal in #32.\n\nReturns models for the default provider. The response format matches `GET /api/providers/{provider_name}`."
 					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/models",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"models"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"models\": [\n        {\n            \"id\": \"qwen3-vl\",\n            \"name\": \"qwen3-vl\",\n            \"description\": \"8.0B parameters\",\n            \"supports_vision\": true,\n            \"provider\": \"ollama\"\n        },\n        {\n            \"id\": \"llava:latest\",\n            \"name\": \"llava:latest\",\n            \"supports_vision\": true,\n            \"provider\": \"ollama\"\n        }\n    ]\n}"
-						}
-					]
+					"response": []
 				}
 			]
 		},
