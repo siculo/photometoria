@@ -52,6 +52,58 @@
 			]
 		},
 		{
+			"name": "Server Info",
+			"item": [
+				{
+					"name": "Get Server Info",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/info",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"info"
+							]
+						},
+						"description": "Returns general server information including version, storage usage, available AI providers, and current activity counts."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/info",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"info"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"general\": {\n        \"version\": \"0.1.0\"\n    },\n    \"server\": {\n        \"allocated_space_bytes\": 107374182400,\n        \"used_space_bytes\": 25243074560,\n        \"available_providers\": [\"ollama\"],\n        \"default_provider\": \"ollama\",\n        \"active_tasks_count\": 3,\n        \"running_jobs_count\": 1\n    }\n}"
+						}
+					]
+				}
+			]
+		},
+		{
 			"name": "Models",
 			"item": [
 				{

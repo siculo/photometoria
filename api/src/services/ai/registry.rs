@@ -103,6 +103,11 @@ impl ProviderRegistry {
         }
     }
 
+    /// Returns the names of available providers.
+    pub fn get_names(&self) -> Vec<String> {
+        self.providers.keys().cloned().collect()
+    }
+
     /// Gets a provider by name.
     ///
     /// # Errors

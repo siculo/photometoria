@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
 use crate::app_state::AppState;
+use crate::handlers::info::info;
 use crate::handlers::jobs::{
     cancel_job, create_job, delete_job, get_job, get_job_results, list_jobs, retry_job,
 };
@@ -23,6 +24,7 @@ pub fn create_router(state: AppState) -> Router {
 
     Router::new()
         .route("/version", get(version))
+        .route("/api/info", get(info))
         .route("/api/tasks", post(create_task).get(list_tasks))
         .route(
             "/api/tasks/{task_id}",

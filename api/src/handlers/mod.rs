@@ -10,5 +10,6 @@ pub mod photos;
 pub mod tasks;
 pub mod upload_photos;
 
+pub mod info;
 #[cfg(test)]
 pub mod test_utils;
