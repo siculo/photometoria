@@ -25,6 +25,61 @@ local function formatBytes(bytes)
 	end
 end
 
+--- Reusable progress bar component for LrView.
+--- Usage: ProgressBar.init(props, key), ProgressBar.build(f, key),
+--- ProgressBar.set(props, key, processed, total).
+local ProgressBar = {}
+
+local PB_FILLED = '\226\150\136'
+local PB_EMPTY = ' '
+local PB_WIDTH = 20
+
+--- Initializes the internal properties for a progress bar.
+function ProgressBar.init(props, key)
+	props[key .. '_bar'] = ''
+	props[key .. '_pct'] = ''
+end
+
+--- Builds the view tree: a disabled edit_field (bar) + static_text (percentage).
+function ProgressBar.build(f, key)
+	return f:row {
+		spacing = f:label_spacing(),
+
+		f:edit_field {
+			value = bind(key .. '_bar'),
+			font = { name = 'Courier New', size = 11 },
+			enabled = false,
+			fill_horizontal = 1,
+		},
+
+		f:static_text {
+			title = bind(key .. '_pct'),
+			width = 35,
+			alignment = 'right',
+		},
+	}
+end
+
+--- Updates the progress bar value.
+function ProgressBar.set(props, key, processed, total)
+	if total <= 0 then
+		props[key .. '_bar'] = ''
+		props[key .. '_pct'] = ''
+		return
+	end
+	local ratio = processed / total
+	local filled = math.floor(ratio * PB_WIDTH + 0.5)
+	local empty = PB_WIDTH - filled
+	props[key .. '_bar'] = string.rep(PB_FILLED, filled) .. string.rep(PB_EMPTY, empty)
+	props[key .. '_pct'] = string.format('%d%%', math.floor(ratio * 100))
+end
+
+--- Clears the progress bar.
+function ProgressBar.clear(props, key)
+	props[key .. '_bar'] = ''
+	props[key .. '_pct'] = ''
+end
+
 --- Returns a localized label for a task status.
 local function taskStatusLabel(status)
 	if status == 'active' then
@@ -71,7 +126,7 @@ local function buildJobListItems(task)
 	end
 	for i, job in ipairs(task.jobs) do
 		items[#items + 1] = {
-			title = job.provider .. ' \xC2\xB7 ' .. job.model .. '  [' .. jobStatusLabel(job.status) .. ']',
+			title = job.provider .. ' \194\183 ' .. job.model .. '  [' .. jobStatusLabel(job.status) .. ']',
 			value = i,
 		}
 	end
@@ -126,6 +181,7 @@ local function initProperties(props, tasks)
 		props['jobSlot' .. i .. '_status'] = ''
 		props['jobSlot' .. i .. '_statusIndicator'] = ''
 		props['jobSlot' .. i .. '_progress'] = ''
+		ProgressBar.init(props, 'jobSlot' .. i .. '_pb')
 	end
 
 	props.btnRemoveEnabled = false
@@ -178,10 +234,11 @@ local function onTaskSelected(props, tasks, index)
 		local job = task.jobs[i]
 		if job then
 			props['jobSlot' .. i .. '_visible'] = true
-			props['jobSlot' .. i .. '_providerModel'] = job.provider .. ' \xC2\xB7 ' .. job.model
+			props['jobSlot' .. i .. '_providerModel'] = job.provider .. ' \194\183 ' .. job.model
 			props['jobSlot' .. i .. '_status'] = jobStatusLabel(job.status)
 			props['jobSlot' .. i .. '_statusIndicator'] = '[' .. jobStatusLabel(job.status) .. ']'
 			props['jobSlot' .. i .. '_progress'] = formatJobProgress(job)
+			ProgressBar.set(props, 'jobSlot' .. i .. '_pb', job.photosProcessed, job.photosTotal)
 			if job.status == 'completed' or job.status == 'errored' or job.status == 'cancelled' then
 				hasCompleted = true
 			end
@@ -191,6 +248,7 @@ local function onTaskSelected(props, tasks, index)
 			props['jobSlot' .. i .. '_status'] = ''
 			props['jobSlot' .. i .. '_statusIndicator'] = ''
 			props['jobSlot' .. i .. '_progress'] = ''
+			ProgressBar.clear(props, 'jobSlot' .. i .. '_pb')
 		end
 	end
 
@@ -243,6 +301,8 @@ local function buildJobSlot(f, props, slotIndex)
 				title = bind(prefix .. 'statusIndicator'),
 			},
 		},
+
+		ProgressBar.build(f, prefix .. 'pb'),
 
 		f:static_text {
 			title = bind(prefix .. 'progress'),
