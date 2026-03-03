@@ -4,7 +4,12 @@
 --- Unit tests for JSON.lua decoder.
 --- Run with: lua plugin/tests/test_json.lua
 
-package.path = '../photometoria.lrdevplugin/?.lua;' .. package.path
+-- Resolve module paths relative to this script's location so that tests
+-- work regardless of the current working directory.
+local script_dir = arg[0]:match('(.*[/\\])') or './'
+package.path = script_dir .. '../photometoria.lrdevplugin/?.lua;'
+            .. script_dir .. '?.lua;'
+            .. package.path
 
 local JSON = require 'JSON'
 local T = require 'testkit'
