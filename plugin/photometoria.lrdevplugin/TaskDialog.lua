@@ -51,8 +51,8 @@ local function jobStatusLabel(status)
 	return status
 end
 
---- Builds popup_menu items from the task list.
-local function buildTaskPopupItems(tasks)
+--- Builds simple_list items from the task list.
+local function buildTaskListItems(tasks)
 	local items = {}
 	for i, task in ipairs(tasks) do
 		items[#items + 1] = {
@@ -63,8 +63,8 @@ local function buildTaskPopupItems(tasks)
 	return items
 end
 
---- Builds popup_menu items from a task's job list.
-local function buildJobPopupItems(task)
+--- Builds simple_list items from a task's job list.
+local function buildJobListItems(task)
 	local items = {}
 	if not task or not task.jobs then
 		return items
@@ -105,8 +105,8 @@ local onJobSelected
 
 --- Initializes all bindable properties.
 local function initProperties(props, tasks)
-	props.selectedTaskIndex = 1
-	props.taskPopupItems = buildTaskPopupItems(tasks)
+	props.selectedTaskValue = { 1 }
+	props.taskListItems = buildTaskListItems(tasks)
 
 	props.taskSummary = ''
 	props.taskStatusText = ''
@@ -117,8 +117,8 @@ local function initProperties(props, tasks)
 	props.contextSavedText = ''
 	props.contextModified = false
 
-	props.selectedJobIndex = 1
-	props.jobPopupItems = {}
+	props.selectedJobValue = { 1 }
+	props.jobListItems = {}
 
 	for i = 1, MAX_JOB_SLOTS do
 		props['jobSlot' .. i .. '_visible'] = false
@@ -170,8 +170,8 @@ local function onTaskSelected(props, tasks, index)
 	props.contextSavedText = task.context or ''
 	props.contextModified = false
 
-	props.jobPopupItems = buildJobPopupItems(task)
-	props.selectedJobIndex = (#task.jobs > 0) and 1 or 0
+	props.jobListItems = buildJobListItems(task)
+	props.selectedJobValue = (#task.jobs > 0) and { 1 } or {}
 
 	local hasCompleted = false
 	for i = 1, MAX_JOB_SLOTS do
@@ -201,13 +201,16 @@ end
 
 --- Updates button states when a job is selected.
 onJobSelected = function(props, tasks)
-	local task = tasks[props.selectedTaskIndex]
+	local selectedTask = props.selectedTaskValue
+	local taskIndex = selectedTask and selectedTask[1]
+	local task = taskIndex and tasks[taskIndex]
 	if not task then
 		return
 	end
 
-	local jobIndex = props.selectedJobIndex
-	local job = task.jobs[jobIndex]
+	local selectedJob = props.selectedJobValue
+	local jobIndex = selectedJob and selectedJob[1]
+	local job = jobIndex and task.jobs[jobIndex]
 	if not job then
 		props.btnRetryEnabled = false
 		props.btnApplyEnabled = false
@@ -265,10 +268,11 @@ local function buildContents(f, props)
 				font = '<system/bold>',
 			},
 
-			f:popup_menu {
-				value = bind 'selectedTaskIndex',
-				items = bind 'taskPopupItems',
-				fill_horizontal = 1,
+			f:simple_list {
+				value = bind 'selectedTaskValue',
+				items = bind 'taskListItems',
+				width = 270,
+				height = 100,
 			},
 
 			f:spacer { height = 4 },
@@ -378,10 +382,11 @@ local function buildContents(f, props)
 						font = '<system/bold>',
 					},
 
-					f:popup_menu {
-						value = bind 'selectedJobIndex',
-						items = bind 'jobPopupItems',
-						fill_horizontal = 1,
+					f:simple_list {
+						value = bind 'selectedJobValue',
+						items = bind 'jobListItems',
+						width = 280,
+						height = 80,
 					},
 
 					f:spacer { height = 4 },
@@ -474,11 +479,14 @@ LrFunctionContext.callWithContext('TaskDialog', function(context)
 	local props = LrBinding.makePropertyTable(context)
 	initProperties(props, tasks)
 
-	props:addObserver('selectedTaskIndex', function(propTable, key, value)
-		onTaskSelected(propTable, tasks, value)
+	props:addObserver('selectedTaskValue', function(propTable, key, value)
+		local index = value and value[1]
+		if index then
+			onTaskSelected(propTable, tasks, index)
+		end
 	end)
 
-	props:addObserver('selectedJobIndex', function(propTable, key, value)
+	props:addObserver('selectedJobValue', function(propTable, key, value)
 		onJobSelected(propTable, tasks)
 	end)
 
