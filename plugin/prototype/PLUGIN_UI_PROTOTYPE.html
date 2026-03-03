@@ -732,109 +732,107 @@
       <span>Photometoria – Tasks</span>
     </div>
 
-    <!-- Master-detail body -->
-    <div style="flex:1; display:flex; flex-direction:row; overflow:hidden; min-height:380px">
+    <!-- Task selector row -->
+    <div style="padding:10px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px">
+      <span class="field-label" style="width:auto; text-align:left">Task</span>
+      <select class="field-input" id="task-popup" style="flex:0 1 280px" onchange="selectTask(parseInt(this.value))">
+        <option value="1">Iceland Vacation 2024 ( ✓ ✕ ⟳ )</option>
+        <option value="2">Milan Workshop – March ( ✓ )</option>
+        <option value="3">Studio Portraits Q1 ( ✕ )</option>
+      </select>
+      <div style="flex:1"></div>
+      <button class="btn btn-ghost" style="font-size:11px; flex-shrink:0" onclick="showPhotosInLibrary()">Show Photos in Library</button>
+      <button class="btn btn-danger" id="btn-delete-task" onclick="openDeleteModal()" disabled style="font-size:11px; flex-shrink:0">Delete</button>
+    </div>
 
-      <!-- ── LEFT: task list ── -->
-      <div style="width:240px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0">
-        <div style="padding:10px 14px 6px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between">
-          <div class="section-title" style="margin:0">Current server tasks</div>
-        </div>
-        <div style="flex:1; overflow-y:auto">
-          <div class="list" id="task-list" style="border:none; border-radius:0">
-            <div class="list-item selected" id="task-item-1" onclick="selectTask(1)">
-              <div>
-                <div class="list-item-name">Iceland Vacation 2024</div>
-                <div class="list-item-sub">72 photos · 1.8 GB</div>
-              </div>
-              <div class="task-status-icons">
-                <span class="task-status-icon icon-done" title="Completed jobs">✓</span>
-                <span class="task-status-icon icon-error" title="Jobs with errors">✕</span>
-                <span class="task-status-icon icon-running" title="Running jobs">⟳</span>
-              </div>
-            </div>
-            <div class="list-item" id="task-item-2" onclick="selectTask(2)">
-              <div>
-                <div class="list-item-name">Milan Workshop – March</div>
-                <div class="list-item-sub">148 photos · 3.2 GB</div>
-              </div>
-              <div class="task-status-icons">
-                <span class="task-status-icon icon-done" title="Completed jobs">✓</span>
-              </div>
-            </div>
-            <div class="list-item" id="task-item-3" onclick="selectTask(3)">
-              <div>
-                <div class="list-item-name">Studio Portraits Q1</div>
-                <div class="list-item-sub">31 photos · 0.7 GB</div>
-              </div>
-              <div class="task-status-icons">
-                <span class="task-status-icon icon-error" title="Jobs with errors">✕</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Bottom actions -->
-        <div style="padding:10px 12px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:6px">
-          <button class="btn btn-ghost" style="width:100%; font-size:11px" onclick="showPhotosInLibrary()">Show Photos in Library</button>
-          <div style="display:flex; gap:6px">
-            <button class="btn btn-danger" id="btn-delete-task" onclick="openDeleteModal()" disabled style="flex:1; font-size:11px">Delete</button>
-          </div>
-          <span class="help-text" id="delete-help" style="margin:0; display:none">Task with active job — cannot delete</span>
-        </div>
+    <!-- Task info row -->
+    <div style="padding:4px 16px 8px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px">
+      <span id="task-info-text" style="font-size:10px; color:var(--text2); font-family:var(--mono)">72 photos · 1.8 GB · 1 job</span>
+      <span class="help-text" id="delete-help" style="margin:0; display:none; color:var(--red); font-style:normal; font-size:10px">Task with active job — cannot delete</span>
+    </div>
+
+    <!-- Detail body -->
+    <div style="flex:1; display:flex; flex-direction:column; overflow:hidden; min-height:380px">
+
+      <!-- empty state -->
+      <div id="detail-empty" style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:12px; display:none">
+        No tasks available
       </div>
 
-      <!-- ── RIGHT: task detail ── -->
-      <div style="flex:1; display:flex; flex-direction:column; min-width:0">
+      <!-- detail content -->
+      <div id="detail-content" style="flex:1; display:flex; flex-direction:column; min-height:0">
 
-        <!-- empty state -->
-        <div id="detail-empty" style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:12px; display:none">
-          Select a task from the list
-        </div>
-
-        <!-- detail content -->
-        <div id="detail-content" style="flex:1; display:flex; flex-direction:column; min-height:0">
-
-          <!-- Task name header -->
-          <div style="padding:10px 16px 8px; border-bottom:1px solid var(--border)">
-            <div id="detail-task-name" style="font-size:13px; font-weight:600; color:var(--text0)">Iceland Vacation 2024</div>
-          </div>
-
-          <!-- Two-col: context | jobs -->
-          <div style="flex:1; display:flex; flex-direction:row; overflow:hidden; min-height:0">
-
-            <!-- Context -->
-            <div style="width:260px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0">
-              <div style="padding:8px 14px 5px; border-bottom:1px solid var(--border)">
-                <div class="section-title" style="margin:0">Context</div>
-              </div>
-              <div style="flex:1; display:flex; flex-direction:column; padding:10px 14px; gap:6px">
-                <textarea class="field-input" id="task-context-field"
-                  style="flex:1; resize:none; min-height:0"
-                >Trip to Iceland, August 2024. Volcanic landscapes, northern lights, waterfalls and small fishing villages along the south coast.</textarea>
-                <div class="inline-actions" id="context-actions" style="display:none">
-                  <button class="btn-xs cancel" onclick="cancelContextEdit()">Cancel</button>
-                  <button class="btn-xs save" onclick="saveContextEdit()">Save</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Job list -->
-            <div style="flex:1; display:flex; flex-direction:column; min-width:0">
-              <div style="padding:8px 14px 5px; border-bottom:1px solid var(--border)">
-                <div class="section-title" style="margin:0">Jobs</div>
-              </div>
-              <div style="flex:1; overflow-y:auto">
-                <div class="list" id="job-list" style="border:none; border-radius:0">
-                </div>
-              </div>
-              <!-- New job button -->
-              <div style="padding:8px 12px; border-top:1px solid var(--border); background:var(--bg0); display:flex; justify-content:flex-end">
-                <button class="btn btn-primary" onclick="openJobModal()" style="font-size:11px">+ Start New Job</button>
-              </div>
-            </div>
-
+        <!-- Context -->
+        <div style="padding:10px 16px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:6px">
+          <div class="section-title" style="margin:0">Context</div>
+          <textarea class="field-input" id="task-context-field"
+            style="resize:vertical; min-height:52px; max-height:120px"
+          >Trip to Iceland, August 2024. Volcanic landscapes, northern lights, waterfalls and small fishing villages along the south coast.</textarea>
+          <div class="inline-actions" id="context-actions" style="display:none">
+            <button class="btn-xs cancel" onclick="cancelContextEdit()">Cancel</button>
+            <button class="btn-xs save" onclick="saveContextEdit()">Save</button>
           </div>
         </div>
+
+        <!-- Jobs area: list | detail -->
+        <div style="flex:1; display:flex; flex-direction:row; min-height:0; border-top:1px solid var(--border)">
+
+          <!-- LEFT: job list + new job button -->
+          <div style="width:240px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0">
+            <div style="padding:8px 14px 5px; border-bottom:1px solid var(--border)">
+              <div class="section-title" style="margin:0">Jobs</div>
+            </div>
+            <div style="flex:1; overflow-y:auto">
+              <div class="list" id="job-list" style="border:none; border-radius:0">
+              </div>
+            </div>
+            <div style="padding:8px 12px; border-top:1px solid var(--border); background:var(--bg0)">
+              <button class="btn btn-primary" onclick="openJobModal()" style="font-size:11px; width:100%">+ Start New Job</button>
+            </div>
+          </div>
+
+          <!-- RIGHT: job detail -->
+          <div style="flex:1; display:flex; flex-direction:column; min-width:0">
+
+            <!-- Job empty state -->
+            <div id="job-detail-empty" style="flex:1; display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:12px">
+              Select a job from the list
+            </div>
+
+            <!-- Job detail content -->
+            <div id="job-detail-content" style="flex:1; display:none; flex-direction:column; padding:14px 16px; gap:10px">
+
+              <!-- Job name + status label -->
+              <div style="display:flex; align-items:center; gap:10px">
+                <span id="job-detail-name" style="font-size:13px; font-weight:600; color:var(--text0); flex:1">Ollama · qwen2-vl:8b</span>
+                <span class="pill running" id="job-detail-status">In progress</span>
+              </div>
+
+              <!-- Progress bar -->
+              <div id="job-detail-progress-wrap" style="display:none">
+                <div class="progress-bar" style="height:6px">
+                  <div class="progress-fill" id="job-detail-progress-fill" style="width:44%"></div>
+                </div>
+              </div>
+
+              <!-- Photo count / time info -->
+              <div id="job-detail-meta" style="font-size:11px; color:var(--text2); font-family:var(--mono)">
+                32 / 72 photos · ~3 min remaining
+              </div>
+
+              <!-- Action buttons row -->
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px">
+                <button class="btn btn-default" id="job-btn-apply" onclick="applyTagsConfirm(selectedJob)" style="font-size:11px; display:none">✓ Apply Tags</button>
+                <button class="btn btn-default" id="job-btn-retry" onclick="retryFailedJob(selectedJob)" style="font-size:11px; display:none">↻ Retry Failed</button>
+                <button class="btn btn-danger" id="job-btn-cancel" onclick="openCancelJobModal(selectedJob)" style="font-size:11px; display:none">✕ Cancel</button>
+                <button class="btn btn-danger" id="job-btn-remove" onclick="removeSelectedJob(selectedJob)" style="font-size:11px; display:none">🗑 Remove</button>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
       </div>
 
     </div>
@@ -1017,167 +1015,135 @@
 
 
   <!-- ════════════════════════════════════════
-       MODAL – CONFIRM TASK DELETION
+       CONFIRM – DELETE TASK (LrDialogs.confirm)
   ════════════════════════════════════════ -->
   <div id="delete-modal-overlay" style="
     display:none; position:fixed; inset:0;
     background:rgba(0,0,0,.65); backdrop-filter:blur(2px);
     z-index:100; align-items:center; justify-content:center;
   ">
-    <div class="dialog visible" style="width:380px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
+    <div class="dialog visible" style="width:400px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
       <div class="dialog-titlebar">
-        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
         <span>Confirm deletion</span>
       </div>
       <div class="dialog-body">
         <div class="section">
-          <div style="font-size:12px; color:var(--text1); line-height:1.6; margin-bottom:10px">
-            You are about to delete the task:
-          </div>
-          <div style="
-            background:var(--bg0); border:1px solid var(--border);
-            border-radius:3px; padding:10px 12px; margin-bottom:12px;
-          ">
-            <div style="font-size:13px; font-weight:600; color:var(--text0)" id="delete-task-name">—</div>
-            <div style="font-size:10px; color:var(--text2); font-family:var(--mono); margin-top:3px" id="delete-task-meta">—</div>
-          </div>
-          <div style="
-            display:flex; gap:8px; padding:8px 10px;
-            background:rgba(212,90,74,.08); border:1px solid rgba(212,90,74,.25);
-            border-radius:3px; font-size:10px; color:var(--red); line-height:1.5;
-          ">
-            <span style="font-size:14px; flex-shrink:0">⚠</span>
-            <span>All task data will be deleted from the server: jobs and uploaded photos. Original photos in Lightroom will not be affected. This operation is irreversible.</span>
-          </div>
+          <div style="font-size:12px; color:var(--text1); line-height:1.8; white-space:pre-line" id="delete-confirm-message">Delete task "—"?
+
+All task data will be deleted from the server: jobs and uploaded photos. Original photos in Lightroom will not be affected. This operation is irreversible.</div>
         </div>
       </div>
       <div class="btn-row right">
         <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
-        <button class="btn btn-danger" onclick="confirmDeleteTask()" style="background:var(--red);color:#fff;border-color:var(--red)">Delete permanently</button>
+        <button class="btn btn-danger" onclick="confirmDeleteTask()">Delete</button>
       </div>
     </div>
   </div>
 
 
   <!-- ════════════════════════════════════════
-       MODAL – CONFIRM JOB CANCELLATION
+       CONFIRM – CANCEL JOB (LrDialogs.confirm)
   ════════════════════════════════════════ -->
   <div id="cancel-job-modal-overlay" style="
     display:none; position:fixed; inset:0;
     background:rgba(0,0,0,.65); backdrop-filter:blur(2px);
     z-index:100; align-items:center; justify-content:center;
   ">
-    <div class="dialog visible" style="width:380px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
+    <div class="dialog visible" style="width:400px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
       <div class="dialog-titlebar">
-        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-        <span>Confirm job cancellation</span>
+        <span>Confirm cancellation</span>
       </div>
       <div class="dialog-body">
         <div class="section">
-          <div style="font-size:12px; color:var(--text1); line-height:1.6; margin-bottom:10px">
-            You are about to cancel the job:
-          </div>
-          <div style="
-            background:var(--bg0); border:1px solid var(--border);
-            border-radius:3px; padding:10px 12px; margin-bottom:12px;
-          ">
-            <div style="font-size:13px; font-weight:600; color:var(--text0)" id="cancel-job-name">—</div>
-            <div style="font-size:10px; color:var(--text2); font-family:var(--mono); margin-top:3px" id="cancel-job-meta">—</div>
-          </div>
-          <div style="
-            display:flex; gap:8px; padding:8px 10px;
-            background:rgba(212,130,10,.08); border:1px solid rgba(212,130,10,.25);
-            border-radius:3px; font-size:10px; color:var(--accent); line-height:1.5;
-          ">
-            <span style="font-size:14px; flex-shrink:0">⚠</span>
-            <span>The job will be stopped after the current photo finishes processing. Partial results already obtained will remain available.</span>
-          </div>
+          <div style="font-size:12px; color:var(--text1); line-height:1.8; white-space:pre-line" id="cancel-confirm-message">Cancel job "—"?
+
+The job will be stopped after the current photo finishes processing. Partial results already obtained will remain available.</div>
         </div>
       </div>
       <div class="btn-row right">
         <button class="btn btn-ghost" onclick="closeCancelJobModal()">Back</button>
-        <button class="btn btn-danger" onclick="confirmCancelJob()">Cancel the job</button>
+        <button class="btn btn-danger" onclick="confirmCancelJob()">Cancel Job</button>
       </div>
     </div>
   </div>
 
 
   <!-- ════════════════════════════════════════
-       MODAL – CONFIRM RETRY FAILED
+       CONFIRM – RETRY FAILED (LrDialogs.confirm)
   ════════════════════════════════════════ -->
   <div id="retry-modal-overlay" style="
     display:none; position:fixed; inset:0;
     background:rgba(0,0,0,.65); backdrop-filter:blur(2px);
     z-index:100; align-items:center; justify-content:center;
   ">
-    <div class="dialog visible" style="width:380px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
+    <div class="dialog visible" style="width:400px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
       <div class="dialog-titlebar">
-        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
         <span>Confirm retry</span>
       </div>
       <div class="dialog-body">
         <div class="section">
-          <div style="font-size:12px; color:var(--text1); line-height:1.6; margin-bottom:10px">
-            A new job will be created to retry the failed photos from:
-          </div>
-          <div style="
-            background:var(--bg0); border:1px solid var(--border);
-            border-radius:3px; padding:10px 12px; margin-bottom:12px;
-          ">
-            <div style="font-size:13px; font-weight:600; color:var(--text0)" id="retry-job-name">—</div>
-            <div style="font-size:10px; color:var(--text2); font-family:var(--mono); margin-top:3px" id="retry-job-meta">—</div>
-          </div>
-          <div class="info-row">
-            The failed photos will be reprocessed using the same model and settings.
-          </div>
+          <div style="font-size:12px; color:var(--text1); line-height:1.8; white-space:pre-line" id="retry-confirm-message">Retry failed photos from "—"?
+
+The failed photos will be reprocessed using the same model and settings.</div>
         </div>
       </div>
       <div class="btn-row right">
         <button class="btn btn-ghost" onclick="closeRetryModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="confirmRetryFailed()">Retry Failed Photos</button>
+        <button class="btn btn-primary" onclick="confirmRetryFailed()">Retry</button>
       </div>
     </div>
   </div>
 
 
   <!-- ════════════════════════════════════════
-       MODAL – CONFIRM APPLY TAGS
+       CONFIRM – REMOVE JOB (LrDialogs.confirm)
+  ════════════════════════════════════════ -->
+  <div id="remove-job-modal-overlay" style="
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.65); backdrop-filter:blur(2px);
+    z-index:100; align-items:center; justify-content:center;
+  ">
+    <div class="dialog visible" style="width:400px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
+      <div class="dialog-titlebar">
+        <span>Confirm removal</span>
+      </div>
+      <div class="dialog-body">
+        <div class="section">
+          <div style="font-size:12px; color:var(--text1); line-height:1.8; white-space:pre-line" id="remove-confirm-message">Remove job "—"?
+
+The job and its results will be removed from this task.</div>
+        </div>
+      </div>
+      <div class="btn-row right">
+        <button class="btn btn-ghost" onclick="closeRemoveJobModal()">Cancel</button>
+        <button class="btn btn-danger" onclick="confirmRemoveJob()">Remove</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════
+       CONFIRM – APPLY TAGS (LrDialogs.confirm)
   ════════════════════════════════════════ -->
   <div id="apply-tags-modal-overlay" style="
     display:none; position:fixed; inset:0;
     background:rgba(0,0,0,.65); backdrop-filter:blur(2px);
     z-index:100; align-items:center; justify-content:center;
   ">
-    <div class="dialog visible" style="width:380px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
+    <div class="dialog visible" style="width:400px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
       <div class="dialog-titlebar">
-        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
         <span>Confirm apply tags</span>
       </div>
       <div class="dialog-body">
         <div class="section">
-          <div style="font-size:12px; color:var(--text1); line-height:1.6; margin-bottom:10px">
-            You are about to apply generated tags to photos in Lightroom from:
-          </div>
-          <div style="
-            background:var(--bg0); border:1px solid var(--border);
-            border-radius:3px; padding:10px 12px; margin-bottom:12px;
-          ">
-            <div style="font-size:13px; font-weight:600; color:var(--text0)" id="apply-job-name">—</div>
-            <div style="font-size:10px; color:var(--text2); font-family:var(--mono); margin-top:3px" id="apply-job-meta">—</div>
-          </div>
-          <div style="
-            display:flex; gap:8px; padding:8px 10px;
-            background:rgba(212,130,10,.08); border:1px solid rgba(212,130,10,.25);
-            border-radius:3px; font-size:10px; color:var(--accent); line-height:1.5;
-          ">
-            <span style="font-size:14px; flex-shrink:0">⚠</span>
-            <span>Tags will be written to the Lightroom Keywords field. This action will modify your catalog metadata.</span>
-          </div>
+          <div style="font-size:12px; color:var(--text1); line-height:1.8; white-space:pre-line" id="apply-confirm-message">Apply tags from "—"?
+
+Tags will be written to the Lightroom Keywords field. This action will modify your catalog metadata.</div>
         </div>
       </div>
       <div class="btn-row right">
         <button class="btn btn-ghost" onclick="closeApplyTagsModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="confirmApplyTags()">Apply Tags to Photos</button>
+        <button class="btn btn-primary" onclick="confirmApplyTags()">Apply Tags</button>
       </div>
     </div>
   </div>
@@ -1369,24 +1335,26 @@
 
   function selectTask(id) {
     selectedTask = id;
-    document.querySelectorAll('#task-list .list-item').forEach(el => {
-      const elId = parseInt(el.id.replace('task-item-', ''), 10);
-      el.classList.toggle('selected', elId === id);
-    });
+    const popup = document.getElementById('task-popup');
+    popup.value = id;
+
     const t = taskData[id];
     if (!t) return;
 
     document.getElementById('detail-empty').style.display = 'none';
     document.getElementById('detail-content').style.display = 'flex';
 
-    document.getElementById('detail-task-name').textContent = t.name;
+    // Update task info row
+    const m = taskMeta[id];
+    document.getElementById('task-info-text').textContent = m ? m.meta : '';
+
     document.getElementById('task-context-field').value = t.desc;
     document.getElementById('context-actions').style.display = 'none';
 
     const btn = document.getElementById('btn-delete-task');
     const help = document.getElementById('delete-help');
     btn.disabled = t.hasActiveJob;
-    help.style.display = t.hasActiveJob ? 'block' : 'none';
+    help.style.display = t.hasActiveJob ? 'inline' : 'none';
 
     renderJobList(id);
   }
@@ -1468,16 +1436,30 @@
     if (j && j.timerId) { clearInterval(j.timerId); j.timerId = null; }
   }
 
-  function buildTaskStatusIcons(taskId) {
+  function buildTaskStatusText(taskId) {
     const jobs = getJobsForTask(taskId);
     const hasDone = jobs.some(id => jobData[id] && jobData[id].status === 'done');
     const hasError = jobs.some(id => jobData[id] && jobData[id].status === 'error');
     const hasRunning = jobs.some(id => jobData[id] && jobData[id].status === 'running');
-    let html = '';
-    if (hasDone)    html += '<span class="task-status-icon icon-done" title="Completed jobs">✓</span>';
-    if (hasError)   html += '<span class="task-status-icon icon-error" title="Jobs with errors">✕</span>';
-    if (hasRunning) html += '<span class="task-status-icon icon-running" title="Running jobs">⟳</span>';
-    return html;
+    let icons = '';
+    const parts = [];
+    if (hasDone)    parts.push('✓');
+    if (hasError)   parts.push('✕');
+    if (hasRunning) parts.push('⟳');
+    return parts.length > 0 ? '( ' + parts.join(' ') + ' )' : '';
+  }
+
+  function taskPopupLabel(taskId) {
+    const t = taskData[taskId];
+    if (!t) return '';
+    const icons = buildTaskStatusText(taskId);
+    return t.name + (icons ? ' ' + icons : '');
+  }
+
+  function updateTaskPopupOption(taskId) {
+    const popup = document.getElementById('task-popup');
+    const opt = popup.querySelector('option[value="' + taskId + '"]');
+    if (opt) opt.textContent = taskPopupLabel(taskId);
   }
 
   function updateTaskBadge(taskId) {
@@ -1487,18 +1469,13 @@
     const hasRunning = jobs.some(id => jobData[id] && jobData[id].status === 'running');
     t.hasActiveJob = hasRunning;
 
-    const itemEl = document.getElementById('task-item-' + taskId);
-    if (itemEl) {
-      const iconsEl = itemEl.querySelector('.task-status-icons');
-      if (iconsEl) {
-        iconsEl.innerHTML = buildTaskStatusIcons(taskId);
-      }
-    }
+    updateTaskPopupOption(taskId);
+
     const btn = document.getElementById('btn-delete-task');
     const help = document.getElementById('delete-help');
     if (btn && selectedTask === taskId) {
       btn.disabled = t.hasActiveJob;
-      help.style.display = t.hasActiveJob ? 'block' : 'none';
+      help.style.display = t.hasActiveJob ? 'inline' : 'none';
     }
   }
 
@@ -1506,7 +1483,20 @@
     if (selectedTask !== taskId) return;
     const screen = document.getElementById('screen-tasks');
     if (!screen || !screen.classList.contains('visible')) return;
-    renderJobList(taskId);
+    // Update list icons
+    const jobIds = getJobsForTask(taskId);
+    jobIds.forEach(id => {
+      const j = jobData[id];
+      const itemEl = document.getElementById('job-item-' + id);
+      if (itemEl) {
+        const nameEl = itemEl.querySelector('.list-item-name');
+        if (nameEl) nameEl.textContent = j.name + ' ( ' + jobStatusIcon(j.status) + ' )';
+      }
+    });
+    // Update detail if the selected job belongs to this task
+    if (selectedJob !== null && jobData[selectedJob] && jobData[selectedJob].taskId === taskId) {
+      showJobDetail(selectedJob);
+    }
   }
 
   let selectedJob = null;
@@ -1517,22 +1507,27 @@
       .filter(id => jobData[id].taskId === taskId);
   }
 
-  function buildJobActions(id, j) {
-    const actions = [];
-    if (j.canCancel) {
-      actions.push('<button class="job-action-btn danger" onclick="event.stopPropagation(); openCancelJobModal(' + id + ')" title="Cancel job">✕ Cancel</button>');
-    }
-    if (j.canRetry) {
-      actions.push('<button class="job-action-btn" onclick="event.stopPropagation(); retryFailedJob(' + id + ')" title="Retry failed photos">↻ Retry</button>');
-    }
-    if (j.canApply) {
-      actions.push('<button class="job-action-btn" onclick="event.stopPropagation(); applyTagsConfirm(' + id + ')" title="Apply tags to Lightroom">✓ Apply Tags</button>');
-    }
-    if (j.status !== 'running') {
-      actions.push('<button class="job-action-btn danger" onclick="event.stopPropagation(); removeSelectedJob(' + id + ')" title="Remove job">🗑 Remove</button>');
-    }
-    if (actions.length === 0) return '';
-    return '<div class="job-actions">' + actions.join('') + '</div>';
+  function jobStatusIcon(status) {
+    if (status === 'running')   return '⟳';
+    if (status === 'done')      return '✓';
+    if (status === 'error')     return '✕';
+    if (status === 'cancelled') return '—';
+    return ' ';
+  }
+
+  function jobStatusLabel(status) {
+    if (status === 'running')   return 'In progress';
+    if (status === 'done')      return 'Completed';
+    if (status === 'error')     return 'With errors';
+    if (status === 'cancelled') return 'Cancelled';
+    return '';
+  }
+
+  function jobStatusPillClass(status) {
+    if (status === 'running') return 'running';
+    if (status === 'done')    return 'done';
+    if (status === 'error')   return 'error';
+    return 'cancelled';
   }
 
   function renderJobList(taskId) {
@@ -1544,22 +1539,11 @@
       const j = jobData[id];
       const item = document.createElement('div');
       item.className = 'list-item';
-      item.style.flexDirection = 'column';
-      item.style.alignItems = 'stretch';
       item.id = 'job-item-' + id;
       item.onclick = function() { selectJob(id); };
 
-      const pillClass = j.status === 'running' ? 'running' : j.status === 'done' ? 'done' : j.status === 'error' ? 'error' : 'cancelled';
-      const pillLabel = j.status === 'running' ? 'In progress' : j.status === 'done' ? 'Completed' : j.status === 'error' ? 'With errors' : 'Cancelled';
-
-      let topRow;
-      if (j.progress !== null) {
-        topRow = '<div style="display:flex; align-items:center; gap:8px"><div style="flex:1;min-width:0"><div class="list-item-name">' + escapeHtml(j.name) + '</div><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill" style="width:' + j.progress + '%"></div></div><div class="progress-text">' + escapeHtml(j.progressText) + '</div></div></div><span class="pill ' + pillClass + '" style="flex-shrink:0">' + pillLabel + '</span></div>';
-      } else {
-        topRow = '<div style="display:flex; align-items:center; gap:8px"><div style="flex:1;min-width:0"><div class="list-item-name">' + escapeHtml(j.name) + '</div><div class="list-item-sub">' + escapeHtml(j.meta) + '</div></div><span class="pill ' + pillClass + '" style="flex-shrink:0">' + pillLabel + '</span></div>';
-      }
-
-      item.innerHTML = topRow + buildJobActions(id, j);
+      const icon = jobStatusIcon(j.status);
+      item.innerHTML = '<div class="list-item-name">' + escapeHtml(j.name) + ' ( ' + icon + ' )</div>';
       listEl.appendChild(item);
     });
 
@@ -1568,6 +1552,7 @@
       selectJob(keepSelection ? selectedJob : jobIds[0]);
     } else {
       selectedJob = null;
+      showJobDetail(null);
     }
   }
 
@@ -1577,6 +1562,57 @@
       const elId = parseInt(el.id.replace('job-item-', ''), 10);
       el.classList.toggle('selected', elId === id);
     });
+    showJobDetail(id);
+  }
+
+  function showJobDetail(id) {
+    const emptyEl = document.getElementById('job-detail-empty');
+    const contentEl = document.getElementById('job-detail-content');
+
+    if (id === null || !jobData[id]) {
+      emptyEl.style.display = 'flex';
+      contentEl.style.display = 'none';
+      return;
+    }
+
+    emptyEl.style.display = 'none';
+    contentEl.style.display = 'flex';
+
+    const j = jobData[id];
+
+    // Name + status pill
+    document.getElementById('job-detail-name').textContent = j.name;
+    const statusEl = document.getElementById('job-detail-status');
+    statusEl.className = 'pill ' + jobStatusPillClass(j.status);
+    statusEl.textContent = jobStatusLabel(j.status);
+
+    // Progress bar
+    const progressWrap = document.getElementById('job-detail-progress-wrap');
+    if (j.progress !== null) {
+      progressWrap.style.display = 'block';
+      document.getElementById('job-detail-progress-fill').style.width = j.progress + '%';
+      document.getElementById('job-detail-progress-fill').className = 'progress-fill' + (j.status === 'done' ? ' done' : '');
+    } else {
+      progressWrap.style.display = 'none';
+    }
+
+    // Meta info
+    const metaEl = document.getElementById('job-detail-meta');
+    if (j.progressText) {
+      metaEl.textContent = j.progressText;
+      metaEl.style.display = 'block';
+    } else if (j.meta) {
+      metaEl.textContent = j.meta;
+      metaEl.style.display = 'block';
+    } else {
+      metaEl.style.display = 'none';
+    }
+
+    // Action buttons — show only relevant ones
+    document.getElementById('job-btn-apply').style.display = j.canApply ? 'inline-flex' : 'none';
+    document.getElementById('job-btn-retry').style.display = j.canRetry ? 'inline-flex' : 'none';
+    document.getElementById('job-btn-cancel').style.display = j.canCancel ? 'inline-flex' : 'none';
+    document.getElementById('job-btn-remove').style.display = (j.status !== 'running') ? 'inline-flex' : 'none';
   }
 
   renderJobList(1);
@@ -1656,13 +1692,11 @@
         meta: photoCount + ' photos · ' + photoSize
       };
 
-      const listEl = document.getElementById('task-list');
-      const item = document.createElement('div');
-      item.className = 'list-item';
-      item.id = 'task-item-' + id;
-      item.onclick = function() { selectTask(id); };
-      item.innerHTML = '<div><div class="list-item-name">' + escapeHtml(name) + '</div><div class="list-item-sub">' + photoCount + ' photos · ' + photoSize + '</div></div><div class="task-status-icons"></div>';
-      listEl.appendChild(item);
+      const popup = document.getElementById('task-popup');
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = name;
+      popup.appendChild(opt);
 
       document.getElementById('new-task-name').value = '';
       document.getElementById('new-task-context').value = '';
@@ -1771,8 +1805,8 @@
     selectedJob = jobId;
     const j = jobData[jobId];
     if (!j) return;
-    document.getElementById('retry-job-name').textContent = j.name;
-    document.getElementById('retry-job-meta').textContent = j.meta;
+    document.getElementById('retry-confirm-message').textContent =
+      'Retry failed photos from "' + j.name + '" (' + j.meta + ')?\n\nThe failed photos will be reprocessed using the same model and settings.';
     document.getElementById('retry-modal-overlay').style.display = 'flex';
   }
 
@@ -1803,8 +1837,8 @@
     selectedJob = jobId;
     const j = jobData[jobId];
     if (!j) return;
-    document.getElementById('apply-job-name').textContent = j.name;
-    document.getElementById('apply-job-meta').textContent = j.meta;
+    document.getElementById('apply-confirm-message').textContent =
+      'Apply tags from "' + j.name + '" (' + j.meta + ')?\n\nTags will be written to the Lightroom Keywords field. This action will modify your catalog metadata.';
     document.getElementById('apply-tags-modal-overlay').style.display = 'flex';
   }
 
@@ -1820,6 +1854,10 @@
     }
   }
 
+  document.getElementById('remove-job-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeRemoveJobModal();
+  });
+
   document.getElementById('apply-tags-modal-overlay').addEventListener('click', function(e) {
     if (e.target === this) closeApplyTagsModal();
   });
@@ -1828,8 +1866,22 @@
   function removeSelectedJob(jobId) {
     const j = jobData[jobId];
     if (!j || j.status === 'running') return;
-    stopJobSimulation(jobId);
-    delete jobData[jobId];
+    selectedJob = jobId;
+    document.getElementById('remove-confirm-message').textContent =
+      'Remove job "' + j.name + '" (' + j.meta + ')?\n\nThe job and its results will be removed from this task.';
+    document.getElementById('remove-job-modal-overlay').style.display = 'flex';
+  }
+
+  function closeRemoveJobModal() {
+    document.getElementById('remove-job-modal-overlay').style.display = 'none';
+  }
+
+  function confirmRemoveJob() {
+    closeRemoveJobModal();
+    const j = jobData[selectedJob];
+    if (!j) return;
+    stopJobSimulation(selectedJob);
+    delete jobData[selectedJob];
     updateTaskBadge(j.taskId);
     renderJobList(selectedTask);
   }
@@ -1837,8 +1889,8 @@
   // ── Delete Task – confirmation ────────────────────
   function openDeleteModal() {
     const t = taskMeta[selectedTask];
-    document.getElementById('delete-task-name').textContent = t.name;
-    document.getElementById('delete-task-meta').textContent = t.meta;
+    document.getElementById('delete-confirm-message').textContent =
+      'Delete task "' + t.name + '" (' + t.meta + ')?\n\nAll task data will be deleted from the server: jobs and uploaded photos. Original photos in Lightroom will not be affected. This operation is irreversible.';
     document.getElementById('delete-modal-overlay').style.display = 'flex';
   }
 
@@ -1849,22 +1901,26 @@
   function confirmDeleteTask() {
     closeDeleteModal();
     const deletedId = selectedTask;
-    const el = document.getElementById('task-item-' + deletedId);
-    if (el) {
-      el.style.transition = 'opacity .3s';
-      el.style.opacity = '0';
-      setTimeout(() => {
-        el.remove();
-        delete taskData[deletedId];
-        delete taskMeta[deletedId];
-        document.getElementById('btn-delete-task').disabled = true;
-        document.getElementById('delete-help').style.display = 'none';
 
-        document.getElementById('detail-content').style.display = 'none';
-        document.getElementById('detail-empty').style.display = 'flex';
-        document.getElementById('job-list').innerHTML = '';
-        selectedTask = null;
-      }, 300);
+    // Remove option from popup
+    const popup = document.getElementById('task-popup');
+    const opt = popup.querySelector('option[value="' + deletedId + '"]');
+    if (opt) opt.remove();
+
+    delete taskData[deletedId];
+    delete taskMeta[deletedId];
+    document.getElementById('btn-delete-task').disabled = true;
+    document.getElementById('delete-help').style.display = 'none';
+
+    // Select next available task or show empty state
+    if (popup.options.length > 0) {
+      selectTask(parseInt(popup.options[0].value, 10));
+    } else {
+      document.getElementById('detail-content').style.display = 'none';
+      document.getElementById('detail-empty').style.display = 'flex';
+      document.getElementById('job-list').innerHTML = '';
+      document.getElementById('task-info-text').textContent = '';
+      selectedTask = null;
     }
   }
 
@@ -1884,8 +1940,8 @@
   function openCancelJobModal(jobId) {
     selectedJob = jobId;
     const j = jobInfo[jobId] || jobData[jobId];
-    document.getElementById('cancel-job-name').textContent = j.name;
-    document.getElementById('cancel-job-meta').textContent = j.meta;
+    document.getElementById('cancel-confirm-message').textContent =
+      'Cancel job "' + j.name + '"?\n\nThe job will be stopped after the current photo finishes processing. Partial results already obtained will remain available.';
     document.getElementById('cancel-job-modal-overlay').style.display = 'flex';
   }
 
