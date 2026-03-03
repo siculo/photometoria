@@ -7,8 +7,10 @@ plugin/
 ├── photometoria.lrdevplugin/     # Lightroom plugin bundle
 │   ├── Info.lua                  # Plugin metadata (SDK version, identifier)
 │   ├── JSON.lua                  # JSON encoder/decoder (pure Lua)
+│   ├── MockData.lua              # Mock data for UI development
 │   ├── ServerConnection.lua      # HTTP client for Photometoria API
 │   ├── PluginInfoProvider.lua    # Plugin Manager UI (connection settings)
+│   ├── TaskDialog.lua            # Task management dialog (File > Plugin Extras)
 │   └── TranslatedStrings_it.txt  # Italian localization
 ├── tests/                        # Unit tests (run outside Lightroom)
 │   ├── testkit.lua               # Minimal test framework
@@ -35,7 +37,64 @@ plugin/
 - `LrTasks` — Async task management
 - `LrDialogs` — User dialogs and alerts
 - `LrView` — UI construction (Plugin Manager sections)
+- `LrBinding` — Property binding and observable tables
 - `LrLogger` — Debug logging
+
+### LrView UI Constraints (for prototype revision)
+
+The LrView SDK imposes significant constraints on what UI elements are possible.
+These must be considered when designing or revising the plugin UI prototype.
+
+**Available list widgets:**
+
+| Widget | Content | Selection value | Notes |
+|--------|---------|-----------------|-------|
+| `popup_menu` | Text-only items (`title` + `value`) | Scalar (e.g. `1`) | Dropdown, compact |
+| `simple_list` | Text-only items (`title` + `value`) | Table (e.g. `{1}`) | Scrollable, min height 80px |
+
+Neither widget supports rich content (icons, colors, multi-line) per item.
+
+**No dynamic view trees:**
+
+- The view tree is **built once** and is static after construction.
+- To simulate dynamic lists, use **pre-allocated slots** with `visible = bind(...)`.
+  Each slot binds to properties that are updated when data changes; unused slots
+  are hidden. Example: 5 job slots in `TaskDialog.lua`.
+
+**No click/mouse events on containers:**
+
+- `row`, `column`, `scrolled_view` have **no** click or mouse event handlers.
+- Only `push_button` has an `action` handler; `catalog_photo` has `mouse_down`.
+- Custom selectable list items (e.g. radio buttons inside a scrolled_view) are
+  possible but with limited UX: selection via radio dot, not full-row highlight.
+
+**No background color on layout containers:**
+
+- `row` and `column` are transparent — no `background_color` property.
+- `scrolled_view` has `background_color` but min height is 80px and includes scrollbars.
+- **Cannot create colored rectangles** for progress bars or status pills using containers.
+
+**Progress bar workaround (ProgressBar component):**
+
+A reusable progress bar is implemented in `TaskDialog.lua` using:
+- A **disabled `edit_field`** (provides native border) filled with Unicode block
+  characters (`█` = `\226\150\136`, space for empty) in monospace font.
+- A **`static_text`** next to it showing the percentage label.
+- Encapsulated as `ProgressBar.init()`, `ProgressBar.build()`, `ProgressBar.set()`,
+  `ProgressBar.clear()` — callers interact through a single key string.
+
+**Lua 5.1 string escapes:**
+
+- `\xNN` hex escapes do **NOT** work in Lua 5.1 (introduced in 5.2).
+- Use **decimal escapes** `\ddd` for raw bytes: e.g. `\194\183` for `·` (middle dot),
+  `\226\150\136` for `█` (full block).
+- Alternatively, write UTF-8 characters directly in the source file.
+
+**Text color limitations:**
+
+- `static_text.text_color` accepts `LrColor` but may not support dynamic binding
+  on all platforms. Use text indicators (e.g. `[Active]`, `[Errors]`) as fallback
+  for color-coded status.
 
 ---
 
