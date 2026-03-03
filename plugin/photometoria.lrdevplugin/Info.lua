@@ -11,5 +11,12 @@ return {
 
 	LrPluginInfoProvider = 'PluginInfoProvider.lua',
 
+	LrLibraryMenuItems = {
+		{
+			title = LOC "$$$/Photometoria/Menu/Tasks=Photometoria Tasks",
+			file = 'TaskDialog.lua',
+		},
+	},
+
 	VERSION = { major=15, minor=1, revision=0, build="20260221101", },
 }
