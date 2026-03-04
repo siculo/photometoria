@@ -733,22 +733,15 @@
     </div>
 
     <!-- Task selector row -->
-    <div style="padding:10px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px">
+    <div style="padding:10px 16px; background:var(--bg0); border-bottom:2px solid var(--border); display:flex; align-items:center; gap:10px">
       <span class="field-label" style="width:auto; text-align:left">Task</span>
       <select class="field-input" id="task-popup" style="flex:0 1 280px" onchange="selectTask(parseInt(this.value))">
-        <option value="1">Iceland Vacation 2024 ( ✓ ✕ ⟳ )</option>
+        <option value="1">Iceland Vacation 2024 ( ✓ ⚠ ⟳ )</option>
         <option value="2">Milan Workshop – March ( ✓ )</option>
-        <option value="3">Studio Portraits Q1 ( ✕ )</option>
+        <option value="3">Studio Portraits Q1 ( ⚠ )</option>
       </select>
       <div style="flex:1"></div>
-      <button class="btn btn-ghost" style="font-size:11px; flex-shrink:0" onclick="showPhotosInLibrary()">Show Photos in Library</button>
       <button class="btn btn-danger" id="btn-delete-task" onclick="openDeleteModal()" disabled style="font-size:11px; flex-shrink:0">Delete</button>
-    </div>
-
-    <!-- Task info row -->
-    <div style="padding:4px 16px 8px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px">
-      <span id="task-info-text" style="font-size:10px; color:var(--text2); font-family:var(--mono)">72 photos · 1.8 GB · 1 job</span>
-      <span class="help-text" id="delete-help" style="margin:0; display:none; color:var(--red); font-style:normal; font-size:10px">Task with active job — cannot delete</span>
     </div>
 
     <!-- Detail body -->
@@ -772,6 +765,14 @@
             <button class="btn-xs cancel" onclick="cancelContextEdit()">Cancel</button>
             <button class="btn-xs save" onclick="saveContextEdit()">Save</button>
           </div>
+        </div>
+
+        <!-- Task info row -->
+        <div style="padding:6px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px">
+          <span id="task-info-text" style="font-size:10px; color:var(--text2); font-family:var(--mono)">72 photos · 1.8 GB · 3 jobs</span>
+          <span class="help-text" id="delete-help" style="margin:0; display:none; color:var(--red); font-style:normal; font-size:10px">Task with active job — cannot delete</span>
+          <div style="flex:1"></div>
+          <button class="btn btn-ghost" style="font-size:11px; flex-shrink:0" onclick="showPhotosInLibrary()">Show Photos in Library</button>
         </div>
 
         <!-- Jobs area: list | detail -->
@@ -824,6 +825,7 @@
               <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px">
                 <button class="btn btn-default" id="job-btn-apply" onclick="applyTagsConfirm(selectedJob)" style="font-size:11px; display:none">✓ Apply Tags</button>
                 <button class="btn btn-default" id="job-btn-retry" onclick="retryFailedJob(selectedJob)" style="font-size:11px; display:none">↻ Retry Failed</button>
+                <button class="btn btn-default" id="job-btn-restart" onclick="restartJob(selectedJob)" style="font-size:11px; display:none">▶ Restart</button>
                 <button class="btn btn-danger" id="job-btn-cancel" onclick="openCancelJobModal(selectedJob)" style="font-size:11px; display:none">✕ Cancel</button>
                 <button class="btn btn-danger" id="job-btn-remove" onclick="removeSelectedJob(selectedJob)" style="font-size:11px; display:none">🗑 Remove</button>
               </div>
@@ -1096,6 +1098,33 @@ The failed photos will be reprocessed using the same model and settings.</div>
 
 
   <!-- ════════════════════════════════════════
+       CONFIRM – RESTART JOB (LrDialogs.confirm)
+  ════════════════════════════════════════ -->
+  <div id="restart-modal-overlay" style="
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.65); backdrop-filter:blur(2px);
+    z-index:100; align-items:center; justify-content:center;
+  ">
+    <div class="dialog visible" style="width:400px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
+      <div class="dialog-titlebar">
+        <span>Confirm restart</span>
+      </div>
+      <div class="dialog-body">
+        <div class="section">
+          <div style="font-size:12px; color:var(--text1); line-height:1.8; white-space:pre-line" id="restart-confirm-message">Restart job "—"?
+
+All photos will be reprocessed using the same model and settings.</div>
+        </div>
+      </div>
+      <div class="btn-row right">
+        <button class="btn btn-ghost" onclick="closeRestartModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmRestart()">Restart</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ════════════════════════════════════════
        CONFIRM – REMOVE JOB (LrDialogs.confirm)
   ════════════════════════════════════════ -->
   <div id="remove-job-modal-overlay" style="
@@ -1144,6 +1173,32 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
       <div class="btn-row right">
         <button class="btn btn-ghost" onclick="closeApplyTagsModal()">Cancel</button>
         <button class="btn btn-primary" onclick="confirmApplyTags()">Apply Tags</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════
+       CONFIRM – REMOVE AFTER APPLY (LrDialogs.confirm)
+  ════════════════════════════════════════ -->
+  <div id="remove-after-apply-modal-overlay" style="
+    display:none; position:fixed; inset:0;
+    background:rgba(0,0,0,.65); backdrop-filter:blur(2px);
+    z-index:100; align-items:center; justify-content:center;
+  ">
+    <div class="dialog visible" style="width:400px; box-shadow:0 16px 60px rgba(0,0,0,.8)">
+      <div class="dialog-titlebar">
+        <span>Tags applied</span>
+      </div>
+      <div class="dialog-body">
+        <div class="section">
+          <div style="font-size:12px; color:var(--text1); line-height:1.8; white-space:pre-line" id="remove-after-apply-message">Tags have been applied successfully.
+
+Do you want to remove this job from the task?</div>
+        </div>
+      </div>
+      <div class="btn-row right">
+        <button class="btn btn-ghost" onclick="closeRemoveAfterApplyModal()">Keep Job</button>
+        <button class="btn btn-danger" onclick="confirmRemoveAfterApply()">Remove Job</button>
       </div>
     </div>
   </div>
@@ -1325,11 +1380,16 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
     }
   };
 
-  const taskMeta = {
-    1: { name: 'Iceland Vacation 2024',    meta: '72 photos · 1.8 GB · 1 job' },
-    2: { name: 'Milan Workshop – March',   meta: '148 photos · 3.2 GB · 3 jobs' },
-    3: { name: 'Studio Portraits Q1',      meta: '31 photos · 0.7 GB · 2 jobs' },
-  };
+  const taskSize = { 1: '1.8 GB', 2: '3.2 GB', 3: '0.7 GB' };
+
+  function buildTaskMeta(id) {
+    const t = taskData[id];
+    if (!t) return '';
+    const jobs = getJobsForTask(id);
+    const size = taskSize[id] || '0 GB';
+    const jLabel = jobs.length === 1 ? '1 job' : jobs.length + ' jobs';
+    return t.photoCount + ' photos · ' + size + ' · ' + jLabel;
+  }
 
   let selectedTask = 1;
 
@@ -1345,8 +1405,7 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
     document.getElementById('detail-content').style.display = 'flex';
 
     // Update task info row
-    const m = taskMeta[id];
-    document.getElementById('task-info-text').textContent = m ? m.meta : '';
+    document.getElementById('task-info-text').textContent = buildTaskMeta(id);
 
     document.getElementById('task-context-field').value = t.desc;
     document.getElementById('context-actions').style.display = 'none';
@@ -1367,10 +1426,10 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
   const jobData = {
     1: { taskId: 1, canRetry: false, canApply: false, canCancel: true,  name: 'Ollama · qwen2-vl:8b',   meta: '', status: 'running', progress: 44, progressText: '', totalPhotos: 72, processed: 32, failed: 0, hasFails: false, timerId: null },
     2: { taskId: 1, canRetry: false, canApply: true,  canCancel: false, name: 'Ollama · llava:latest',   meta: '72 / 72 photos · completed in 41 min', status: 'done', progress: null, progressText: null },
-    3: { taskId: 1, canRetry: true,  canApply: false, canCancel: false, name: 'OpenAI · gpt-4o',         meta: '58 / 72 photos · 14 failed', status: 'error', progress: null, progressText: null, failed: 14 },
+    3: { taskId: 1, canRetry: true,  canApply: true,  canCancel: false, name: 'OpenAI · gpt-4o',         meta: '58 / 72 photos · 14 failed', status: 'error', progress: null, progressText: null, failed: 14 },
     4: { taskId: 2, canRetry: false, canApply: true,  canCancel: false, name: 'Ollama · qwen2-vl:8b',    meta: '148 / 148 photos · completed in 1h 12min', status: 'done', progress: null, progressText: null },
     5: { taskId: 2, canRetry: false, canApply: true,  canCancel: false, name: 'Ollama · llava:latest',    meta: '148 / 148 photos · completed in 58 min', status: 'done', progress: null, progressText: null },
-    6: { taskId: 3, canRetry: true,  canApply: false, canCancel: false, name: 'Ollama · qwen2-vl:8b',    meta: '24 / 31 photos · 7 failed', status: 'error', progress: null, progressText: null, failed: 7 },
+    6: { taskId: 3, canRetry: true,  canApply: true,  canCancel: false, name: 'Ollama · qwen2-vl:8b',    meta: '24 / 31 photos · 7 failed', status: 'error', progress: null, progressText: null, failed: 7 },
   };
 
   function formatRemaining(seconds) {
@@ -1397,7 +1456,7 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
     if (j.failed > 0) {
       j.status = 'error';
       j.canRetry = true;
-      j.canApply = false;
+      j.canApply = true;
       j.meta = (j.processed - j.failed) + ' / ' + j.totalPhotos + ' photos · ' + j.failed + ' failed';
     } else {
       j.status = 'done';
@@ -1438,14 +1497,15 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
 
   function buildTaskStatusText(taskId) {
     const jobs = getJobsForTask(taskId);
-    const hasDone = jobs.some(id => jobData[id] && jobData[id].status === 'done');
-    const hasError = jobs.some(id => jobData[id] && jobData[id].status === 'error');
-    const hasRunning = jobs.some(id => jobData[id] && jobData[id].status === 'running');
-    let icons = '';
+    const hasDone      = jobs.some(id => jobData[id] && jobData[id].status === 'done');
+    const hasError     = jobs.some(id => jobData[id] && jobData[id].status === 'error');
+    const hasCancelled = jobs.some(id => jobData[id] && jobData[id].status === 'cancelled');
+    const hasRunning   = jobs.some(id => jobData[id] && jobData[id].status === 'running');
     const parts = [];
-    if (hasDone)    parts.push('✓');
-    if (hasError)   parts.push('✕');
-    if (hasRunning) parts.push('⟳');
+    if (hasDone)      parts.push('✓');
+    if (hasError)     parts.push('⚠');
+    if (hasCancelled) parts.push('✕');
+    if (hasRunning)   parts.push('⟳');
     return parts.length > 0 ? '( ' + parts.join(' ') + ' )' : '';
   }
 
@@ -1471,9 +1531,10 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
 
     updateTaskPopupOption(taskId);
 
-    const btn = document.getElementById('btn-delete-task');
-    const help = document.getElementById('delete-help');
-    if (btn && selectedTask === taskId) {
+    if (selectedTask === taskId) {
+      document.getElementById('task-info-text').textContent = buildTaskMeta(taskId);
+      const btn = document.getElementById('btn-delete-task');
+      const help = document.getElementById('delete-help');
       btn.disabled = t.hasActiveJob;
       help.style.display = t.hasActiveJob ? 'inline' : 'none';
     }
@@ -1510,8 +1571,8 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
   function jobStatusIcon(status) {
     if (status === 'running')   return '⟳';
     if (status === 'done')      return '✓';
-    if (status === 'error')     return '✕';
-    if (status === 'cancelled') return '—';
+    if (status === 'error')     return '⚠';
+    if (status === 'cancelled') return '✕';
     return ' ';
   }
 
@@ -1611,6 +1672,7 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
     // Action buttons — show only relevant ones
     document.getElementById('job-btn-apply').style.display = j.canApply ? 'inline-flex' : 'none';
     document.getElementById('job-btn-retry').style.display = j.canRetry ? 'inline-flex' : 'none';
+    document.getElementById('job-btn-restart').style.display = j.canRestart ? 'inline-flex' : 'none';
     document.getElementById('job-btn-cancel').style.display = j.canCancel ? 'inline-flex' : 'none';
     document.getElementById('job-btn-remove').style.display = (j.status !== 'running') ? 'inline-flex' : 'none';
   }
@@ -1687,10 +1749,7 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
         hasActiveJob: false,
         photoCount: parseInt(photoCount, 10) || 24
       };
-      taskMeta[id] = {
-        name: name,
-        meta: photoCount + ' photos · ' + photoSize
-      };
+      taskSize[id] = photoSize;
 
       const popup = document.getElementById('task-popup');
       const opt = document.createElement('option');
@@ -1832,6 +1891,38 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
     if (e.target === this) closeRetryModal();
   });
 
+  // ── Restart (cancelled job) ─────────────────────────
+  function restartJob(jobId) {
+    selectedJob = jobId;
+    const j = jobData[jobId];
+    if (!j) return;
+    document.getElementById('restart-confirm-message').textContent =
+      'Restart job "' + j.name + '"?\n\nAll photos will be reprocessed using the same model and settings.';
+    document.getElementById('restart-modal-overlay').style.display = 'flex';
+  }
+
+  function closeRestartModal() {
+    document.getElementById('restart-modal-overlay').style.display = 'none';
+  }
+
+  function confirmRestart() {
+    closeRestartModal();
+    const j = jobData[selectedJob];
+    const id = nextJobId++;
+    const total = j.totalPhotos || taskData[selectedTask].photoCount;
+
+    jobData[id] = { taskId: selectedTask, canRetry: false, canApply: false, canCancel: true, canRestart: false, name: j.name.replace(' (restart)', '') + ' (restart)', meta: '', status: 'running', progress: 0, progressText: '', totalPhotos: total, processed: 0, failed: 0, hasFails: false, timerId: null };
+
+    updateTaskBadge(selectedTask);
+    renderJobList(selectedTask);
+    selectJob(id);
+    startJobSimulation(id);
+  }
+
+  document.getElementById('restart-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeRestartModal();
+  });
+
   // ── Apply Tags ────────────────────────────────────
   function applyTagsConfirm(jobId) {
     selectedJob = jobId;
@@ -1849,7 +1940,24 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
   function confirmApplyTags() {
     closeApplyTagsModal();
     if (selectedJob !== null && jobData[selectedJob]) {
+      const j = jobData[selectedJob];
+      j.canApply = false;
+      showJobDetail(selectedJob);
+      document.getElementById('remove-after-apply-message').textContent =
+        'Tags from "' + j.name + '" have been applied successfully.\n\nDo you want to remove this job from the task?';
+      document.getElementById('remove-after-apply-modal-overlay').style.display = 'flex';
+    }
+  }
+
+  function closeRemoveAfterApplyModal() {
+    document.getElementById('remove-after-apply-modal-overlay').style.display = 'none';
+  }
+
+  function confirmRemoveAfterApply() {
+    closeRemoveAfterApplyModal();
+    if (selectedJob !== null && jobData[selectedJob]) {
       delete jobData[selectedJob];
+      updateTaskBadge(selectedTask);
       renderJobList(selectedTask);
     }
   }
@@ -1860,6 +1968,10 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
 
   document.getElementById('apply-tags-modal-overlay').addEventListener('click', function(e) {
     if (e.target === this) closeApplyTagsModal();
+  });
+
+  document.getElementById('remove-after-apply-modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeRemoveAfterApplyModal();
   });
 
   // ── Remove Selected Job ─────────────────────────
@@ -1888,9 +2000,10 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
 
   // ── Delete Task – confirmation ────────────────────
   function openDeleteModal() {
-    const t = taskMeta[selectedTask];
+    const t = taskData[selectedTask];
+    const meta = buildTaskMeta(selectedTask);
     document.getElementById('delete-confirm-message').textContent =
-      'Delete task "' + t.name + '" (' + t.meta + ')?\n\nAll task data will be deleted from the server: jobs and uploaded photos. Original photos in Lightroom will not be affected. This operation is irreversible.';
+      'Delete task "' + t.name + '" (' + meta + ')?\n\nAll task data will be deleted from the server: jobs and uploaded photos. Original photos in Lightroom will not be affected. This operation is irreversible.';
     document.getElementById('delete-modal-overlay').style.display = 'flex';
   }
 
@@ -1908,7 +2021,7 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
     if (opt) opt.remove();
 
     delete taskData[deletedId];
-    delete taskMeta[deletedId];
+    delete taskSize[deletedId];
     document.getElementById('btn-delete-task').disabled = true;
     document.getElementById('delete-help').style.display = 'none';
 
@@ -1956,12 +2069,10 @@ Tags will be written to the Lightroom Keywords field. This action will modify yo
       const j = jobData[selectedJob];
       j.canCancel = false;
       j.canApply = false;
+      j.canRestart = true;
       j.status = 'cancelled';
       j.progress = null;
       j.progressText = null;
-      const remaining = (j.totalPhotos || 0) - (j.processed || 0);
-      j.failed = remaining;
-      j.canRetry = remaining > 0;
       j.meta = (j.processed || 0) + ' / ' + (j.totalPhotos || 0) + ' photos · cancelled';
       updateTaskBadge(jobData[selectedJob].taskId);
     }
