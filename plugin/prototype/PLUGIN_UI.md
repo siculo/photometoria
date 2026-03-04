@@ -5,9 +5,9 @@
 The plugin consists of three main windows (modeless dialogs) plus seven modal dialogs used for destructive or significant operations. A horizontal menu bar at the top provides access to the three windows; each window can be opened and closed independently. Modals appear in response to specific user actions without leaving the current context.
 
 The prototype was originally designed without Lightroom SDK constraints in mind,
-featuring rich interactive elements (dynamic lists, progress bars, color-coded pills,
-modals) that are fully achievable in a web context but only partially reproducible
-within the Lightroom plugin SDK.
+featuring rich interactive elements (dynamic lists, progress bars, modals) that are
+fully achievable in a web context but only partially reproducible within the
+Lightroom plugin SDK.
 
 ## Files
 
@@ -57,10 +57,10 @@ A free-text field collects the server host and port in the format `host:port` (e
 
 The field is validated in real time: if the format is invalid, a validation error message appears below the field and the input is highlighted in red. The **Connect** button remains disabled while the field is empty or contains an invalid value; it becomes enabled as soon as a valid host:port is entered.
 
-When Connect is clicked the plugin attempts a connection to the server. While waiting, a blue "Connecting…" status pill appears. The outcome produces two distinct behaviors:
+When Connect is clicked the plugin attempts a connection to the server. While waiting, a "[⟳ Connecting…]" status label appears. The outcome produces two distinct behaviors:
 
-- **Successful connection**: green "Online" pill with supplementary text "Connection successful", the Server Details section appears below, and the Add Photos and Task menu items become enabled.
-- **Failed connection**: red "Unreachable" pill with supplementary text "No response from server", the details remain hidden.
+- **Successful connection**: "[✓ Online]" label with supplementary text "Connection successful", the Server Details section appears below, and the Add Photos and Task menu items become enabled.
+- **Failed connection**: "[✕ Unreachable]" label with supplementary text "No response from server", the details remain hidden.
 
 If the user modifies the host field after a successful connection, the state resets and the details are hidden again, requiring a new connection. This prevents saving configurations that are no longer valid.
 
@@ -92,7 +92,7 @@ The plugin's main window. Uses a task dropdown at the top and a detail area belo
 
 A dropdown (`popup_menu`) at the top allows selecting the active task. Each dropdown item shows the task name followed by text-based status icons representing the state of its jobs: `✓` completed, `⚠` errors, `✕` cancelled, `⟳` running.
 
-The task selector row has a distinct background and thicker bottom border to visually separate it from the detail area below. To the right of the dropdown:
+The task selector row has a thicker bottom border to visually separate it from the detail area below. To the right of the dropdown:
 
 - **Delete**: removes the task and all its data from the server. Disabled if the task has active jobs.
 
@@ -122,9 +122,8 @@ A scrollable list of jobs for the selected task. Each job item shows minimal tex
 
 Shows the details of the selected job:
 
-- Job name (provider · model) and a status pill.
+- Job name (provider · model) and a text status label with icon (e.g. "[⟳ In progress]", "[✓ Completed]", "[⚠ With errors]", "[✕ Cancelled]").
 - Progress bar with photo counter and estimated remaining time for running jobs; or final summary (total photos, time taken, any errors) for completed jobs.
-- Status pill colors: In progress (orange), Completed (green), With errors (red), Cancelled (grey), Queued (blue).
 
 Action buttons are shown/hidden based on the selected job's state:
 
@@ -189,13 +188,9 @@ Two cascading dropdown menus: the first selects the provider, the second shows t
 
 For cloud providers (e.g. OpenAI, Anthropic) an informational row appears showing the estimated cost for analyzing the entire photo batch, calculated before starting (e.g. "Estimated cost: ~€ 0.72 for 72 photos").
 
-### Options
-
-A checkbox allows enabling **automatic tag application** at the end of the job: if selected, upon completion the tags are written to the Lightroom Keywords field without requiring further user action. A help text explains: "Writes tags to the Lightroom Keywords field as soon as the job is completed."
-
 ### Summary
 
-A panel at the bottom of the modal shows, in read-only form, a summary of the configuration before starting: number of photos to process, selected model, status of the auto-apply option.
+A panel at the bottom of the modal shows, in read-only form, a summary of the configuration before starting: number of photos to process and selected model.
 
 ### Buttons
 
@@ -292,7 +287,7 @@ Shows a message in the form: `Tags from "{job name}" have been applied successfu
 
 **Horizontal menu bar for navigation.** The three windows are accessed through a horizontal menu bar at the top, prefixed by the "Photometoria" brand label. The menu items for Add Photos and Task are disabled until the server is configured, enforcing the correct workflow order.
 
-**Task dropdown with detail panel.** The task list uses a dropdown (`popup_menu`) rather than a scrollable side column, consistent with LrView SDK's available list widgets. The dropdown is visually separated from the detail area below with a distinct background and thicker border. Task metadata (photo count, size, job count) is shown in an info row within the detail area, after the context field. This approach maps directly to the `popup_menu` widget available in the SDK.
+**Task dropdown with detail panel.** The task list uses a dropdown (`popup_menu`) rather than a scrollable side column, consistent with LrView SDK's available list widgets. The dropdown is visually separated from the detail area below with a thicker border. Task metadata (photo count, size, job count) is shown in an info row within the detail area, after the context field. This approach maps directly to the `popup_menu` widget available in the SDK.
 
 **Nested master-detail for jobs.** Within the task detail area, jobs use their own master-detail layout: a narrow list on the left and a detail panel on the right. This allows showing detailed job information (progress, actions) without cluttering the job list items, which remain minimal text-only entries compatible with `simple_list`.
 
@@ -313,8 +308,6 @@ Shows a message in the form: `Tags from "{job name}" have been applied successfu
 **Save enabled only when meaningful.** The Save button in the setup window is enabled only when both conditions are met: the server connection is active and the host:port value differs from the previously saved one. This prevents unnecessary saves and makes it clear when a change has actually been made.
 
 **Confirm button disabled without task name.** In the add photos window, the confirm button is disabled while in "New task" mode and the Name field is empty. The Context field is not blocking because it can be filled in later from the Task window.
-
-**Automatic tag application as opt-in.** The checkbox in job creation is unchecked by default: writing metadata to the Lightroom catalog is a significant action and the user may want to review the results first. Those who want the automatic behavior can enable it explicitly.
 
 ---
 

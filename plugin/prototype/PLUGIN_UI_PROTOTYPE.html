@@ -194,38 +194,19 @@
   .field-input.invalid { border-color: var(--red); }
   textarea.field-input { resize: vertical; min-height: 52px; line-height: 1.5; }
 
-  /* ── STATUS PILL ───────────────────────────────── */
-  .pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 8px;
-    border-radius: 10px;
+  /* ── STATUS LABEL ──────────────────────────────── */
+  .status-label {
     font-size: 10px;
     font-weight: 600;
     letter-spacing: 0.06em;
-    text-transform: uppercase;
   }
-  .pill::before {
-    content: '';
-    width: 6px; height: 6px;
-    border-radius: 50%;
-  }
-  .pill.online { background: rgba(76,175,110,.12); color: var(--green); }
-  .pill.online::before { background: var(--green); box-shadow: 0 0 4px var(--green); }
-  .pill.offline { background: rgba(212,90,74,.12); color: var(--red); }
-  .pill.offline::before { background: var(--red); }
-  .pill.running { background: rgba(212,130,10,.12); color: var(--accent); }
-  .pill.running::before { background: var(--accent); animation: pulse 1.2s infinite; }
-  .pill.done { background: rgba(76,175,110,.12); color: var(--green); }
-  .pill.done::before { background: var(--green); }
-  .pill.error { background: rgba(212,90,74,.12); color: var(--red); }
-  .pill.error::before { background: var(--red); }
-  .pill.queued { background: rgba(90,159,212,.12); color: var(--blue); }
-  .pill.queued::before { background: var(--blue); }
-  .pill.cancelled { background: rgba(80,80,80,.2); color: var(--text2); }
-  .pill.cancelled::before { background: var(--text2); }
-  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+  .status-label.online { color: var(--green); }
+  .status-label.offline { color: var(--red); }
+  .status-label.running { color: var(--accent); }
+  .status-label.done { color: var(--green); }
+  .status-label.error { color: var(--red); }
+  .status-label.queued { color: var(--blue); }
+  .status-label.cancelled { color: var(--text2); }
 
   /* ── TASK STATUS ICONS ──────────────────────────── */
   .task-status-icons {
@@ -733,7 +714,7 @@
     </div>
 
     <!-- Task selector row -->
-    <div style="padding:10px 16px; background:var(--bg0); border-bottom:2px solid var(--border); display:flex; align-items:center; gap:10px">
+    <div style="padding:10px 16px; border-bottom:2px solid var(--border); display:flex; align-items:center; gap:10px">
       <span class="field-label" style="width:auto; text-align:left">Task</span>
       <select class="field-input" id="task-popup" style="flex:0 1 280px" onchange="selectTask(parseInt(this.value))">
         <option value="1">Iceland Vacation 2024 ( ✓ ⚠ ⟳ )</option>
@@ -776,7 +757,7 @@
         </div>
 
         <!-- Jobs area: list | detail -->
-        <div style="flex:1; display:flex; flex-direction:row; min-height:0; border-top:1px solid var(--border)">
+        <div style="flex:1; display:flex; flex-direction:row; min-height:0">
 
           <!-- LEFT: job list + new job button -->
           <div style="width:240px; border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0">
@@ -787,7 +768,7 @@
               <div class="list" id="job-list" style="border:none; border-radius:0">
               </div>
             </div>
-            <div style="padding:8px 12px; border-top:1px solid var(--border); background:var(--bg0)">
+            <div style="padding:8px 12px; border-top:1px solid var(--border)">
               <button class="btn btn-primary" onclick="openJobModal()" style="font-size:11px; width:100%">+ Start New Job</button>
             </div>
           </div>
@@ -806,7 +787,7 @@
               <!-- Job name + status label -->
               <div style="display:flex; align-items:center; gap:10px">
                 <span id="job-detail-name" style="font-size:13px; font-weight:600; color:var(--text0); flex:1">Ollama · qwen2-vl:8b</span>
-                <span class="pill running" id="job-detail-status">In progress</span>
+                <span class="status-label running" id="job-detail-status">[⟳ In progress]</span>
               </div>
 
               <!-- Progress bar -->
@@ -973,26 +954,8 @@
           </div>
         </div>
 
-        <!-- Options -->
-        <div class="section">
-          <div class="section-title">Options</div>
-          <div style="display:flex; align-items:center; gap:10px; padding:4px 0; cursor:pointer" onclick="toggleAutoApply(this)">
-            <div id="checkbox-auto" style="
-              width:16px; height:16px; border-radius:3px;
-              border:2px solid var(--border-light);
-              background:transparent; flex-shrink:0;
-              display:flex; align-items:center; justify-content:center;
-              transition:all .15s;
-            "></div>
-            <span style="font-size:12px; color:var(--text1)">Automatically apply tags to photos when done</span>
-          </div>
-          <div class="help-text" style="padding-left:26px; margin-top:2px">
-            Writes tags to the Lightroom Keywords field as soon as the job is completed.
-          </div>
-        </div>
-
         <!-- Summary -->
-        <div class="section" style="background:var(--bg0)">
+        <div class="section">
           <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text2)">
             <span>Photos to process</span>
             <span style="font-family:var(--mono); color:var(--text0)">72 photos</span>
@@ -1000,10 +963,6 @@
           <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text2); margin-top:5px">
             <span>Selected model</span>
             <span id="summary-model" style="font-family:var(--mono); color:var(--text0)">qwen2-vl:8b</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text2); margin-top:5px">
-            <span>Auto-apply tags</span>
-            <span id="summary-autoapply" style="font-family:var(--mono); color:var(--text0)">No</span>
           </div>
         </div>
 
@@ -1301,19 +1260,19 @@ Do you want to remove this job from the task?</div>
   }
 
   function setConnStatus(state) {
-    const pill = document.getElementById('conn-status-pill');
+    const label = document.getElementById('conn-status-pill');
     const text = document.getElementById('conn-status-text');
     if (state === 'idle') {
-      pill.className = ''; pill.textContent = '';
+      label.className = ''; label.textContent = '';
       text.textContent = '';
     } else if (state === 'checking') {
-      pill.className = 'pill queued'; pill.textContent = 'Connecting…';
+      label.className = 'status-label queued'; label.textContent = '[⟳ Connecting…]';
       text.textContent = '';
     } else if (state === 'ok') {
-      pill.className = 'pill online'; pill.textContent = 'Online';
+      label.className = 'status-label online'; label.textContent = '[✓ Online]';
       text.textContent = 'Connection successful';
     } else if (state === 'fail') {
-      pill.className = 'pill offline'; pill.textContent = 'Unreachable';
+      label.className = 'status-label offline'; label.textContent = '[✕ Unreachable]';
       text.textContent = 'No response from server';
     }
   }
@@ -1577,14 +1536,14 @@ Do you want to remove this job from the task?</div>
   }
 
   function jobStatusLabel(status) {
-    if (status === 'running')   return 'In progress';
-    if (status === 'done')      return 'Completed';
-    if (status === 'error')     return 'With errors';
-    if (status === 'cancelled') return 'Cancelled';
+    if (status === 'running')   return '⟳ In progress';
+    if (status === 'done')      return '✓ Completed';
+    if (status === 'error')     return '⚠ With errors';
+    if (status === 'cancelled') return '✕ Cancelled';
     return '';
   }
 
-  function jobStatusPillClass(status) {
+  function jobStatusClass(status) {
     if (status === 'running') return 'running';
     if (status === 'done')    return 'done';
     if (status === 'error')   return 'error';
@@ -1641,11 +1600,11 @@ Do you want to remove this job from the task?</div>
 
     const j = jobData[id];
 
-    // Name + status pill
+    // Name + status label
     document.getElementById('job-detail-name').textContent = j.name;
     const statusEl = document.getElementById('job-detail-status');
-    statusEl.className = 'pill ' + jobStatusPillClass(j.status);
-    statusEl.textContent = jobStatusLabel(j.status);
+    statusEl.className = 'status-label ' + jobStatusClass(j.status);
+    statusEl.textContent = '[' + jobStatusLabel(j.status) + ']';
 
     // Progress bar
     const progressWrap = document.getElementById('job-detail-progress-wrap');
@@ -1788,8 +1747,6 @@ Do you want to remove this job from the task?</div>
     anthropic: '~ € 1.20',
   };
 
-  let autoApply = false;
-
   function openJobModal() {
     updateModelList();
     document.getElementById('modal-overlay').style.display = 'flex';
@@ -1820,21 +1777,6 @@ Do you want to remove this job from the task?</div>
     } else {
       row.style.display = 'none';
     }
-  }
-
-  function toggleAutoApply(row) {
-    autoApply = !autoApply;
-    const box = document.getElementById('checkbox-auto');
-    if (autoApply) {
-      box.style.background = 'var(--accent-dim)';
-      box.style.borderColor = 'var(--accent)';
-      box.innerHTML = '<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    } else {
-      box.style.background = 'transparent';
-      box.style.borderColor = 'var(--border-light)';
-      box.innerHTML = '';
-    }
-    document.getElementById('summary-autoapply').textContent = autoApply ? 'Yes' : 'No';
   }
 
   document.getElementById('modal-overlay').addEventListener('click', function(e) {
