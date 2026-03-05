@@ -11,7 +11,7 @@ Cargo.lock
 /scripts/test_results/
 
 # Claude (Anthropic)
-.claude/*
+**/.claude/*
 !.claude/skills/
 .claude-code/
 
