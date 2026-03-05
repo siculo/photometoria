@@ -77,6 +77,39 @@ host = "0.0.0.0"
 port = 8080
 ```
 
+#### Firewall Configuration
+
+When `host` is set to `"0.0.0.0"` the server accepts connections from any network
+interface, but the operating system firewall may still block incoming traffic.
+If the Lightroom plugin (or any other client) runs on a different machine, you
+need to open the configured port.
+
+**Ubuntu / Debian (ufw):**
+
+```bash
+# Check firewall status
+sudo ufw status
+
+# Allow the server port (replace 8080 with your configured port)
+sudo ufw allow 8080/tcp
+```
+
+**Firewalld (Fedora / RHEL / CentOS):**
+
+```bash
+sudo firewall-cmd --permanent --add-port=8080/tcp
+sudo firewall-cmd --reload
+```
+
+**Verify from the remote machine:**
+
+```bash
+curl http://<server-ip>:<port>/api/info
+```
+
+If `host` is set to `"127.0.0.1"`, the server only accepts local connections
+and no firewall rule is needed.
+
 ### [storage]
 
 Photo storage configuration.

@@ -6,6 +6,7 @@
 //! This module contains all data structures (entities and DTOs) used throughout
 //! the application.
 
+pub mod info;
 pub mod job;
 pub mod photo;
 pub mod task;

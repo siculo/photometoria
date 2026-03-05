@@ -64,7 +64,7 @@ async fn get_task_summary(photo_store: &Arc<dyn PhotoStore>, task: Task) -> Task
     let storage_used = photo_store
         .total_size_by_task(task.task_id)
         .await
-        .unwrap_or(0);
+        .unwrap_or(0); // TODO: è corretto che in caso di errore il risultato sia zero?
     let summary = TaskSummary {
         task_id: task.task_id,
         context: task.context,

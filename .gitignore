@@ -10,30 +10,14 @@ Cargo.lock
 # Test results
 /scripts/test_results/
 
-################################################################################
-# AI Coding Assistants - Essential exclusions
-#
-# These are tool-specific configurations that should not be committed.
-# Project-level AI guidelines belong in:
-#   - README.md (overview)
-#   - CONTRIBUTING.md (contribution guidelines)
-#   - docs/ARCHITECTURE.md (technical decisions)
-################################################################################
-
 # Claude (Anthropic)
-CLAUDE.md
-.claude/
+**/.claude/*
+!.claude/skills/
 .claude-code/
 
-# ChatGPT / OpenAI
-CHATGPT.md
-OPENAI.md
-
 # GitHub Copilot
-COPILOT.md
 .github/copilot-instructions.md
 
 # OpenCode
-AGENTS.md
 .opencode/config.json
 .opencode/auth.json

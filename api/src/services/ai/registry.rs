@@ -139,9 +139,14 @@ impl ProviderRegistry {
         self.default_provider_name.as_deref()
     }
 
+    /// Returns all registered providers.
+    pub fn providers(&self) -> Vec<Arc<dyn AIProvider>> {
+        self.providers.values().map(|v| v.clone()).collect()
+    }
+
     /// Returns all registered provider names.
-    pub fn provider_names(&self) -> Vec<&str> {
-        self.providers.keys().map(|s| s.as_str()).collect()
+    pub fn provider_names(&self) -> Vec<String> {
+        self.providers.keys().cloned().collect()
     }
 
     /// Returns the number of registered providers.

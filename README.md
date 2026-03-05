@@ -27,7 +27,7 @@ The main goal is to automate the photographic keywording process, drastically re
 - 🚧 Input validations (#13)
 - 🚧 Configuration system (#5-6)
 - 🚧 CLI subcommands (#15)
-- 📋 Lightroom Plugin (Lua) - planned (#12)
+- 🚧 Lightroom Plugin (Lua) - planned (#12)
 - 📋 Integration tests expansion (#14)
 - 📋 Storage enhancements (#16-18)
 
@@ -84,6 +84,17 @@ cargo run --release
 - **[Contributing Guidelines](CONTRIBUTING.md)** - Coding standards and guidelines for development
 
 ## Development
+
+### Claude Code Skills
+
+This project includes [Claude Code](https://claude.com/claude-code) skills for AI-assisted development. Skills provide on-demand development guidelines scoped to each component:
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| API Development | `/api-dev` | Rust code style, testing guidelines, tech stack, dev commands |
+| Plugin Development | `/plugin-dev` | LrView UI constraints, Lua testing, Lightroom workflow |
+
+Invoke a skill at the start of a session when working on the corresponding component.
 
 ### Contributing
 

@@ -1,91 +1,53 @@
-# Photometoria - AI Assistant Memory
+# Photometoria - AI Assistant Context
 
-## 🎯 Project Overview
+## Project Overview
 
-Photometoria is an AI-powered metadata generation system for photography with Adobe Lightroom Classic integration. Multi-level tagging approach: individual photo analysis, photo grouping for macro-categories, user context hints, and EXIF extraction. Privacy-first with local AI (Ollama).
+Photometoria is an AI-based photographic metadata generation system integrated with Adobe Lightroom Classic. It uses a multi-level tagging approach: individual photo analysis, macro-categorization, contextual user suggestions, and EXIF data extraction.
+
+The system is organized into two main components:
+
+- **REST API server** (Rust/Axum) — analyzes photos and communicates with AI model providers
+- **Lightroom Plugin** (Lua) — allows Lightroom Classic to communicate with the server
+
+Supported providers include both local (Ollama) and remote providers.
 
 **Version:** 0.1.0 (Early Development)
 
 ---
 
-## 🏗️ Architecture & API Workflow
-
-### Components
+## Architecture & Components
 
 | Component | Technology | Status |
 |-----------|------------|--------|
 | REST API | Rust/Axum | In development |
-| Lightroom Plugin | Lua | Planned |
+| Lightroom Plugin | Lua 5.1 | In development |
 | Testing Scripts | Python 3.11+ | Functional |
 
 ### Core Concepts
 
+- **Provider**: External system that provides access to AI models (e.g., Ollama)
+- **Model**: AI model with imaging/vision capabilities
 - **Task**: Working session containing photos and context
 - **Photo**: Uploaded image file with metadata
 - **Job**: AI analysis process on a set of photos
 - **Worker**: GPU-bound executor for job processing
 
-### Complete API Workflow
-```
-1. POST /api/tasks → Create task (working session)
-2. POST /api/tasks/{id}/photos → Upload photos
-3. POST /api/tasks/{id}/jobs → Start job (choose AI model)
-4. [TODO #11] SSE streaming → Monitor progress
-5. POST /api/jobs/{id}/cancel → Cancel job (optional)
-6. GET /api/jobs/{id}/results → Retrieve generated metadata
-7. POST /api/jobs/{id}/retry → Retry failed/unprocessed photos
-8. DELETE /api/tasks/{id} → Cleanup
-```
-
-### Implemented Guardrails
-
-- Tasks/photos not deletable while any job is active
-- Jobs deletable only if in terminal state
-- Job transitions to `processing` BEFORE AI analysis starts
-- Cancel removes pending photos from buffer, marks job `cancelled`
-
 ---
 
-## 📂 Code Structure
-```
-api/src/
-├── main.rs           # Entry point
-├── routes/           # Endpoint definitions
-├── handlers/         # Business logic (TEST LOGIC HERE)
-├── services/         # External services (ollama, worker pool)
-├── storage/          # Persistence layer
-└── models/           # Domain structs
-```
-
----
-
-## ✨ Code Style & Preferences
+## Code Style & Preferences
 
 ### General Principles
 
-- **Clarity > micro-optimizations** → Prefer understandable code even if slightly less efficient
-- **Separate execution paths** → Clearly divide different logical branches (e.g., early returns, well-structured match)
-- **Short functions/methods** → Extract functional units into separate methods for readability
-- **DRY for repeated patterns** → Constantly repeated patterns → reusable library functions
-
-### Rust-Specific
-```rust
-// ❌ AVOID: Excessive .clone()
-fn process(data: MyStruct) { ... }
-let result = process(data.clone());
-
-// ✅ PREFER: References when possible
-fn process(data: &MyStruct) { ... }
-let result = process(&data);
-```
-
-**Evaluate whether to use references as parameters instead of cloning.**
+- **Clarity > micro-optimizations** — Prefer understandable code even if slightly less efficient
+- **Separate execution paths** — Clearly divide different logical branches (early returns, well-structured match)
+- **Short functions/methods** — Extract functional units into separate methods for readability
+- **DRY for repeated patterns** — Constantly repeated patterns become reusable library functions
 
 ### Comments
 
-- ✅ **Doc comments on methods** (`///` for public functions, `//!` for modules)
-- ❌ **NO comments in method body** → Code should be self-explanatory
-- ✅ Exception: Complex algorithms or necessary workarounds
+- Doc comments on methods (`///` for public functions, `//!` for modules in Rust)
+- **NO comments in method body** — Code should be self-explanatory
+- Exception: Complex algorithms or necessary workarounds
 
 ### File Headers (SPDX)
 
@@ -96,6 +58,7 @@ let result = process(&data);
 - **When to add:** Newly created files OR existing files missing headers
 
 **Comment syntax by file type:**
+
 ```rust
 // Rust (.rs)
 // SPDX-License-Identifier: Apache-2.0
@@ -118,160 +81,9 @@ let result = process(&data);
 - Python files with shebang: Place shebang first, then SPDX headers
 - Always include blank line after SPDX headers before code
 
-### Preferred Example
-```rust
-/// Calculates the total size of photos in a task.
-/// Returns None if the task contains no photos.
-fn calculate_task_size(photos: &[Photo]) -> Option<u64> {
-    if photos.is_empty() {
-        return None;
-    }
-    
-    let total = photos.iter()
-        .map(|p| p.file_size)
-        .sum();
-    
-    Some(total)
-}
-```
-
 ---
 
-## 🧪 Testing Guidelines (CRITICAL)
-
-### ✅ WHERE to Write Tests
-
-- **Handler tests** (`handlers/{module}.rs`) → Business logic, error handling, custom validations
-- **Storage tests** → CRUD, edge cases, persistence
-- **Model tests** → Constructors, state transitions, conversions
-- **Service tests** → Business logic with mocked dependencies
-
-### ⚠️ Smoke Tests ONLY
-
-- **Router tests** (`routes/mod.rs`) → NO logic duplication
-
-### ❌ WHAT NOT to Test
-
-- Axum framework validations (UUID parsing, JSON deserialization)
-- HTTP routing (Axum's responsibility)
-- Standard serialization
-
-### Test Utilities
-
-- Use `handlers::test_utils::fixtures::create_test_state()` for consistent setup
-- Avoid duplicating test infrastructure
-
-### Naming Convention
-```rust
-test_<handler>_<scenario>
-// Example: test_create_job_task_not_found
-```
-
-📖 **Full details:** `api/docs/development.md` → Testing section
-
----
-
-## 🤖 AI Models (Ollama)
-
-- **qwen3-vl:8b** → PRODUCTION (best quality, slower)
-- **llava** → DEVELOPMENT (faster, good for testing)
-
----
-
-## 📋 Roadmap (Issue Tracker)
-
-### ✅ Completed
-
-- #7: Ollama service client
-- #8: Worker Pool (`src/services/worker/`)
-- #9: Job endpoints (CRUD + retry + cancel)
-- #10: `GET /api/models`
-
-### 🚧 In Development
-
-- #11: SSE streaming for job progress
-- #13: Input validations
-- #5-6: Configuration system
-- #15: CLI subcommands
-
-### 📋 Planned
-
-- #12: Lightroom Plugin (Lua)
-- #14: Integration tests expansion
-- #16-18: Storage enhancements
-
----
-
-## ⚙️ Development Commands
-```bash
-# Build & run
-cd api
-cargo build --release
-cargo run --release
-
-# Quality checks (always before commit!)
-cargo fmt && cargo clippy && cargo test
-
-# Python tests
-cd scripts
-pip install -r requirements.txt
-python3 test_models.py
-
-# Quick API test
-curl -X POST http://localhost:8080/api/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"context":"test photos"}'
-```
-
-**Default server:** `http://localhost:8080`
-
----
-
-## 🔧 GitHub CLI Best Practice
-
-**⚠️ IMPORTANT:** Always use `--json` to avoid Projects (classic) deprecation errors:
-```bash
-# ✅ CORRECT
-gh issue view 3 --json title,body,state,labels
-
-# ❌ WRONG (causes GraphQL error)
-gh issue view 3
-```
-
----
-
-## 📦 Technology Stack
-
-### Rust Crates
-
-- axum, tokio (full), tower
-- reqwest (json), serde (derive), serde_json
-- anyhow (app errors), thiserror (domain errors)
-- tracing + tracing-subscriber (env-filter)
-
-### Error Handling Pattern
-```rust
-Result<T, anyhow::Error>  // App level
-.context("descriptive message")?  // Add context
-
-// Domain-specific
-#[derive(Error, Debug)]
-pub enum OllamaError { ... }
-```
-
-### Concurrency
-
-- `Arc<RwLock<T>>` → Shared mutable state
-- `Arc<T>` → Shared immutable
-- Future cancellation → `tokio::select!` / `timeout()`
-
-### Edition
-
-**Rust Edition:** `2024` (stable since Rust 1.85.0, currently using 1.92.0)
-
----
-
-## 📝 Git Workflow
+## Git Workflow
 
 - Imperative mood in commit messages
 - Atomic commits (one logical change per commit)
@@ -279,16 +91,40 @@ pub enum OllamaError { ... }
 
 ---
 
-## 📚 Documentation Structure
+## GitHub CLI Best Practice
 
-- `README.md` - Project overview, quick start
-- `CONTRIBUTING.md` - Development guidelines, coding standards
-- `api/docs/development.md` - Detailed API implementation guide
-- `CLAUDE.md` (this file) - AI assistant context for coding agents
+Always use `--json` to avoid Projects (classic) deprecation errors:
+
+```bash
+# CORRECT
+gh issue view 3 --json title,body,state,labels
+
+# WRONG (causes GraphQL error)
+gh issue view 3
+```
 
 ---
 
-## 🎓 Key Design Decisions
+## Documentation Structure
+
+- `README.md` — Project overview, quick start
+- `CONTRIBUTING.md` — Development guidelines, coding standards
+- `CLAUDE.md` (this file) — General project context for AI assistants
+- `api/CLAUDE.md` — Rust API specific: endpoints, code structure, testing, tech stack
+- `api/docs/` — API documentation (reference, architecture, configuration, development)
+- `plugin/CLAUDE.md` — Lightroom plugin specific: structure, SDK constraints, testing
+- `plugin/docs/` — Plugin documentation
+- `docs/` — Cross-cutting documentation (provider abstraction, evolution plans)
+
+---
+
+## Roadmap
+
+See the **GitHub issue tracker** for the current roadmap and progress.
+
+---
+
+## Key Design Decisions
 
 ### Why Rust?
 
@@ -313,7 +149,7 @@ pub enum OllamaError { ... }
 
 ---
 
-## 🔐 Security & Privacy
+## Security & Privacy
 
 - All AI processing happens locally (Ollama)
 - No external API calls for image analysis
@@ -322,4 +158,4 @@ pub enum OllamaError { ... }
 
 ---
 
-**End of AI Assistant Memory**
+**End of AI Assistant Context**

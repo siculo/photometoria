@@ -69,6 +69,35 @@ This example demonstrates a typical workflow from task creation to cleanup:
 
 ## System Endpoints
 
+### GET /api/info
+
+Returns general server information: version, storage usage, available AI providers, and current activity counts.
+
+**Response:** `200 OK`
+
+```json
+{
+  "general": {
+    "version": "0.1.0"
+  },
+  "server": {
+    "allocated_space_bytes": 107374182400,
+    "used_space_bytes": 25243074560,
+    "available_providers": ["ollama"],
+    "default_provider": "ollama",
+    "active_tasks_count": 3,
+    "running_jobs_count": 1
+  }
+}
+```
+
+- `allocated_space_bytes` — maximum storage space configured for photos
+- `used_space_bytes` — total size of all uploaded photos across all tasks
+- `available_providers` — names of registered AI provider backends
+- `default_provider` — name of the default provider, or `null` if none is configured
+- `active_tasks_count` — number of existing tasks
+- `running_jobs_count` — number of jobs in `queued` or `processing` state
+
 ### GET /api/config
 
 Returns server configuration and limits relevant to the client.
@@ -96,14 +125,34 @@ Returns server configuration and limits relevant to the client.
 
 **Note:** `max_tasks: null` indicates that task count limits are not currently enforced. Future versions may introduce configurable quotas. All size values are in bytes for consistency with other API responses.
 
-### GET /api/models
+## Provider Endpoints
 
-Returns list of supported AI models that are currently available (both configured and installed in Ollama).
+### GET /api/providers
 
-**Response:**
+Returns the list of registered AI providers.
+
+**Response:** `200 OK`
 
 ```json
 {
+  "providers": [
+    { "name": "ollama" }
+  ],
+  "default": "ollama"
+}
+```
+
+- `default` — name of the default provider, or omitted if none is configured
+
+### GET /api/providers/{provider_name}
+
+Returns details for a specific provider, including its configured models and their current availability on the backend.
+
+**Response:** `200 OK`
+
+```json
+{
+  "name": "ollama",
   "models": [
     {
       "name": "qwen3-vl",
@@ -118,6 +167,16 @@ Returns list of supported AI models that are currently available (both configure
   ]
 }
 ```
+
+**Errors:**
+
+- `404` - Provider not found
+
+### GET /api/models *(deprecated)*
+
+> **Deprecated:** use `GET /api/providers/{provider_name}` instead. Scheduled for removal in #32.
+
+Returns models for the default provider. The response format matches `GET /api/providers/{provider_name}`.
 
 ## Task Endpoints
 
