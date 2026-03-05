@@ -50,10 +50,17 @@ end
 
 --- Updates the existing task summary text.
 local function updateExistingTaskSummary(props)
+	if #props.existingTaskItems == 0 then
+		props.existingTaskSummary = LOC "$$$/Photometoria/AddPhotos/NoTasks=No tasks on the server. Create a new task first."
+		props.existingTaskAfterSummary = ''
+		return
+	end
+
 	local taskIndex = props.existingTask
 	local task = MockData.tasks[taskIndex]
 	if not task then
 		props.existingTaskSummary = ''
+		props.existingTaskAfterSummary = ''
 		return
 	end
 
@@ -62,10 +69,14 @@ local function updateExistingTaskSummary(props)
 	local afterSize = task.sizeBytes + photoData.sizeBytes
 
 	props.existingTaskSummary = string.format(
-		'%d %s \194\183 %s\n%s ~%d %s \194\183 ~%s',
+		'%d %s \194\183 %s',
 		task.photoCount,
 		LOC "$$$/Photometoria/AddPhotos/PhotosPresent=photos already present",
-		formatBytes(task.sizeBytes),
+		formatBytes(task.sizeBytes)
+	)
+
+	props.existingTaskAfterSummary = string.format(
+		'%s ~%d %s \194\183 ~%s',
 		LOC "$$$/Photometoria/AddPhotos/AfterAdding=After adding:",
 		afterCount,
 		LOC "$$$/Photometoria/AddPhotos/Photos=photos",
@@ -78,7 +89,7 @@ local function updateConfirmEnabled(props)
 	if props.destination == 'new' then
 		props.confirmEnabled = (props.taskName ~= nil and props.taskName ~= '')
 	else
-		props.confirmEnabled = true
+		props.confirmEnabled = (#props.existingTaskItems > 0)
 	end
 end
 
@@ -109,6 +120,7 @@ local function initProperties(props)
 	props.existingTask = 1
 	props.existingTaskItems = buildTaskPopupItems(MockData.tasks)
 	props.existingTaskSummary = ''
+	props.existingTaskAfterSummary = ''
 
 	props.confirmEnabled = false
 
@@ -121,151 +133,151 @@ local function buildPhotoSection(f, props)
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
 
-		f:radio_button {
-			title = LOC "$$$/Photometoria/AddPhotos/SelectedOnly=Selected only",
-			value = bind 'photoChoice',
-			checked_value = 'selected',
-		},
+		f:row {
+			spacing = f:control_spacing(),
 
-		f:radio_button {
-			title = LOC "$$$/Photometoria/AddPhotos/All=All photos in catalog",
-			value = bind 'photoChoice',
-			checked_value = 'all',
+			f:radio_button {
+				title = LOC "$$$/Photometoria/AddPhotos/SelectedOnly=Selected only",
+				value = bind 'photoChoice',
+				checked_value = 'selected',
+			},
+
+			f:radio_button {
+				title = LOC "$$$/Photometoria/AddPhotos/All=All photos in catalog",
+				value = bind 'photoChoice',
+				checked_value = 'all',
+			},
 		},
 
 		f:static_text {
 			title = bind 'photoSummary',
 			fill_horizontal = 1,
+			font = '<system/small>',
 		},
+
+		f:separator { fill_horizontal = 1 },
 	}
 end
 
---- Builds the destination selection section.
+--- Builds the destination section (linear layout).
 local function buildDestinationSection(f, props)
 	return f:column {
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
 
-		f:static_text {
-			title = LOC "$$$/Photometoria/AddPhotos/DestTitle=Destination",
-			font = '<system/bold>',
-		},
-
 		f:radio_button {
-			title = LOC "$$$/Photometoria/AddPhotos/NewTask=New task",
+			title = LOC "$$$/Photometoria/AddPhotos/NewTask=Add to new task",
 			value = bind 'destination',
 			checked_value = 'new',
 		},
 
-		f:radio_button {
-			title = LOC "$$$/Photometoria/AddPhotos/ExistingTask=Existing task",
-			value = bind 'destination',
-			checked_value = 'existing',
-		},
-	}
-end
-
---- Builds the new task form.
-local function buildNewTaskForm(f, props)
-	return f:column {
-		spacing = f:control_spacing(),
-		fill_horizontal = 1,
-
-		f:static_text {
-			visible = bind 'newTaskVisible',
-			title = LOC "$$$/Photometoria/AddPhotos/NewTaskTitle=New Task",
-			font = '<system/bold>',
-		},
-
 		f:row {
-			visible = bind 'newTaskVisible',
 			spacing = f:label_spacing(),
 
 			f:static_text {
 				title = LOC "$$$/Photometoria/AddPhotos/Name=Name",
 				alignment = 'right',
 				width = LABEL_WIDTH,
+				enabled = bind 'newTaskVisible',
 			},
 
 			f:edit_field {
 				value = bind 'taskName',
+				enabled = bind 'newTaskVisible',
 				fill_horizontal = 1,
 				immediate = true,
 			},
 		},
 
 		f:row {
-			visible = bind 'newTaskVisible',
 			spacing = f:label_spacing(),
 
 			f:static_text {
 				title = LOC "$$$/Photometoria/AddPhotos/Context=Context",
 				alignment = 'right',
 				width = LABEL_WIDTH,
+				enabled = bind 'newTaskVisible',
 			},
 
 			f:edit_field {
 				value = bind 'taskContext',
+				enabled = bind 'newTaskVisible',
 				fill_horizontal = 1,
 				height_in_lines = 4,
 			},
 		},
 
-		f:static_text {
-			visible = bind 'newTaskVisible',
-			title = LOC "$$$/Photometoria/AddPhotos/ContextHint=Context helps the model generate more precise and contextual tags.",
-			fill_horizontal = 1,
-		},
-	}
-end
+		f:row {
+			spacing = f:label_spacing(),
 
---- Builds the existing task picker.
-local function buildExistingTaskForm(f, props)
-	return f:column {
-		spacing = f:control_spacing(),
-		fill_horizontal = 1,
+			f:spacer { width = LABEL_WIDTH },
 
-		f:popup_menu {
-			visible = bind 'existingTaskVisible',
-			value = bind 'existingTask',
-			items = bind 'existingTaskItems',
-			width = 250,
+			f:static_text {
+				title = LOC "$$$/Photometoria/AddPhotos/ContextHint=Context helps the model generate more precise and contextual tags.",
+				fill_horizontal = 1,
+				font = '<system/small>',
+				enabled = bind 'newTaskVisible',
+			},
 		},
 
-		f:static_text {
-			visible = bind 'existingTaskVisible',
-			title = bind 'existingTaskSummary',
-			fill_horizontal = 1,
-			height_in_lines = 2,
+		f:spacer { height = 8 },
+
+		f:radio_button {
+			title = LOC "$$$/Photometoria/AddPhotos/ExistingTask=Add to existing task",
+			value = bind 'destination',
+			checked_value = 'existing',
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = LABEL_WIDTH },
+
+			f:popup_menu {
+				value = bind 'existingTask',
+				items = bind 'existingTaskItems',
+				enabled = bind 'existingTaskVisible',
+				width = 250,
+			},
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = LABEL_WIDTH },
+
+			f:static_text {
+				title = bind 'existingTaskSummary',
+				fill_horizontal = 1,
+				font = '<system/small>',
+			},
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = LABEL_WIDTH },
+
+			f:static_text {
+				title = bind 'existingTaskAfterSummary',
+				fill_horizontal = 1,
+				font = '<system/small>',
+			},
 		},
 	}
 end
 
 --- Builds the complete dialog contents.
 local function buildContents(f, props)
-	return f:row {
+	return f:column {
 		bind_to_object = props,
-		spacing = f:dialog_spacing(),
+		spacing = f:control_spacing(),
 		fill_horizontal = 1,
+		width = 490,
 
-		f:column {
-			width = 200,
-			spacing = f:control_spacing(),
+		buildPhotoSection(f, props),
 
-			buildPhotoSection(f, props),
-
-			f:separator { fill_horizontal = 1 },
-
-			buildDestinationSection(f, props),
-		},
-
-		f:column {
-			fill_horizontal = 1,
-			spacing = f:control_spacing(),
-
-			buildNewTaskForm(f, props),
-			buildExistingTaskForm(f, props),
-		},
+		buildDestinationSection(f, props),
 	}
 end
 
@@ -318,6 +330,7 @@ LrTasks.startAsyncTask(function()
 				updateExistingTaskSummary(propTable)
 			else
 				propTable.existingTaskSummary = ''
+				propTable.existingTaskAfterSummary = ''
 			end
 		end)
 
