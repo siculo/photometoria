@@ -85,6 +85,17 @@ cargo run --release
 
 ## Development
 
+### Claude Code Skills
+
+This project includes [Claude Code](https://claude.com/claude-code) skills for AI-assisted development. Skills provide on-demand development guidelines scoped to each component:
+
+| Skill | Command | Description |
+|-------|---------|-------------|
+| API Development | `/api-dev` | Rust code style, testing guidelines, tech stack, dev commands |
+| Plugin Development | `/plugin-dev` | LrView UI constraints, Lua testing, Lightroom workflow |
+
+Invoke a skill at the start of a session when working on the corresponding component.
+
 ### Contributing
 
 This project uses AI-assisted development with coding agents. Before contributing:
