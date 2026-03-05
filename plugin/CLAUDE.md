@@ -10,7 +10,8 @@ plugin/
 │   ├── MockData.lua              # Mock data for UI development
 │   ├── ServerConnection.lua      # HTTP client for Photometoria API
 │   ├── PluginInfoProvider.lua    # Plugin Manager UI (connection settings)
-│   ├── TaskDialog.lua            # Task management dialog (File > Plugin Extras)
+│   ├── AddPhotosDialog.lua       # Add photos dialog (Library > Plugin Extras)
+│   ├── TaskDialog.lua            # Task management dialog (Library > Plugin Extras)
 │   └── TranslatedStrings_it.txt  # Italian localization
 ├── tests/                        # Unit tests (run outside Lightroom)
 │   ├── testkit.lua               # Minimal test framework

@@ -91,4 +91,14 @@ MockData.tasks = {
 	},
 }
 
+MockData.selectedPhotos = {
+	count = 47,
+	sizeBytes = 1288490189,
+}
+
+MockData.allPhotos = {
+	count = 312,
+	sizeBytes = 9018753434,
+}
+
 return MockData
