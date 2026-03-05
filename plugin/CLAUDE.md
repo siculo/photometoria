@@ -40,4 +40,13 @@ plugin/
 - `LrBinding` — Property binding and observable tables
 - `LrLogger` — Debug logging
 
-> **Development guidelines** (LrView constraints, testing, workflow): use `/plugin-dev` skill
+### LrView Pitfalls (quick reference)
+
+- `static_text` with empty initial value + `bind(...)` → stays zero-width; always
+  set `fill_horizontal`, `width`, or `width_in_chars`
+- `popup_menu` with `fill_horizontal` → button stretches but dropdown doesn't;
+  use fixed `width`
+- Unicode escapes inside LOC default values may not render; concatenate icons
+  outside LOC: `'\226\156\147 ' .. LOC "$$$/Key=text"`
+
+> **Full constraint catalog and development guidelines**: use `/plugin-dev` skill

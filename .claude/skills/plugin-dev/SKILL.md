@@ -24,7 +24,9 @@ Neither widget supports rich content (icons, colors, multi-line) per item.
 - The view tree is **built once** and is static after construction.
 - To simulate dynamic lists, use **pre-allocated slots** with `visible = bind(...)`.
   Each slot binds to properties that are updated when data changes; unused slots
-  are hidden. Example: 5 job slots in `TaskDialog.lua`.
+  are hidden.
+- Alternatively, use a single detail panel bound to the selected item's properties
+  (master-detail pattern). Example: job detail panel in `TaskDialog.lua`.
 
 **No click/mouse events on containers:**
 
@@ -60,6 +62,37 @@ A reusable progress bar is implemented in `TaskDialog.lua` using:
 - `static_text.text_color` accepts `LrColor` but may not support dynamic binding
   on all platforms. Use text indicators (e.g. `[Active]`, `[Errors]`) as fallback
   for color-coded status.
+
+**`static_text` with dynamic binding needs explicit width:**
+
+- A `static_text` built with an empty initial value (`''`) and updated via
+  `bind(...)` keeps its zero width from construction time — text appears truncated.
+- Always set `fill_horizontal = 1`, `width`, or `width_in_chars` on any
+  `static_text` whose value changes at runtime.
+
+**`popup_menu` does not auto-size to content:**
+
+- With `fill_horizontal = 1` the button stretches to fill the row, but the native
+  dropdown menu appears at its own smaller width, causing visual misalignment.
+- Use a fixed `width` calibrated to the expected content length.
+
+**Unicode icons inside LOC strings may not render:**
+
+- Decimal escape sequences (e.g. `\226\156\147`) inside a LOC default value
+  (`"$$$/Key=\226\156\147 text"`) may not display correctly.
+- Concatenate the icon **outside** LOC: `'\226\156\147 ' .. LOC "$$$/Key=text"`.
+
+**Translation file caching:**
+
+- `TranslatedStrings_<locale>.txt` overrides LOC defaults and is **not reloaded**
+  by Plugin Manager's "Reload" — a full Lightroom restart is required.
+- If a UI label appears stale after code changes, check for an outdated translation
+  in the `.txt` file.
+
+**Right-aligning elements in a row:**
+
+- Use `place_horizontal = 1` on the widget to push it to the right edge.
+- Or set `fill_horizontal = 1` on the preceding widget to absorb remaining space.
 
 ---
 
