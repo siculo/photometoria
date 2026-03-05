@@ -10,7 +10,6 @@ local LrBinding = import 'LrBinding'
 local MockData = require 'MockData'
 
 local bind = LrView.bind
-local MAX_JOB_SLOTS = 5
 
 --- Formats a byte count into a human-readable string.
 local function formatBytes(bytes)
@@ -26,8 +25,6 @@ local function formatBytes(bytes)
 end
 
 --- Reusable progress bar component for LrView.
---- Usage: ProgressBar.init(props, key), ProgressBar.build(f, key),
---- ProgressBar.set(props, key, processed, total).
 local ProgressBar = {}
 
 local PB_FILLED = '\226\150\136'
@@ -80,16 +77,18 @@ function ProgressBar.clear(props, key)
 	props[key .. '_pct'] = ''
 end
 
---- Returns a localized label for a task status.
-local function taskStatusLabel(status)
-	if status == 'active' then
-		return LOC "$$$/Photometoria/TaskStatus/Active=Active"
+--- Returns a text status icon for a job status.
+local function jobStatusIcon(status)
+	if status == 'running' then
+		return '\226\159\179'
 	elseif status == 'completed' then
-		return LOC "$$$/Photometoria/TaskStatus/Completed=Completed"
-	elseif status == 'errors' then
-		return LOC "$$$/Photometoria/TaskStatus/Errors=Errors"
+		return '\226\156\147'
+	elseif status == 'errored' then
+		return '\226\154\160'
+	elseif status == 'cancelled' then
+		return '\226\156\149'
 	end
-	return status
+	return ''
 end
 
 --- Returns a localized label for a job status.
@@ -106,12 +105,33 @@ local function jobStatusLabel(status)
 	return status
 end
 
---- Builds simple_list items from the task list.
-local function buildTaskListItems(tasks)
+--- Builds status icon summary for a task's jobs.
+local function taskJobIcons(task)
+	local hasRunning, hasCompleted, hasErrored, hasCancelled = false, false, false, false
+	for _, job in ipairs(task.jobs) do
+		if job.status == 'running' then hasRunning = true
+		elseif job.status == 'completed' then hasCompleted = true
+		elseif job.status == 'errored' then hasErrored = true
+		elseif job.status == 'cancelled' then hasCancelled = true
+		end
+	end
+	local icons = {}
+	if hasCompleted then icons[#icons + 1] = '\226\156\147' end
+	if hasErrored then icons[#icons + 1] = '\226\154\160' end
+	if hasCancelled then icons[#icons + 1] = '\226\156\149' end
+	if hasRunning then icons[#icons + 1] = '\226\159\179' end
+	if #icons == 0 then
+		return ''
+	end
+	return '  (' .. table.concat(icons, ' ') .. ')'
+end
+
+--- Builds popup_menu items from the task list.
+local function buildTaskPopupItems(tasks)
 	local items = {}
 	for i, task in ipairs(tasks) do
 		items[#items + 1] = {
-			title = task.name .. '  [' .. taskStatusLabel(task.status) .. ']',
+			title = task.name .. taskJobIcons(task),
 			value = i,
 		}
 	end
@@ -126,47 +146,62 @@ local function buildJobListItems(task)
 	end
 	for i, job in ipairs(task.jobs) do
 		items[#items + 1] = {
-			title = job.provider .. ' \194\183 ' .. job.model .. '  [' .. jobStatusLabel(job.status) .. ']',
+			title = job.provider .. ' \194\183 ' .. job.model .. '  ' .. jobStatusIcon(job.status),
 			value = i,
 		}
 	end
 	return items
 end
 
---- Formats a job progress string.
-local function formatJobProgress(job)
-	if job.status == 'running' then
-		local pct = math.floor((job.photosProcessed / job.photosTotal) * 100)
-		local text = string.format('%d/%d (%d%%)', job.photosProcessed, job.photosTotal, pct)
-		if job.estimatedRemaining ~= '' then
-			text = text .. ' — ' .. LOC("$$$/Photometoria/Job/Remaining=~^1 remaining", job.estimatedRemaining)
-		end
-		return text
-	elseif job.status == 'completed' then
-		return string.format('%d/%d — %s', job.photosProcessed, job.photosTotal, job.duration)
-	elseif job.status == 'errored' then
-		return string.format(
-			'%d/%d — %s — %d %s',
-			job.photosProcessed, job.photosTotal, job.duration,
-			job.errorCount, LOC "$$$/Photometoria/Job/Errors=errors"
+--- Formats a job info string for running jobs.
+local function formatJobRunningInfo(job)
+	local text = string.format(
+		'%d/%d %s',
+		job.photosProcessed, job.photosTotal,
+		LOC "$$$/Photometoria/Job/Photos=foto processate"
+	)
+	if job.estimatedRemaining ~= '' then
+		text = text .. ' \226\128\148 ' .. LOC(
+			"$$$/Photometoria/Job/Remaining=~^1. rimanenti",
+			job.estimatedRemaining
 		)
-	elseif job.status == 'cancelled' then
-		return string.format('%d/%d — %s', job.photosProcessed, job.photosTotal, job.duration)
 	end
-	return ''
+	return text
+end
+
+--- Formats a job info string for completed/errored/cancelled jobs.
+local function formatJobCompletedInfo(job)
+	local text = string.format(
+		'%d/%d %s',
+		job.photosProcessed, job.photosTotal,
+		LOC "$$$/Photometoria/Job/Photos=foto processate"
+	)
+	if job.status == 'errored' and job.errorCount > 0 then
+		text = text .. ' \226\128\148 ' .. LOC(
+			"$$$/Photometoria/Job/Failed=^1 fallite",
+			job.errorCount
+		)
+	end
+	if job.duration ~= '' then
+		text = text .. ' \226\128\148 ' .. LOC(
+			"$$$/Photometoria/Job/CompletedIn=completato in ^1.",
+			job.duration
+		)
+	end
+	return text
 end
 
 local onJobSelected
 
 --- Initializes all bindable properties.
 local function initProperties(props, tasks)
-	props.selectedTaskValue = { 1 }
-	props.taskListItems = buildTaskListItems(tasks)
+	props.selectedTask = 1
+	props.taskPopupItems = buildTaskPopupItems(tasks)
 
 	props.taskSummary = ''
-	props.taskStatusText = ''
 	props.deleteEnabled = true
 	props.deleteDisabledReason = ''
+	props.deleteDisabledVisible = false
 
 	props.contextText = ''
 	props.contextSavedText = ''
@@ -175,20 +210,18 @@ local function initProperties(props, tasks)
 	props.selectedJobValue = { 1 }
 	props.jobListItems = {}
 
-	for i = 1, MAX_JOB_SLOTS do
-		props['jobSlot' .. i .. '_visible'] = false
-		props['jobSlot' .. i .. '_providerModel'] = ''
-		props['jobSlot' .. i .. '_status'] = ''
-		props['jobSlot' .. i .. '_statusIndicator'] = ''
-		props['jobSlot' .. i .. '_progress'] = ''
-		ProgressBar.init(props, 'jobSlot' .. i .. '_pb')
-	end
+	props.jobDetailVisible = false
+	props.jobProviderModel = ''
+	props.jobStatusIndicator = ''
+	props.jobProgressVisible = false
+	props.jobInfoText = ''
+	ProgressBar.init(props, 'jobDetail_pb')
 
-	props.btnRemoveEnabled = false
-	props.btnRetryEnabled = false
 	props.btnApplyEnabled = false
-	props.btnCancelJobEnabled = false
-	props.btnNewJobEnabled = true
+	props.btnRetryEnabled = false
+	props.btnRestartEnabled = false
+	props.btnCancelEnabled = false
+	props.btnRemoveEnabled = false
 end
 
 --- Updates the detail panel when a task is selected.
@@ -199,12 +232,13 @@ local function onTaskSelected(props, tasks, index)
 	end
 
 	props.taskSummary = string.format(
-		'%d %s — %s',
+		'%d %s \194\183 %s \194\183 %d %s',
 		task.photoCount,
 		LOC "$$$/Photometoria/Task/Photos=photos",
-		formatBytes(task.sizeBytes)
+		formatBytes(task.sizeBytes),
+		#task.jobs,
+		LOC "$$$/Photometoria/Task/Jobs=job"
 	)
-	props.taskStatusText = '[' .. taskStatusLabel(task.status) .. ']'
 
 	local hasActiveJobs = false
 	for _, job in ipairs(task.jobs) do
@@ -216,9 +250,11 @@ local function onTaskSelected(props, tasks, index)
 
 	if hasActiveJobs then
 		props.deleteEnabled = false
-		props.deleteDisabledReason = LOC "$$$/Photometoria/Task/CannotDelete=Cannot delete: task has active jobs"
+		props.deleteDisabledVisible = true
+		props.deleteDisabledReason = LOC "$$$/Photometoria/Task/CannotDelete=Task with active job \226\128\148 cannot delete"
 	else
 		props.deleteEnabled = true
+		props.deleteDisabledVisible = false
 		props.deleteDisabledReason = ''
 	end
 
@@ -229,40 +265,14 @@ local function onTaskSelected(props, tasks, index)
 	props.jobListItems = buildJobListItems(task)
 	props.selectedJobValue = (#task.jobs > 0) and { 1 } or {}
 
-	local hasCompleted = false
-	for i = 1, MAX_JOB_SLOTS do
-		local job = task.jobs[i]
-		if job then
-			props['jobSlot' .. i .. '_visible'] = true
-			props['jobSlot' .. i .. '_providerModel'] = job.provider .. ' \194\183 ' .. job.model
-			props['jobSlot' .. i .. '_status'] = jobStatusLabel(job.status)
-			props['jobSlot' .. i .. '_statusIndicator'] = '[' .. jobStatusLabel(job.status) .. ']'
-			props['jobSlot' .. i .. '_progress'] = formatJobProgress(job)
-			ProgressBar.set(props, 'jobSlot' .. i .. '_pb', job.photosProcessed, job.photosTotal)
-			if job.status == 'completed' or job.status == 'errored' or job.status == 'cancelled' then
-				hasCompleted = true
-			end
-		else
-			props['jobSlot' .. i .. '_visible'] = false
-			props['jobSlot' .. i .. '_providerModel'] = ''
-			props['jobSlot' .. i .. '_status'] = ''
-			props['jobSlot' .. i .. '_statusIndicator'] = ''
-			props['jobSlot' .. i .. '_progress'] = ''
-			ProgressBar.clear(props, 'jobSlot' .. i .. '_pb')
-		end
-	end
-
-	props.btnRemoveEnabled = hasCompleted
-
 	onJobSelected(props, tasks)
 end
 
---- Updates button states when a job is selected.
+--- Updates job detail panel when a job is selected.
 onJobSelected = function(props, tasks)
-	local selectedTask = props.selectedTaskValue
-	local taskIndex = selectedTask and selectedTask[1]
-	local task = taskIndex and tasks[taskIndex]
+	local task = tasks[props.selectedTask]
 	if not task then
+		props.jobDetailVisible = false
 		return
 	end
 
@@ -270,265 +280,307 @@ onJobSelected = function(props, tasks)
 	local jobIndex = selectedJob and selectedJob[1]
 	local job = jobIndex and task.jobs[jobIndex]
 	if not job then
-		props.btnRetryEnabled = false
+		props.jobDetailVisible = false
 		props.btnApplyEnabled = false
-		props.btnCancelJobEnabled = false
+		props.btnRetryEnabled = false
+		props.btnRestartEnabled = false
+		props.btnCancelEnabled = false
+		props.btnRemoveEnabled = false
 		return
 	end
 
+	props.jobDetailVisible = true
+	props.jobProviderModel = job.provider .. ' \194\183 ' .. job.model
+	props.jobStatusIndicator = '[' .. jobStatusIcon(job.status) .. ' ' .. jobStatusLabel(job.status) .. ']'
+
+	if job.status == 'running' then
+		props.jobProgressVisible = true
+		props.jobInfoText = formatJobRunningInfo(job)
+		ProgressBar.set(props, 'jobDetail_pb', job.photosProcessed, job.photosTotal)
+	else
+		props.jobProgressVisible = false
+		props.jobInfoText = formatJobCompletedInfo(job)
+		ProgressBar.clear(props, 'jobDetail_pb')
+	end
+
+	props.btnApplyEnabled = (job.status == 'completed' or job.status == 'errored')
 	props.btnRetryEnabled = (job.status == 'errored' and job.errorCount > 0)
-	props.btnApplyEnabled = (job.status == 'completed')
-	props.btnCancelJobEnabled = (job.status == 'running')
+	props.btnRestartEnabled = (job.status == 'cancelled')
+	props.btnCancelEnabled = (job.status == 'running')
+	props.btnRemoveEnabled = (job.status ~= 'running')
 end
 
---- Builds a single pre-allocated job slot view.
-local function buildJobSlot(f, props, slotIndex)
-	local prefix = 'jobSlot' .. slotIndex .. '_'
-	return f:column {
-		visible = bind(prefix .. 'visible'),
+--- Builds the task selector row: popup_menu + Delete button.
+local function buildTaskSelectorRow(f, props)
+	return f:row {
+		spacing = f:control_spacing(),
 		fill_horizontal = 1,
-		margin_top = 4,
 
-		f:row {
-			spacing = f:control_spacing(),
-
-			f:static_text {
-				title = bind(prefix .. 'providerModel'),
-				font = '<system/bold>',
-			},
-
-			f:static_text {
-				title = bind(prefix .. 'statusIndicator'),
-			},
+		f:popup_menu {
+			value = bind 'selectedTask',
+			items = bind 'taskPopupItems',
+			width = 280,
 		},
 
-		ProgressBar.build(f, prefix .. 'pb'),
+		f:push_button {
+			title = LOC "$$$/Photometoria/Button/Delete=Delete",
+			enabled = bind 'deleteEnabled',
+			action = function()
+				LrDialogs.message(
+					LOC "$$$/Photometoria/Mock/Delete=Delete Task",
+					LOC "$$$/Photometoria/Mock/DeleteMsg=This would open the task deletion confirmation dialog.",
+					'info'
+				)
+			end,
+		},
 
 		f:static_text {
-			title = bind(prefix .. 'progress'),
+			visible = bind 'deleteDisabledVisible',
+			title = bind 'deleteDisabledReason',
+			text_color = LrColor(0.85, 0.2, 0.2),
+		},
+	}
+end
+
+--- Builds the context section.
+local function buildContextSection(f, props)
+	return f:column {
+		spacing = f:control_spacing(),
+		fill_horizontal = 1,
+
+		f:static_text {
+			title = LOC "$$$/Photometoria/Dialog/ContextTitle=Context",
+			font = '<system/bold>',
+		},
+
+		f:edit_field {
+			value = bind 'contextText',
 			fill_horizontal = 1,
+			height_in_lines = 4,
+			immediate = true,
+		},
+
+		f:row {
+			visible = bind 'contextModified',
+			spacing = f:control_spacing(),
+
+			f:push_button {
+				title = LOC "$$$/Photometoria/Button/SaveContext=Save",
+				action = function()
+					props.contextSavedText = props.contextText
+					props.contextModified = false
+					LrDialogs.message(
+						LOC "$$$/Photometoria/Mock/SaveContext=Save Context",
+						LOC "$$$/Photometoria/Mock/SaveContextMsg=Context saved successfully.",
+						'info'
+					)
+				end,
+			},
+
+			f:push_button {
+				title = LOC "$$$/Photometoria/Button/CancelContext=Cancel",
+				action = function()
+					props.contextText = props.contextSavedText
+					props.contextModified = false
+				end,
+			},
 		},
 
 		f:separator { fill_horizontal = 1 },
 	}
 end
 
---- Builds the complete dialog contents.
-local function buildContents(f, props)
+--- Builds the task info row.
+local function buildTaskInfoRow(f, props)
 	return f:row {
-		bind_to_object = props,
-		spacing = f:dialog_spacing(),
+		spacing = f:control_spacing(),
+		fill_horizontal = 1,
 
-		f:column {
-			width = 280,
+		f:static_text {
+			title = bind 'taskSummary',
+		},
+
+		f:push_button {
+			title = LOC "$$$/Photometoria/Button/ShowPhotos=Show Photos in Library",
+			place_horizontal = 1,
+			action = function()
+				LrDialogs.message(
+					LOC "$$$/Photometoria/Mock/ShowPhotos=Show Photos",
+					LOC "$$$/Photometoria/Mock/ShowPhotosMsg=This would select the task photos in the Lightroom library.",
+					'info'
+				)
+			end,
+		},
+	}
+end
+
+--- Builds the job detail panel (right column of jobs section).
+local function buildJobDetailPanel(f, props)
+	return f:column {
+		visible = bind 'jobDetailVisible',
+		fill_horizontal = 1,
+		spacing = f:control_spacing(),
+
+		f:row {
 			spacing = f:control_spacing(),
+			fill_horizontal = 1,
 
 			f:static_text {
-				title = LOC "$$$/Photometoria/Dialog/TasksTitle=Tasks",
+				title = bind 'jobProviderModel',
 				font = '<system/bold>',
-			},
-
-			f:simple_list {
-				value = bind 'selectedTaskValue',
-				items = bind 'taskListItems',
-				width = 270,
-				height = 100,
-			},
-
-			f:spacer { height = 4 },
-
-			f:static_text {
-				title = bind 'taskSummary',
 				fill_horizontal = 1,
 			},
 
 			f:static_text {
-				title = bind 'taskStatusText',
-				font = '<system/bold>',
-			},
-
-			f:spacer { height = 8 },
-			f:separator { fill_horizontal = 1 },
-			f:spacer { height = 8 },
-
-			f:push_button {
-				title = LOC "$$$/Photometoria/Button/ShowPhotos=Show Photos in Library",
-				fill_horizontal = 1,
-				action = function()
-					LrDialogs.message(
-						LOC "$$$/Photometoria/Mock/ShowPhotos=Show Photos",
-						LOC "$$$/Photometoria/Mock/ShowPhotosMsg=This would select the task photos in the Lightroom library.",
-						'info'
-					)
-				end,
-			},
-
-			f:push_button {
-				title = LOC "$$$/Photometoria/Button/Delete=Delete",
-				fill_horizontal = 1,
-				enabled = bind 'deleteEnabled',
-				action = function()
-					LrDialogs.message(
-						LOC "$$$/Photometoria/Mock/Delete=Delete Task",
-						LOC "$$$/Photometoria/Mock/DeleteMsg=This would open the task deletion confirmation dialog.",
-						'info'
-					)
-				end,
-			},
-
-			f:static_text {
-				title = bind 'deleteDisabledReason',
-				text_color = LrColor(0.85, 0.55, 0.0),
-				fill_horizontal = 1,
+				title = bind 'jobStatusIndicator',
+				width_in_chars = 18,
+				alignment = 'right',
 			},
 		},
 
 		f:column {
+			visible = bind 'jobProgressVisible',
 			fill_horizontal = 1,
 			spacing = f:control_spacing(),
 
-			f:row {
-				spacing = f:dialog_spacing(),
+			ProgressBar.build(f, 'jobDetail_pb'),
+		},
 
-				f:column {
-					width = 300,
-					spacing = f:control_spacing(),
+		f:static_text {
+			title = bind 'jobInfoText',
+			fill_horizontal = 1,
+		},
 
-					f:static_text {
-						title = LOC "$$$/Photometoria/Dialog/ContextTitle=Context",
-						font = '<system/bold>',
-					},
+		f:spacer { height = 8 },
 
-					f:edit_field {
-						value = bind 'contextText',
-						width_in_chars = 35,
-						height_in_lines = 10,
-						immediate = true,
-					},
+		f:row {
+			spacing = f:control_spacing(),
 
-					f:row {
-						visible = bind 'contextModified',
-						spacing = f:control_spacing(),
+			f:push_button {
+				enabled = bind 'btnApplyEnabled',
+				title = '\226\156\147 ' .. LOC "$$$/Photometoria/Button/ApplyTags=Applica tag",
+				action = function()
+					LrDialogs.message(
+						LOC "$$$/Photometoria/Mock/ApplyTags=Applica tag",
+						LOC "$$$/Photometoria/Mock/ApplyTagsMsg=This would open the apply tags confirmation dialog.",
+						'info'
+					)
+				end,
+			},
 
-						f:push_button {
-							title = LOC "$$$/Photometoria/Button/SaveContext=Save",
-							action = function()
-								props.contextSavedText = props.contextText
-								props.contextModified = false
-								LrDialogs.message(
-									LOC "$$$/Photometoria/Mock/SaveContext=Save Context",
-									LOC "$$$/Photometoria/Mock/SaveContextMsg=Context saved successfully.",
-									'info'
-								)
-							end,
-						},
+			f:push_button {
+				enabled = bind 'btnRetryEnabled',
+				title = '\226\154\160 ' .. LOC "$$$/Photometoria/Button/RetryFailed=Ritenta falliti",
+				action = function()
+					LrDialogs.message(
+						LOC "$$$/Photometoria/Mock/RetryFailed=Ritenta falliti",
+						LOC "$$$/Photometoria/Mock/RetryFailedMsg=This would open the retry failed confirmation dialog.",
+						'info'
+					)
+				end,
+			},
 
-						f:push_button {
-							title = LOC "$$$/Photometoria/Button/CancelContext=Cancel",
-							action = function()
-								props.contextText = props.contextSavedText
-								props.contextModified = false
-							end,
-						},
-					},
-				},
+			f:push_button {
+				enabled = bind 'btnRestartEnabled',
+				title = '\226\159\179 ' .. LOC "$$$/Photometoria/Button/Restart=Riavvia",
+				action = function()
+					LrDialogs.message(
+						LOC "$$$/Photometoria/Mock/Restart=Riavvia",
+						LOC "$$$/Photometoria/Mock/RestartMsg=This would open the restart confirmation dialog.",
+						'info'
+					)
+				end,
+			},
 
-				f:column {
-					fill_horizontal = 1,
-					spacing = f:control_spacing(),
+			f:push_button {
+				enabled = bind 'btnCancelEnabled',
+				title = '\226\156\149 ' .. LOC "$$$/Photometoria/Button/CancelJob=Interrompi",
+				action = function()
+					LrDialogs.message(
+						LOC "$$$/Photometoria/Mock/CancelJob=Interrompi",
+						LOC "$$$/Photometoria/Mock/CancelJobMsg=This would open the job cancellation confirmation dialog.",
+						'info'
+					)
+				end,
+			},
 
-					f:static_text {
-						title = LOC "$$$/Photometoria/Dialog/JobsTitle=Jobs",
-						font = '<system/bold>',
-					},
-
-					f:simple_list {
-						value = bind 'selectedJobValue',
-						items = bind 'jobListItems',
-						width = 280,
-						height = 80,
-					},
-
-					f:spacer { height = 4 },
-
-					buildJobSlot(f, props, 1),
-					buildJobSlot(f, props, 2),
-					buildJobSlot(f, props, 3),
-					buildJobSlot(f, props, 4),
-					buildJobSlot(f, props, 5),
-
-					f:spacer { height = 8 },
-
-					f:row {
-						spacing = f:control_spacing(),
-
-						f:push_button {
-							title = LOC "$$$/Photometoria/Button/RemoveCompleted=Remove Completed",
-							enabled = bind 'btnRemoveEnabled',
-							action = function()
-								LrDialogs.message(
-									LOC "$$$/Photometoria/Mock/RemoveCompleted=Remove Completed",
-									LOC "$$$/Photometoria/Mock/RemoveCompletedMsg=This would remove all completed jobs from the list.",
-									'info'
-								)
-							end,
-						},
-
-						f:push_button {
-							title = LOC "$$$/Photometoria/Button/RetryFailed=Retry Failed",
-							enabled = bind 'btnRetryEnabled',
-							action = function()
-								LrDialogs.message(
-									LOC "$$$/Photometoria/Mock/RetryFailed=Retry Failed",
-									LOC "$$$/Photometoria/Mock/RetryFailedMsg=This would open the retry failed confirmation dialog.",
-									'info'
-								)
-							end,
-						},
-
-						f:push_button {
-							title = LOC "$$$/Photometoria/Button/ApplyTags=Apply Tags",
-							enabled = bind 'btnApplyEnabled',
-							action = function()
-								LrDialogs.message(
-									LOC "$$$/Photometoria/Mock/ApplyTags=Apply Tags",
-									LOC "$$$/Photometoria/Mock/ApplyTagsMsg=This would open the apply tags confirmation dialog.",
-									'info'
-								)
-							end,
-						},
-					},
-
-					f:row {
-						spacing = f:control_spacing(),
-
-						f:push_button {
-							title = LOC "$$$/Photometoria/Button/CancelJob=Cancel Job",
-							enabled = bind 'btnCancelJobEnabled',
-							action = function()
-								LrDialogs.message(
-									LOC "$$$/Photometoria/Mock/CancelJob=Cancel Job",
-									LOC "$$$/Photometoria/Mock/CancelJobMsg=This would open the job cancellation confirmation dialog.",
-									'info'
-								)
-							end,
-						},
-
-						f:push_button {
-							title = LOC "$$$/Photometoria/Button/NewJob=+ New Job",
-							enabled = bind 'btnNewJobEnabled',
-							action = function()
-								LrDialogs.message(
-									LOC "$$$/Photometoria/Mock/NewJob=New Job",
-									LOC "$$$/Photometoria/Mock/NewJobMsg=This would open the create job dialog.",
-									'info'
-								)
-							end,
-						},
-					},
-				},
+			f:push_button {
+				enabled = bind 'btnRemoveEnabled',
+				title = '\240\159\151\145 ' .. LOC "$$$/Photometoria/Button/RemoveJob=Elimina",
+				action = function()
+					LrDialogs.message(
+						LOC "$$$/Photometoria/Mock/RemoveJob=Elimina",
+						LOC "$$$/Photometoria/Mock/RemoveJobMsg=This would open the job removal confirmation dialog.",
+						'info'
+					)
+				end,
 			},
 		},
+	}
+end
+
+--- Builds the jobs section with master-detail layout.
+local function buildJobsSection(f, props)
+	return f:column {
+		spacing = f:control_spacing(),
+		fill_horizontal = 1,
+
+		f:static_text {
+			title = LOC "$$$/Photometoria/Dialog/JobsTitle=Jobs",
+			font = '<system/bold>',
+		},
+
+		f:row {
+			spacing = f:dialog_spacing(),
+			fill_horizontal = 1,
+
+			f:column {
+				width = 240,
+				spacing = f:control_spacing(),
+
+				f:simple_list {
+					value = bind 'selectedJobValue',
+					items = bind 'jobListItems',
+					width = 240,
+					height = 120,
+				},
+
+				f:push_button {
+					title = LOC "$$$/Photometoria/Button/NewJob=+ Start New Job",
+					fill_horizontal = 1,
+					action = function()
+						LrDialogs.message(
+							LOC "$$$/Photometoria/Mock/NewJob=New Job",
+							LOC "$$$/Photometoria/Mock/NewJobMsg=This would open the create job dialog.",
+							'info'
+						)
+					end,
+				},
+			},
+
+			buildJobDetailPanel(f, props),
+		},
+	}
+end
+
+--- Builds the complete dialog contents.
+local function buildContents(f, props)
+	return f:column {
+		bind_to_object = props,
+		spacing = f:control_spacing(),
+		fill_horizontal = 1,
+
+		buildTaskSelectorRow(f, props),
+
+		f:separator { fill_horizontal = 1 },
+
+		buildContextSection(f, props),
+
+		buildTaskInfoRow(f, props),
+
+		f:separator { fill_horizontal = 1 },
+
+		buildJobsSection(f, props),
 	}
 end
 
@@ -539,14 +591,13 @@ LrFunctionContext.callWithContext('TaskDialog', function(context)
 	local props = LrBinding.makePropertyTable(context)
 	initProperties(props, tasks)
 
-	props:addObserver('selectedTaskValue', function(propTable, key, value)
-		local index = value and value[1]
-		if index then
-			onTaskSelected(propTable, tasks, index)
+	props:addObserver('selectedTask', function(propTable, key, value)
+		if value then
+			onTaskSelected(propTable, tasks, value)
 		end
 	end)
 
-	props:addObserver('selectedJobValue', function(propTable, key, value)
+	props:addObserver('selectedJobValue', function(propTable)
 		onJobSelected(propTable, tasks)
 	end)
 
