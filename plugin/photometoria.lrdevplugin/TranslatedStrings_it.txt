@@ -10,6 +10,10 @@
 "$$$/Photometoria/Status/Unreachable=Non raggiungibile"
 "$$$/Photometoria/Status/ConnectedTo=Connesso a ^1"
 "$$$/Photometoria/Status/CannotReach=Impossibile raggiungere il server ^1"
+"$$$/Photometoria/Status/ServerError=Il server ha risposto con stato ^1"
+"$$$/Photometoria/Status/InvalidResponse=Risposta non valida dal server"
+"$$$/Photometoria/Error/NoServer=Server non configurato. Impostare l'indirizzo del server nel Plugin Manager."
+"$$$/Photometoria/Progress/Connecting=Connessione al server..."
 
 "$$$/Photometoria/Detail/StorageAllocated=Spazio allocato:"
 "$$$/Photometoria/Detail/StorageUsed=Spazio utilizzato:"

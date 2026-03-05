@@ -50,3 +50,46 @@ plugin/
   outside LOC: `'\226\156\147 ' .. LOC "$$$/Key=text"`
 
 > **Full constraint catalog and development guidelines**: use `/plugin-dev` skill
+
+---
+
+## Code Conventions
+
+### Async / Sync separation pattern
+
+Functions that call `LrHttp` or other async-only SDK APIs must be split into two layers:
+
+1. **Sync function** — performs the actual work, returns results directly. Must be
+   called from within an existing `LrTasks.startAsyncTask` context.
+2. **Async wrapper** — starts an async task, calls the sync function, and forwards
+   results via callback.
+
+This allows callers that already run inside an async task to use the sync version
+directly, avoiding nested async tasks and callback-based synchronization.
+
+Example (from `ServerConnection.lua`):
+
+```lua
+-- Sync: callable from any async task
+function ServerConnection.fetch(host)
+    local body, headers = LrHttp.get(url, nil, timeout)
+    return success, data
+end
+
+-- Async wrapper: for callers that need fire-and-forget with callback
+function ServerConnection.connect(host, callback)
+    LrTasks.startAsyncTask(function()
+        local success, data = ServerConnection.fetch(host)
+        callback(success, data)
+    end)
+end
+```
+
+### Localization
+
+**All user-visible text** in the UI must use `LOC "$$$/Key=Default"` for localization.
+When adding or modifying UI strings:
+
+1. Use `LOC "$$$/Photometoria/Section/Key=English default"` in the Lua source.
+2. Add the corresponding Italian translation in `TranslatedStrings_it.txt`.
+3. Never leave a UI-facing string as a bare Lua literal — always wrap it with LOC.

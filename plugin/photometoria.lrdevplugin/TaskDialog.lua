@@ -6,7 +6,11 @@ local LrDialogs = import 'LrDialogs'
 local LrView = import 'LrView'
 local LrColor = import 'LrColor'
 local LrBinding = import 'LrBinding'
+local LrPrefs = import 'LrPrefs'
+local LrProgressScope = import 'LrProgressScope'
+local LrTasks = import 'LrTasks'
 
+local ServerConnection = require 'ServerConnection'
 local MockData = require 'MockData'
 
 local bind = LrView.bind
@@ -584,33 +588,63 @@ local function buildContents(f, props)
 	}
 end
 
-LrFunctionContext.callWithContext('TaskDialog', function(context)
-	local f = LrView.osFactory()
-	local tasks = MockData.tasks
+LrTasks.startAsyncTask(function()
+	local prefs = LrPrefs.prefsForPlugin()
+	local host = prefs.serverHost or ''
 
-	local props = LrBinding.makePropertyTable(context)
-	initProperties(props, tasks)
+	if not ServerConnection.isValidHostPort(host) then
+		LrDialogs.message(
+			LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+			LOC "$$$/Photometoria/Error/NoServer=Server not configured. Please set the server address in Plugin Manager.",
+			'critical'
+		)
+		return
+	end
 
-	props:addObserver('selectedTask', function(propTable, key, value)
-		if value then
-			onTaskSelected(propTable, tasks, value)
-		end
-	end)
-
-	props:addObserver('selectedJobValue', function(propTable)
-		onJobSelected(propTable, tasks)
-	end)
-
-	props:addObserver('contextText', function(propTable, key, value)
-		propTable.contextModified = (value ~= propTable.contextSavedText)
-	end)
-
-	onTaskSelected(props, tasks, 1)
-
-	LrDialogs.presentModalDialog {
-		title = LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
-		contents = buildContents(f, props),
-		actionVerb = LOC "$$$/Photometoria/Button/Close=Close",
-		cancelVerb = '< exclude >',
+	local progressScope = LrProgressScope {
+		title = LOC "$$$/Photometoria/Progress/Connecting=Connecting to server...",
 	}
+
+	local success, data = ServerConnection.fetch(host)
+	progressScope:done()
+
+	if not success then
+		LrDialogs.message(
+			LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+			data.message,
+			'critical'
+		)
+		return
+	end
+
+	LrFunctionContext.callWithContext('TaskDialog', function(context)
+		local f = LrView.osFactory()
+		local tasks = MockData.tasks
+
+		local props = LrBinding.makePropertyTable(context)
+		initProperties(props, tasks)
+
+		props:addObserver('selectedTask', function(propTable, key, value)
+			if value then
+				onTaskSelected(propTable, tasks, value)
+			end
+		end)
+
+		props:addObserver('selectedJobValue', function(propTable)
+			onJobSelected(propTable, tasks)
+		end)
+
+		props:addObserver('contextText', function(propTable, key, value)
+			propTable.contextModified = (value ~= propTable.contextSavedText)
+		end)
+
+		onTaskSelected(props, tasks, 1)
+
+		LrDialogs.presentModalDialog {
+			title = LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+			contents = buildContents(f, props),
+			actionVerb = LOC "$$$/Photometoria/Button/Close=Close",
+			cancelVerb = '< exclude >',
+		}
+	end)
 end)
