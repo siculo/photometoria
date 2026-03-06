@@ -28,8 +28,9 @@
 "$$$/Photometoria/Menu/Tasks=Gestisci Task"
 "$$$/Photometoria/Dialog/Title=Task Photometoria"
 "$$$/Photometoria/Dialog/TasksTitle=Task"
-"$$$/Photometoria/Dialog/ContextTitle=Contesto"
-"$$$/Photometoria/Dialog/JobsTitle=Job"
+"$$$/Photometoria/Dialog/TaskTitle=Dettaglio task"
+"$$$/Photometoria/Dialog/ContextLabel=Contesto"
+"$$$/Photometoria/Dialog/JobsTitle=Job del task"
 
 "$$$/Photometoria/TaskStatus/Active=Attivo"
 "$$$/Photometoria/TaskStatus/Completed=Completato"

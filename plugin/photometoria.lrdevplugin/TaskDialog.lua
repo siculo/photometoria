@@ -342,18 +342,42 @@ local function buildTaskSelectorRow(f, props)
 			visible = bind 'deleteDisabledVisible',
 			title = bind 'deleteDisabledReason',
 			text_color = LrColor(0.85, 0.2, 0.2),
+			font = '<system/small>',
+			fill_horizontal = 1,
 		},
 	}
 end
 
---- Builds the context section.
-local function buildContextSection(f, props)
-	return f:column {
+--- Builds the task section: summary, context, and action buttons.
+local function buildTaskSection(f, props)
+	return f:group_box {
+		title = LOC "$$$/Photometoria/Dialog/TaskTitle=Task detail",
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
 
+		f:row {
+			spacing = f:control_spacing(),
+			fill_horizontal = 1,
+
+			f:static_text {
+				title = bind 'taskSummary',
+			},
+
+			f:push_button {
+				title = LOC "$$$/Photometoria/Button/ShowPhotos=Show Photos in Library",
+				place_horizontal = 1,
+				action = function()
+					LrDialogs.message(
+						LOC "$$$/Photometoria/Mock/ShowPhotos=Show Photos",
+						LOC "$$$/Photometoria/Mock/ShowPhotosMsg=This would select the task photos in the Lightroom library.",
+						'info'
+					)
+				end,
+			},
+		},
+
 		f:static_text {
-			title = LOC "$$$/Photometoria/Dialog/ContextTitle=Context",
+			title = LOC "$$$/Photometoria/Dialog/ContextLabel=Context",
 			font = '<system/bold>',
 		},
 
@@ -365,10 +389,10 @@ local function buildContextSection(f, props)
 		},
 
 		f:row {
-			visible = bind 'contextModified',
 			spacing = f:control_spacing(),
 
 			f:push_button {
+				enabled = bind 'contextModified',
 				title = LOC "$$$/Photometoria/Button/SaveContext=Save",
 				action = function()
 					props.contextSavedText = props.contextText
@@ -382,6 +406,7 @@ local function buildContextSection(f, props)
 			},
 
 			f:push_button {
+				enabled = bind 'contextModified',
 				title = LOC "$$$/Photometoria/Button/CancelContext=Cancel",
 				action = function()
 					props.contextText = props.contextSavedText
@@ -389,34 +414,9 @@ local function buildContextSection(f, props)
 				end,
 			},
 		},
-
-		f:separator { fill_horizontal = 1 },
 	}
 end
 
---- Builds the task info row.
-local function buildTaskInfoRow(f, props)
-	return f:row {
-		spacing = f:control_spacing(),
-		fill_horizontal = 1,
-
-		f:static_text {
-			title = bind 'taskSummary',
-		},
-
-		f:push_button {
-			title = LOC "$$$/Photometoria/Button/ShowPhotos=Show Photos in Library",
-			place_horizontal = 1,
-			action = function()
-				LrDialogs.message(
-					LOC "$$$/Photometoria/Mock/ShowPhotos=Show Photos",
-					LOC "$$$/Photometoria/Mock/ShowPhotosMsg=This would select the task photos in the Lightroom library.",
-					'info'
-				)
-			end,
-		},
-	}
-end
 
 --- Builds the job detail panel (right column of jobs section).
 local function buildJobDetailPanel(f, props)
@@ -525,14 +525,10 @@ end
 
 --- Builds the jobs section with master-detail layout.
 local function buildJobsSection(f, props)
-	return f:column {
+	return f:group_box {
+		title = LOC "$$$/Photometoria/Dialog/JobsTitle=Task jobs",
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
-
-		f:static_text {
-			title = LOC "$$$/Photometoria/Dialog/JobsTitle=Jobs",
-			font = '<system/bold>',
-		},
 
 		f:row {
 			spacing = f:dialog_spacing(),
@@ -576,13 +572,7 @@ local function buildContents(f, props)
 
 		buildTaskSelectorRow(f, props),
 
-		f:separator { fill_horizontal = 1 },
-
-		buildContextSection(f, props),
-
-		buildTaskInfoRow(f, props),
-
-		f:separator { fill_horizontal = 1 },
+		buildTaskSection(f, props),
 
 		buildJobsSection(f, props),
 	}
