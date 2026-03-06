@@ -136,6 +136,25 @@ A reusable progress bar is implemented in `TaskDialog.lua` using:
 - Use `place_horizontal = 1` on the widget to push it to the right edge.
 - Or set `fill_horizontal = 1` on the preceding widget to absorb remaining space.
 
+**`group_box` for visual grouping:**
+
+- `group_box` draws a native border with a label in the top-left corner (like
+  HTML `<fieldset>`). Accepts `title`, `fill_horizontal`, `spacing` and child
+  widgets laid out vertically (like `column`).
+- Replaces the pattern of `separator` + bold `static_text` title with a single
+  semantic container — cleaner layout and less code.
+- Works well for logically distinct sections inside a dialog (e.g. task detail,
+  jobs list).
+
+**System font constants for `font` property:**
+
+- `'<system>'` — default system font.
+- `'<system/bold>'` — bold variant, useful for section headings / sub-titles.
+- `'<system/small>'` — smaller variant, useful for secondary text and inline
+  warnings.
+- `'<system/small/bold>'` — small + bold.
+- These work on `static_text`, `edit_field`, `push_button`, and other widgets.
+
 ---
 
 ## Testing
