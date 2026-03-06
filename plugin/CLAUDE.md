@@ -51,6 +51,7 @@ plugin/
   outside LOC: `'\226\156\147 ' .. LOC "$$$/Key=text"`
 - `visible = bind(...)` on `row`/`column` does NOT hide children; apply on leaf widgets
 - `\n` in `static_text` does not produce line breaks; use separate widgets
+- `radio_button` groups in same container hierarchy merge on macOS; use `group_box` to isolate groups
 - `actionBinding` in `presentModalDialog` needs explicit `bind_to_object = props`
 - Lua escape sequences in `TranslatedStrings_*.txt` are NOT interpreted; write UTF-8 directly
 

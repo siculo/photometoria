@@ -146,6 +146,14 @@ A reusable progress bar is implemented in `TaskDialog.lua` using:
 - Works well for logically distinct sections inside a dialog (e.g. task detail,
   jobs list).
 
+**`radio_button` grouping across platforms:**
+
+- On macOS, radio buttons in the same container hierarchy are treated as a single
+  native group — clicking one deselects all others, even if they bind to different
+  properties. The Lua binding state stays correct, but the visual selection is wrong.
+- Fix: place each logical radio group inside its own `group_box`. The `group_box`
+  boundary acts as a native radio group separator on all platforms.
+
 **System font constants for `font` property:**
 
 - `'<system>'` — default system font.

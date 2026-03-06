@@ -129,7 +129,8 @@ end
 
 --- Builds the photo selection section.
 local function buildPhotoSection(f, props)
-	return f:column {
+	return f:group_box {
+		title = LOC "$$$/Photometoria/AddPhotos/PhotoSectionTitle=Photos to add",
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
 
@@ -154,14 +155,13 @@ local function buildPhotoSection(f, props)
 			fill_horizontal = 1,
 			font = '<system/small>',
 		},
-
-		f:separator { fill_horizontal = 1 },
 	}
 end
 
 --- Builds the destination section (linear layout).
 local function buildDestinationSection(f, props)
-	return f:column {
+	return f:group_box {
+		title = LOC "$$$/Photometoria/AddPhotos/DestSectionTitle=Destination",
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
 
