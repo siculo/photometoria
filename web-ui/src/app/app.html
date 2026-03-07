@@ -1,0 +1,15 @@
+<style>
+</style>
+
+<main class="main">
+  <h1>{{title()}}</h1>
+  <div><button [disabled]="!canClick()" (click)="clicked()">Click</button> {{count()}}</div>
+
+  @if (canClick()) {
+    <p>Continua a fare click</p>
+  } @else {
+    <p>Non puoi più fare click</p>
+  }
+</main>
+
+<router-outlet />
