@@ -12,6 +12,7 @@ local LrTasks = import 'LrTasks'
 
 local ServerConnection = require 'ServerConnection'
 local MockData = require 'MockData'
+local NewJobDialog = require 'NewJobDialog'
 
 local bind = LrView.bind
 
@@ -524,7 +525,7 @@ local function buildJobDetailPanel(f, props)
 end
 
 --- Builds the jobs section with master-detail layout.
-local function buildJobsSection(f, props)
+local function buildJobsSection(f, props, tasks)
 	return f:group_box {
 		title = LOC "$$$/Photometoria/Dialog/JobsTitle=Task jobs",
 		spacing = f:control_spacing(),
@@ -549,11 +550,33 @@ local function buildJobsSection(f, props)
 					title = LOC "$$$/Photometoria/Button/NewJob=+ Start New Job",
 					fill_horizontal = 1,
 					action = function()
-						LrDialogs.message(
-							LOC "$$$/Photometoria/Mock/NewJob=New Job",
-							LOC "$$$/Photometoria/Mock/NewJobMsg=This would open the create job dialog.",
-							'info'
+						local task = tasks[props.selectedTask]
+						if not task then
+							return
+						end
+						local selection = NewJobDialog.showDialog(
+							MockData.providers,
+							task.photoCount
 						)
+						if not selection then
+							return
+						end
+						local newJob = {
+							id = 'job-new-' .. tostring(#task.jobs + 1),
+							provider = selection.provider,
+							model = selection.model,
+							status = 'running',
+							photosTotal = task.photoCount,
+							photosProcessed = 0,
+							estimatedRemaining = '',
+							duration = '',
+							errorCount = 0,
+						}
+						task.jobs[#task.jobs + 1] = newJob
+						props.taskPopupItems = buildTaskPopupItems(tasks)
+						props.jobListItems = buildJobListItems(task)
+						props.selectedJobValue = { #task.jobs }
+						onJobSelected(props, tasks)
 					end,
 				},
 			},
@@ -564,7 +587,7 @@ local function buildJobsSection(f, props)
 end
 
 --- Builds the complete dialog contents.
-local function buildContents(f, props)
+local function buildContents(f, props, tasks)
 	return f:column {
 		bind_to_object = props,
 		spacing = f:control_spacing(),
@@ -574,7 +597,7 @@ local function buildContents(f, props)
 
 		buildTaskSection(f, props),
 
-		buildJobsSection(f, props),
+		buildJobsSection(f, props, tasks),
 	}
 end
 
@@ -632,7 +655,7 @@ LrTasks.startAsyncTask(function()
 
 		LrDialogs.presentModalDialog {
 			title = LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
-			contents = buildContents(f, props),
+			contents = buildContents(f, props, tasks),
 			actionVerb = LOC "$$$/Photometoria/Button/Close=Close",
 			cancelVerb = '< exclude >',
 		}
