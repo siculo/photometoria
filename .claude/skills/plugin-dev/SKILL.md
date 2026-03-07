@@ -89,10 +89,79 @@ A reusable progress bar is implemented in `TaskDialog.lua` using:
 - If a UI label appears stale after code changes, check for an outdated translation
   in the `.txt` file.
 
+**`visible = bind(...)` does NOT work on container widgets:**
+
+- `row` and `column` ignore dynamic `visible` binding — child widgets remain
+  visible even when the bound property is `false`.
+- Apply `visible = bind(...)` directly on each **leaf widget** (`static_text`,
+  `edit_field`, `popup_menu`, `radio_button`, etc.) instead of the parent container.
+- Alternative: use `enabled = bind(...)` on leaf widgets to gray them out
+  instead of hiding. This avoids empty space and provides clearer UX when
+  toggling between form sections (e.g. new task vs existing task).
+
+**`static_text` does not support newlines:**
+
+- `\n` inside a `static_text` title does not produce a line break.
+- Split multi-line content into separate `static_text` widgets.
+
+**`actionBinding` in `presentModalDialog` needs explicit `bind_to_object`:**
+
+- `LrView.bind 'key'` does NOT work inside `actionBinding` because
+  `presentModalDialog` has no `bind_to_object` context.
+- Use the explicit form:
+  ```lua
+  actionBinding = {
+      enabled = {
+          bind_to_object = props,
+          key = 'confirmEnabled',
+      },
+  },
+  ```
+
+**Escape sequences in `TranslatedStrings_*.txt`:**
+
+- Translation files are plain text, NOT Lua source — Lua decimal escapes
+  (`\ddd`) are printed literally, not interpreted as bytes.
+- Write UTF-8 characters directly in the `.txt` file (e.g. `più`, not
+  `pi\195\185`). Escape sequences only work in `.lua` string literals.
+
+**`static_text` supports `enabled` for visual dimming:**
+
+- Setting `enabled = false` (or binding) on `static_text` grays out the text,
+  matching the native look of disabled fields. Useful for labels next to
+  disabled `edit_field` or `popup_menu` widgets.
+
 **Right-aligning elements in a row:**
 
 - Use `place_horizontal = 1` on the widget to push it to the right edge.
 - Or set `fill_horizontal = 1` on the preceding widget to absorb remaining space.
+
+**`group_box` for visual grouping:**
+
+- `group_box` draws a native border with a label in the top-left corner (like
+  HTML `<fieldset>`). Accepts `title`, `fill_horizontal`, `spacing` and child
+  widgets laid out vertically (like `column`).
+- Replaces the pattern of `separator` + bold `static_text` title with a single
+  semantic container — cleaner layout and less code.
+- Works well for logically distinct sections inside a dialog (e.g. task detail,
+  jobs list).
+
+**`radio_button` grouping across platforms:**
+
+- On macOS, radio buttons in the same container hierarchy are treated as a single
+  native group — clicking one deselects all others, even if they bind to different
+  properties. The Lua binding state stays correct, but the visual selection is wrong.
+- Fix: place each logical radio group inside its own `group_box`. The `group_box`
+  boundary acts as a native radio group separator on all platforms.
+
+**System font constants for `font` property:**
+
+- `'<system>'` — default system font.
+- `'<system/bold>'` — bold variant, useful for section headings / sub-titles.
+- `'<system/small>'` — smaller variant, useful for secondary text and inline
+  warnings.
+- `'<system/small/bold>'` — small + bold.
+- These work on `static_text`, `edit_field`, `push_button`, and other widgets.
 
 ---
 

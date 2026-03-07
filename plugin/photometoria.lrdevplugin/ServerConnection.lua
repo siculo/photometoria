@@ -57,56 +57,60 @@ local function formatBytes(bytes)
 	end
 end
 
---- Connects to a Photometoria server and retrieves its info.
---- Calls `callback(success, data)` asynchronously.
+--- Fetches server info synchronously. Must be called from within an async task.
+--- Returns `(true, data)` on success or `(false, data)` on failure.
 --- On success, data contains server details formatted for display.
 --- On failure, data contains a `message` field with the error description.
+function ServerConnection.fetch(host)
+	local url = 'http://' .. host .. '/api/info'
+
+	local body, headers = LrHttp.get(url, nil, TIMEOUT_SECONDS)
+
+	if not body or not headers then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/CannotReach=Could not reach server at ^1", host),
+		}
+	end
+
+	if headers.status ~= 200 then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(headers.status)),
+		}
+	end
+
+	local info, err = JSON.decode(body)
+	if not info or not info.server then
+		return false, {
+			message = LOC "$$$/Photometoria/Status/InvalidResponse=Invalid response from server",
+		}
+	end
+
+	local server = info.server
+	local allocated = server.allocated_space_bytes or 0
+	local used = server.used_space_bytes or 0
+	local free = (allocated > used) and (allocated - used) or 0
+
+	local providers = table.concat(server.available_providers or {}, ', ')
+	local defaultProvider = server.default_provider or ''
+
+	return true, {
+		storageAllocated = formatBytes(allocated),
+		storageUsed      = formatBytes(used),
+		storageFree      = formatBytes(free),
+		providers        = providers,
+		defaultProvider  = defaultProvider,
+		version          = info.general and info.general.version or '',
+		activeTasks      = server.active_tasks_count or 0,
+		queuedJobs       = server.running_jobs_count or 0,
+	}
+end
+
+--- Connects to a Photometoria server and retrieves its info.
+--- Calls `callback(success, data)` asynchronously.
 function ServerConnection.connect(host, callback)
 	LrTasks.startAsyncTask(function()
-		local url = 'http://' .. host .. '/api/info'
-
-		local body, headers = LrHttp.get(url, nil, TIMEOUT_SECONDS)
-
-		if not body or not headers then
-			callback(false, {
-				message = LOC("$$$/Photometoria/Status/CannotReach=Could not reach server at ^1", host),
-			})
-			return
-		end
-
-		if headers.status ~= 200 then
-			callback(false, {
-				message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(headers.status)),
-			})
-			return
-		end
-
-		local info, err = JSON.decode(body)
-		if not info or not info.server then
-			callback(false, {
-				message = LOC "$$$/Photometoria/Status/InvalidResponse=Invalid response from server",
-			})
-			return
-		end
-
-		local server = info.server
-		local allocated = server.allocated_space_bytes or 0
-		local used = server.used_space_bytes or 0
-		local free = (allocated > used) and (allocated - used) or 0
-
-		local providers = table.concat(server.available_providers or {}, ', ')
-		local defaultProvider = server.default_provider or ''
-
-		callback(true, {
-			storageAllocated = formatBytes(allocated),
-			storageUsed      = formatBytes(used),
-			storageFree      = formatBytes(free),
-			providers        = providers,
-			defaultProvider  = defaultProvider,
-			version          = info.general and info.general.version or '',
-			activeTasks      = server.active_tasks_count or 0,
-			queuedJobs       = server.running_jobs_count or 0,
-		})
+		local success, data = ServerConnection.fetch(host)
+		callback(success, data)
 	end)
 end
 

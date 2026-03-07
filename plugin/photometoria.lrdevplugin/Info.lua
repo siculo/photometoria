@@ -13,7 +13,11 @@ return {
 
 	LrLibraryMenuItems = {
 		{
-			title = LOC "$$$/Photometoria/Menu/Tasks=Photometoria Tasks",
+			title = LOC "$$$/Photometoria/Menu/AddPhotos=Add Photos",
+			file = 'AddPhotosDialog.lua',
+		},
+		{
+			title = LOC "$$$/Photometoria/Menu/Tasks=Manage Tasks",
 			file = 'TaskDialog.lua',
 		},
 	},
