@@ -1,0 +1,20 @@
+<form (submit)="onSubmit($event)">
+    <label>
+        Name:
+        <input type="text" [formField]="newTaskForm.name" />
+
+        @if (newTaskForm.name().touched() && newTaskForm.name().invalid()) {
+        <ul class="error-list">
+            @for (error of newTaskForm.name().errors(); track error) {
+                <li>{{ error.message }}</li>
+            }
+        </ul>
+        }
+    </label>
+    <label>
+        Context:
+        <textarea rows="4" [formField]="newTaskForm.context" ></textarea>
+    </label>
+
+    <button type="submit">OK</button>
+</form>

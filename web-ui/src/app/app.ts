@@ -1,5 +1,9 @@
-import { Component, signal, computed } from '@angular/core';
+import { Component, signal, inject, effect, computed } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import { NewTaskForm } from './task/newTaskForm';
+import { Observable } from 'rxjs';
+import { APIService, InfoResponse } from './service/APIService';
+import { httpResource } from '@angular/common/http';
 
 @Component({
   selector: 'app-root',
@@ -9,10 +13,16 @@ import { RouterOutlet } from '@angular/router';
 })
 export class App {
   protected readonly title = signal('Photometoria Web UI');
-  protected readonly count = signal(0);
-  protected readonly canClick = computed(() => this.count() < 10);
+  info$!: Observable<InfoResponse>;
+  private api = inject(APIService);
 
-  clicked() {
-    this.count.update((value) => value + 1);
-  }
+  protected readonly serverInfo = httpResource<InfoResponse>(() => '/api/info');
+
+  protected readonly version = computed<string>(() => {
+    if (this.serverInfo.hasValue()) {
+      let v: string | null = (this.serverInfo.value())?.general?.version;
+      return (v != null) ? v : "-";
+    }
+    return "-";
+  });
 }
