@@ -84,7 +84,7 @@ pub trait TaskStore: Send + Sync {
     ///
     /// # Example
     /// ```ignore
-    /// let task = Task::new("vacation in SF".to_string());
+    /// let task = Task::new("SF Vacation".to_string(), "vacation in SF".to_string());
     /// let created = store.create(task).await?;
     /// ```
     async fn create(&self, task: Task) -> TaskStoreResult<Task>;
@@ -199,4 +199,15 @@ pub trait TaskStore: Send + Sync {
     /// ```
     #[allow(dead_code)]
     async fn count(&self) -> TaskStoreResult<usize>;
+
+    /// Finds a task by its name.
+    ///
+    /// # Arguments
+    /// * `name` - The name to search for (case-sensitive)
+    ///
+    /// # Returns
+    /// * `Ok(Some(Task))` - The task if found
+    /// * `Ok(None)` - If no task with the given name exists
+    /// * `Err(StorageError)` - If a storage-level error occurs
+    async fn find_by_name(&self, name: &str) -> TaskStoreResult<Option<Task>>;
 }

@@ -270,7 +270,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn create_test_task() -> Task {
-        Task::new("Test task".to_string())
+        Task::new("Test task".to_string(), "Test context".to_string())
     }
 
     fn create_test_photo(task_id: Uuid) -> Photo {

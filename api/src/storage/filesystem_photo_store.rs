@@ -349,7 +349,8 @@ impl PhotoStore for FileSystemPhotoStore {
         use crate::models::Task;
         let task = Task {
             task_id: photo_clone.task_id,
-            context: String::new(), // Dummy task for layout operations
+            name: String::new(),
+            context: String::new(),
             created_at: chrono::Utc::now(),
         };
 

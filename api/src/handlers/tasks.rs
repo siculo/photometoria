@@ -19,14 +19,41 @@ use crate::models::{
 };
 use crate::storage::{JobStore, PhotoStore, TaskStoreError};
 
+/// Validates and trims a task name, returning an error if empty.
+fn validate_task_name(name: &str) -> Result<String, AppError> {
+    let trimmed = name.trim().to_string();
+    if trimmed.is_empty() {
+        return Err(AppError::bad_request(
+            "invalid_name",
+            "Task name must not be empty",
+        ));
+    }
+    Ok(trimmed)
+}
+
 /// Handler for POST /api/tasks
 ///
-/// Creates a new task with the provided context and stores it.
+/// Creates a new task with the provided name and context and stores it.
 pub async fn create_task(
     State(state): State<AppState>,
     AppJson(request): AppJson<CreateTaskRequest>,
 ) -> Result<(StatusCode, Json<TaskResponse>), AppError> {
-    let task = Task::new(request.context);
+    let name = validate_task_name(&request.name)?;
+
+    if state
+        .task_store
+        .find_by_name(&name)
+        .await
+        .unwrap_or(None)
+        .is_some()
+    {
+        return Err(AppError::conflict(
+            "name_taken",
+            format!("A task with name '{}' already exists", name),
+        ));
+    }
+
+    let task = Task::new(name, request.context);
 
     match state.task_store.create(task).await {
         Ok(created_task) => {
@@ -65,15 +92,15 @@ async fn get_task_summary(photo_store: &Arc<dyn PhotoStore>, task: Task) -> Task
         .total_size_by_task(task.task_id)
         .await
         .unwrap_or(0); // TODO: è corretto che in caso di errore il risultato sia zero?
-    let summary = TaskSummary {
+    TaskSummary {
         task_id: task.task_id,
+        name: task.name,
         context: task.context,
         photo_count,
         storage_used,
         created_at: task.created_at,
         job_count: 0, // JobStore not implemented yet
-    };
-    summary
+    }
 }
 
 /// Helper function to retrieve a task and handle errors.
@@ -122,6 +149,7 @@ pub async fn get_task(
     let task = get_existing_task(&state.task_store, task_id).await?;
     let detail = TaskDetail {
         task_id: task.task_id,
+        name: task.name,
         context: task.context,
         created_at: task.created_at,
         photo_count: state.photo_store.count_by_task(task_id).await.unwrap(),
@@ -132,18 +160,28 @@ pub async fn get_task(
 
 /// Handler for PATCH /api/tasks/{task_id}
 ///
-/// Updates an existing task's context.
+/// Updates an existing task's name and context.
 pub async fn update_task(
     State(state): State<AppState>,
     AppPath(task_id): AppPath<Uuid>,
     AppJson(request): AppJson<UpdateTaskRequest>,
 ) -> Result<Json<TaskResponse>, AppError> {
-    // First, get the existing task
     let task = get_existing_task(&state.task_store, task_id).await?;
 
-    // Update the context while preserving other fields
+    let name = validate_task_name(&request.name)?;
+
+    if let Some(existing) = state.task_store.find_by_name(&name).await.unwrap_or(None) {
+        if existing.task_id != task_id {
+            return Err(AppError::conflict(
+                "name_taken",
+                format!("A task with name '{}' already exists", name),
+            ));
+        }
+    }
+
     let updated_task = Task {
         task_id: task.task_id,
+        name,
         context: request.context,
         created_at: task.created_at,
     };
@@ -187,6 +225,7 @@ mod tests {
     async fn test_create_task_returns_task_response() {
         let ts = create_test_state().await;
         let request = CreateTaskRequest {
+            name: "SF Vacation".to_string(),
             context: "vacation in San Francisco".to_string(),
         };
 
@@ -195,8 +234,76 @@ mod tests {
         assert!(result.is_ok());
         let (status, Json(response)) = result.unwrap();
         assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(response.name, "SF Vacation");
         assert_eq!(response.context, "vacation in San Francisco");
         assert!(!response.task_id.is_nil());
+    }
+
+    #[tokio::test]
+    async fn test_create_task_empty_string_name_rejected() {
+        let ts = create_test_state().await;
+        let request = CreateTaskRequest {
+            name: "".to_string(),
+            context: "some context".to_string(),
+        };
+
+        let result = create_task(State(ts.state.clone()), AppJson(request)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "invalid_name");
+    }
+
+    #[tokio::test]
+    async fn test_create_task_whitespace_name_rejected() {
+        let ts = create_test_state().await;
+        let request = CreateTaskRequest {
+            name: "   ".to_string(),
+            context: "some context".to_string(),
+        };
+
+        let result = create_task(State(ts.state.clone()), AppJson(request)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "invalid_name");
+    }
+
+    #[tokio::test]
+    async fn test_create_task_name_trimmed() {
+        let ts = create_test_state().await;
+        let request = CreateTaskRequest {
+            name: "  SF Vacation  ".to_string(),
+            context: "context".to_string(),
+        };
+
+        let (_, Json(response)) = create_task(State(ts.state.clone()), AppJson(request))
+            .await
+            .unwrap();
+
+        assert_eq!(response.name, "SF Vacation");
+    }
+
+    #[tokio::test]
+    async fn test_create_task_duplicate_name_rejected() {
+        let ts = create_test_state().await;
+
+        let request1 = CreateTaskRequest {
+            name: "My Task".to_string(),
+            context: "context 1".to_string(),
+        };
+        create_task(State(ts.state.clone()), AppJson(request1))
+            .await
+            .unwrap();
+
+        let request2 = CreateTaskRequest {
+            name: "My Task".to_string(),
+            context: "context 2".to_string(),
+        };
+        let result = create_task(State(ts.state.clone()), AppJson(request2)).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.status, StatusCode::CONFLICT);
+        assert_eq!(err.body.error, "name_taken");
     }
 
     #[tokio::test]
@@ -214,11 +321,12 @@ mod tests {
     async fn test_list_tasks_returns_created_tasks() {
         let ts = create_test_state().await;
 
-        // Create two tasks
         let request1 = CreateTaskRequest {
+            name: "Task 1".to_string(),
             context: "task 1".to_string(),
         };
         let request2 = CreateTaskRequest {
+            name: "Task 2".to_string(),
             context: "task 2".to_string(),
         };
         let _ = create_task(State(ts.state.clone()), AppJson(request1)).await;
@@ -229,7 +337,6 @@ mod tests {
         assert!(result.is_ok());
         let Json(summaries) = result.unwrap();
         assert_eq!(summaries.len(), 2);
-        // Check that photo_count, storage_used_mb, job_count are 0
         for summary in &summaries {
             assert_eq!(summary.photo_count, 0);
             assert_eq!(summary.storage_used, 0);
@@ -241,8 +348,8 @@ mod tests {
     async fn test_get_task_found() {
         let ts = create_test_state().await;
 
-        // Create a task first
         let request = CreateTaskRequest {
+            name: "Test Task".to_string(),
             context: "test task".to_string(),
         };
         let (_, Json(created)) = create_task(State(ts.state.clone()), AppJson(request))
@@ -254,6 +361,7 @@ mod tests {
         assert!(result.is_ok());
         let Json(detail) = result.unwrap();
         assert_eq!(detail.task_id, created.task_id);
+        assert_eq!(detail.name, "Test Task");
         assert_eq!(detail.context, "test task");
         assert_eq!(detail.photo_count, 0);
         assert_eq!(detail.storage_used, 0);
@@ -275,16 +383,16 @@ mod tests {
     async fn test_update_task_success() {
         let ts = create_test_state().await;
 
-        // Create a task first
         let request = CreateTaskRequest {
+            name: "Original Name".to_string(),
             context: "original context".to_string(),
         };
         let (_, Json(created)) = create_task(State(ts.state.clone()), AppJson(request))
             .await
             .unwrap();
 
-        // Update the task
         let update_request = UpdateTaskRequest {
+            name: "Updated Name".to_string(),
             context: "updated context".to_string(),
         };
         let result = update_task(
@@ -297,8 +405,75 @@ mod tests {
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
         assert_eq!(response.task_id, created.task_id);
+        assert_eq!(response.name, "Updated Name");
         assert_eq!(response.context, "updated context");
         assert_eq!(response.created_at, created.created_at);
+    }
+
+    #[tokio::test]
+    async fn test_update_task_same_name_allowed() {
+        let ts = create_test_state().await;
+
+        let request = CreateTaskRequest {
+            name: "My Task".to_string(),
+            context: "original".to_string(),
+        };
+        let (_, Json(created)) = create_task(State(ts.state.clone()), AppJson(request))
+            .await
+            .unwrap();
+
+        let update_request = UpdateTaskRequest {
+            name: "My Task".to_string(),
+            context: "updated context".to_string(),
+        };
+        let result = update_task(
+            State(ts.state.clone()),
+            AppPath(created.task_id),
+            AppJson(update_request),
+        )
+        .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_update_task_duplicate_name_rejected() {
+        let ts = create_test_state().await;
+
+        create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest {
+                name: "Task A".to_string(),
+                context: "context".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let (_, Json(task_b)) = create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest {
+                name: "Task B".to_string(),
+                context: "context".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let result = update_task(
+            State(ts.state.clone()),
+            AppPath(task_b.task_id),
+            AppJson(UpdateTaskRequest {
+                name: "Task A".to_string(),
+                context: "context".to_string(),
+            }),
+        )
+        .await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.status, StatusCode::CONFLICT);
+        assert_eq!(err.body.error, "name_taken");
     }
 
     #[tokio::test]
@@ -308,6 +483,7 @@ mod tests {
         let task_id = Uuid::new_v4();
 
         let update_request = UpdateTaskRequest {
+            name: "Some Name".to_string(),
             context: "updated context".to_string(),
         };
         let result = update_task(
@@ -325,20 +501,18 @@ mod tests {
     async fn test_delete_task_success() {
         let ts = create_test_state().await;
 
-        // Create a task first
         let request = CreateTaskRequest {
+            name: "To Delete".to_string(),
             context: "task to delete".to_string(),
         };
         let (_, Json(created)) = create_task(State(ts.state.clone()), AppJson(request))
             .await
             .unwrap();
 
-        // Delete the task
         let result = delete_task(State(ts.state.clone()), AppPath(created.task_id)).await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
 
-        // Verify it's deleted
         let get_result = get_task(State(ts.state.clone()), AppPath(created.task_id)).await;
         assert!(get_result.is_err());
         assert_eq!(
@@ -364,6 +538,7 @@ mod tests {
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
             AppJson(CreateTaskRequest {
+                name: "Task".to_string(),
                 context: "task".to_string(),
             }),
         )
@@ -386,6 +561,7 @@ mod tests {
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
             AppJson(CreateTaskRequest {
+                name: "Task".to_string(),
                 context: "task".to_string(),
             }),
         )
@@ -409,6 +585,7 @@ mod tests {
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
             AppJson(CreateTaskRequest {
+                name: "Task".to_string(),
                 context: "task".to_string(),
             }),
         )
@@ -432,6 +609,7 @@ mod tests {
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
             AppJson(CreateTaskRequest {
+                name: "Task".to_string(),
                 context: "task".to_string(),
             }),
         )
@@ -451,6 +629,7 @@ mod tests {
     async fn test_task_photo_summary() {
         let ts = create_test_state().await;
         let request = CreateTaskRequest {
+            name: "SF Vacation".to_string(),
             context: "vacation in San Francisco".to_string(),
         };
 
@@ -499,6 +678,7 @@ mod tests {
         let (_, Json(task1)) = create_task(
             State(ts.state.clone()),
             AppJson(CreateTaskRequest {
+                name: "Task 1".to_string(),
                 context: "task 1".to_string(),
             }),
         )
@@ -507,6 +687,7 @@ mod tests {
         let (_, Json(task2)) = create_task(
             State(ts.state.clone()),
             AppJson(CreateTaskRequest {
+                name: "Task 2".to_string(),
                 context: "task 2".to_string(),
             }),
         )
