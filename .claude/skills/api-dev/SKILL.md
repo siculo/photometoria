@@ -41,6 +41,12 @@ fn calculate_task_size(photos: &[Photo]) -> Option<u64> {
 
 ## Testing Guidelines (CRITICAL)
 
+### Test-First Strategy
+
+When fixing bugs or adding behaviour, **write a failing test first** that
+captures the expected behaviour, then implement the fix or feature to make
+it pass. This ensures the change is verifiable and prevents regressions.
+
 ### WHERE to Write Tests
 
 - **Handler tests** (`handlers/{module}.rs`) — Business logic, error handling, custom validations
@@ -71,6 +77,20 @@ test_<handler>_<scenario>
 ```
 
 Full details: `api/docs/development.md` — Testing section
+
+---
+
+## Documentation (CRITICAL)
+
+When adding, modifying, or removing endpoints, models, or response structures,
+**always update all affected documentation in the same change**:
+
+- `api/docs/api-reference.md` — Endpoint reference and response examples
+- `api/docs/Photometoria.postman_collection.json` — Postman collection
+- `api/docs/development.md` — curl examples in the manual testing section
+- `api/CLAUDE.md` — API workflow overview
+
+Do not consider the work complete until documentation is in sync with code.
 
 ---
 

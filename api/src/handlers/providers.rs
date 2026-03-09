@@ -126,21 +126,14 @@ async fn provider_response(provider: &Arc<dyn AIProvider>) -> ProviderDetailsRes
 }
 
 /// Query provider for installed model names. On failure treat all as unavailable.
-/// NOTE: the only model currently supported is Ollama.
-///
-/// TODO: other providers should be supported
 async fn available_models(provider: &Arc<dyn AIProvider>) -> HashSet<String> {
-    if provider.name().eq("ollama") {
-        HashSet::new()
-    } else {
-        provider
-            .list_models(false)
-            .await
-            .unwrap_or_default()
-            .into_iter()
-            .map(|m| m.name)
-            .collect()
-    }
+    provider
+        .list_models(false)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|m| m.name)
+        .collect()
 }
 // ============================================================================
 // Tests
@@ -303,6 +296,21 @@ mod tests {
         assert_eq!(models[0].name, "qwen3-vl");
         assert_eq!(models[0].description.as_deref(), Some("fast model"));
         assert!(models[0].available, "model should be available");
+    }
+
+    #[tokio::test]
+    async fn test_ollama_provider_installed_model_is_available() {
+        let provider = MockProvider {
+            provider_name: "ollama".to_string(),
+            configured: vec![configured("qwen3-vl", "qwen3-vl:8b", None)],
+            installed: vec![make_model_info("qwen3-vl:8b")],
+        };
+        let models = call_list_models(registry_with_name("ollama", provider)).await;
+
+        assert!(
+            models[0].available,
+            "ollama provider must report installed models as available"
+        );
     }
 
     #[tokio::test]

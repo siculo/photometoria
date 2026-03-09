@@ -79,7 +79,16 @@ impl FileSystemTaskStore {
 
         for task_json in task_files {
             match self.load_task_from_file(&task_json).await {
-                Ok(task) => {
+                Ok(mut task) => {
+                    if task.name.is_empty() {
+                        task.ensure_name();
+                        if let Err(e) = self.save_task_to_file(&task).await {
+                            warn!(
+                                "Failed to persist migrated name for task {}: {}",
+                                task.task_id, e
+                            );
+                        }
+                    }
                     self.tasks.insert(task.task_id, task);
                     loaded_count += 1;
                 }
@@ -252,6 +261,16 @@ impl TaskStore for FileSystemTaskStore {
         // O(1) operation using internal atomic counter
         Ok(self.tasks.len())
     }
+
+    async fn find_by_name(&self, name: &str) -> TaskStoreResult<Option<Task>> {
+        debug!("Finding task by name: {}", name);
+
+        Ok(self
+            .tasks
+            .iter()
+            .find(|entry| entry.value().name == name)
+            .map(|entry| entry.value().clone()))
+    }
 }
 
 // ============================================================================
@@ -282,17 +301,18 @@ mod tests {
     }
 
     // Helper function to create a test task with specific timestamp
-    fn create_test_task_with_timestamp(context: &str, timestamp: DateTime<Utc>) -> Task {
+    fn create_test_task_with_timestamp(name: &str, timestamp: DateTime<Utc>) -> Task {
         Task {
             task_id: Uuid::new_v4(),
-            context: context.to_string(),
+            name: name.to_string(),
+            context: format!("context for {}", name),
             created_at: timestamp,
         }
     }
 
     // Helper function to create a test task with current timestamp
-    fn create_test_task(context: &str) -> Task {
-        Task::new(context.to_string())
+    fn create_test_task(name: &str) -> Task {
+        Task::new(name.to_string(), format!("context for {}", name))
     }
 
     #[tokio::test]
@@ -382,9 +402,9 @@ mod tests {
         let tasks = ts.store.list().await.unwrap();
 
         assert_eq!(tasks.len(), 3);
-        assert_eq!(tasks[0].context, "First");
-        assert_eq!(tasks[1].context, "Second");
-        assert_eq!(tasks[2].context, "Third");
+        assert_eq!(tasks[0].name, "First");
+        assert_eq!(tasks[1].name, "Second");
+        assert_eq!(tasks[2].name, "Third");
         assert_eq!(tasks[0].task_id, task1.task_id);
         assert_eq!(tasks[1].task_id, task2.task_id);
         assert_eq!(tasks[2].task_id, task3.task_id);
@@ -548,7 +568,7 @@ mod tests {
         assert!(store.exists(task2_id).await.unwrap());
 
         let loaded_task1 = store.get(task1_id).await.unwrap().unwrap();
-        assert_eq!(loaded_task1.context, "First task");
+        assert_eq!(loaded_task1.name, "First task");
     }
 
     #[tokio::test]

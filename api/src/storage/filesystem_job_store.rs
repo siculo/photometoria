@@ -182,7 +182,8 @@ impl JobStore for FileSystemJobStore {
                 use crate::models::Task;
                 let task = Task {
                     task_id: job.task_id,
-                    context: String::new(), // Dummy task for layout operations
+                    name: String::new(),
+                    context: String::new(),
                     created_at: chrono::Utc::now(),
                 };
 

@@ -329,7 +329,13 @@ curl -X PATCH http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-4466554400
 curl -X DELETE http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000
 ```
 
-**6. Create multiple tasks (to test multi-task support):**
+**6. List jobs for a task:**
+
+```bash
+curl http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/jobs
+```
+
+**7. Create multiple tasks (to test multi-task support):**
 
 ```bash
 # Create first task

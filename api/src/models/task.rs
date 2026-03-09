@@ -34,6 +34,13 @@ pub struct Task {
     /// Unique identifier (UUID)
     pub task_id: Uuid,
 
+    /// Short human-readable name for the task (must be unique)
+    ///
+    /// Defaults to empty string for backward compatibility with existing
+    /// storage that predates this field.
+    #[serde(default)]
+    pub name: String,
+
     /// User-provided context information for AI analysis
     ///
     /// This context is used by the AI models to better understand the photos
@@ -50,19 +57,33 @@ impl Task {
     /// Creates a new Task with generated UUID and current timestamp.
     ///
     /// # Arguments
+    /// * `name` - Short human-readable name for the task
     /// * `context` - User-provided context information for AI analysis
     ///
     /// # Example
     /// ```
     /// use photometoria_rest_api::models::Task;
     ///
-    /// let task = Task::new("vacation in San Francisco".to_string());
+    /// let task = Task::new("SF Vacation".to_string(), "vacation in San Francisco".to_string());
     /// ```
-    pub fn new(context: String) -> Self {
+    pub fn new(name: String, context: String) -> Self {
         Self {
             task_id: Uuid::new_v4(),
+            name,
             context,
             created_at: Utc::now(),
+        }
+    }
+
+    /// Assigns a generated name if the current name is empty.
+    ///
+    /// Used for backward compatibility when loading tasks from storage
+    /// that predate the `name` field. Generates a name like "Untitled Task a1b2"
+    /// using the first 4 hex characters of the task ID.
+    pub fn ensure_name(&mut self) {
+        if self.name.is_empty() {
+            let short_id = &self.task_id.to_string()[..4];
+            self.name = format!("Untitled Task {}", short_id);
         }
     }
 }
@@ -78,11 +99,15 @@ impl Task {
 /// # Example JSON
 /// ```json
 /// {
+///   "name": "SF Vacation 2024",
 ///   "context": "vacation in San Francisco, summer 2024"
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateTaskRequest {
+    /// Short human-readable name for the task (must be unique)
+    pub name: String,
+
     /// User-provided context information for AI analysis
     pub context: String,
 }
@@ -97,6 +122,7 @@ pub struct CreateTaskRequest {
 /// ```json
 /// {
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "name": "SF Vacation 2024",
 ///   "context": "vacation in San Francisco, summer 2024",
 ///   "created_at": "2024-01-15T10:30:00Z"
 /// }
@@ -105,6 +131,9 @@ pub struct CreateTaskRequest {
 pub struct TaskResponse {
     /// Unique task identifier
     pub task_id: Uuid,
+
+    /// Short human-readable name for the task
+    pub name: String,
 
     /// User-provided context information
     pub context: String,
@@ -123,6 +152,7 @@ pub struct TaskResponse {
 /// ```json
 /// {
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "name": "SF Vacation 2024",
 ///   "context": "vacation in SF",
 ///   "photo_count": 15,
 ///   "storage_used": 243434374,
@@ -134,6 +164,9 @@ pub struct TaskResponse {
 pub struct TaskSummary {
     /// Unique task identifier
     pub task_id: Uuid,
+
+    /// Short human-readable name for the task
+    pub name: String,
 
     /// User-provided context information
     pub context: String,
@@ -151,7 +184,7 @@ pub struct TaskSummary {
     pub job_count: usize,
 }
 
-/// Detailed information about a task including associated jobs.
+/// Detailed information about a task including aggregated data.
 ///
 /// Used by: `GET /api/tasks/{task_id}` (detailed view)
 ///
@@ -159,19 +192,21 @@ pub struct TaskSummary {
 /// ```json
 /// {
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "name": "SF Vacation 2024",
 ///   "context": "vacation in SF",
 ///   "created_at": "2024-01-15T10:30:00Z",
 ///   "photo_count": 15,
-///   "storage_used": 42378436
+///   "storage_used": 42378436,
+///   "job_count": 2
 /// }
 /// ```
-///
-/// Note: The `jobs` field is currently commented out and will be added
-/// once the Job model is implemented.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskDetail {
     /// Unique task identifier
     pub task_id: Uuid,
+
+    /// Short human-readable name for the task
+    pub name: String,
 
     /// User-provided context information
     pub context: String,
@@ -184,9 +219,9 @@ pub struct TaskDetail {
 
     /// Total storage used by photos in this task in bytes
     pub storage_used: u64,
-    // TODO: Uncomment and use Vec<JobSummary> when job model is implemented
-    // /// List of jobs associated with this task
-    // pub jobs: Vec<JobSummary>,
+
+    /// Number of jobs associated with this task
+    pub job_count: usize,
 }
 
 /// Request body for updating an existing task.
@@ -196,11 +231,15 @@ pub struct TaskDetail {
 /// # Example JSON
 /// ```json
 /// {
+///   "name": "Updated Name",
 ///   "context": "updated context information"
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateTaskRequest {
+    /// Updated task name (must be unique)
+    pub name: String,
+
     /// Updated context information
     pub context: String,
 }
@@ -216,6 +255,7 @@ impl From<Task> for TaskResponse {
     fn from(task: Task) -> Self {
         Self {
             task_id: task.task_id,
+            name: task.name,
             context: task.context,
             created_at: task.created_at,
         }
@@ -229,6 +269,7 @@ impl From<&Task> for TaskResponse {
     fn from(task: &Task) -> Self {
         Self {
             task_id: task.task_id,
+            name: task.name.clone(),
             context: task.context.clone(),
             created_at: task.created_at,
         }
@@ -246,42 +287,66 @@ mod tests {
 
     #[test]
     fn test_task_new_generates_uuid() {
-        let task = Task::new("test context".to_string());
-        // Uuid is always valid, just verify it's not nil
+        let task = Task::new("Test".to_string(), "test context".to_string());
         assert!(!task.task_id.is_nil());
     }
 
     #[test]
-    fn test_task_new_sets_context() {
-        let context = "vacation in SF".to_string();
-        let task = Task::new(context.clone());
-        assert_eq!(task.context, context);
+    fn test_task_new_sets_fields() {
+        let task = Task::new("SF Vacation".to_string(), "vacation in SF".to_string());
+        assert_eq!(task.name, "SF Vacation");
+        assert_eq!(task.context, "vacation in SF");
     }
 
     #[test]
     fn test_task_to_response_conversion() {
-        let task = Task::new("test".to_string());
+        let task = Task::new("Test".to_string(), "test".to_string());
         let response: TaskResponse = (&task).into();
 
         assert_eq!(response.task_id, task.task_id);
+        assert_eq!(response.name, task.name);
         assert_eq!(response.context, task.context);
         assert_eq!(response.created_at, task.created_at);
     }
 
     #[test]
     fn test_task_serialization() {
-        let task = Task::new("test context".to_string());
+        let task = Task::new("Test".to_string(), "test context".to_string());
         let json = serde_json::to_string(&task).unwrap();
 
         assert!(json.contains("task_id"));
+        assert!(json.contains("name"));
         assert!(json.contains("context"));
         assert!(json.contains("created_at"));
     }
 
     #[test]
     fn test_create_task_request_deserialization() {
-        let json = r#"{"context":"vacation in SF"}"#;
+        let json = r#"{"name":"SF Vacation","context":"vacation in SF"}"#;
         let request: CreateTaskRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(request.name, "SF Vacation");
         assert_eq!(request.context, "vacation in SF");
+    }
+
+    #[test]
+    fn test_task_deserialization_without_name() {
+        let json = r#"{
+            "task_id": "550e8400-e29b-41d4-a716-446655440000",
+            "context": "vacation in SF",
+            "created_at": "2024-01-15T10:30:00Z"
+        }"#;
+        let mut task: Task = serde_json::from_str(json).unwrap();
+        assert_eq!(task.name, "");
+
+        task.ensure_name();
+        assert_eq!(task.name, "Untitled Task 550e");
+        assert_eq!(task.context, "vacation in SF");
+    }
+
+    #[test]
+    fn test_ensure_name_does_not_overwrite_existing() {
+        let mut task = Task::new("My Task".to_string(), "context".to_string());
+        task.ensure_name();
+        assert_eq!(task.name, "My Task");
     }
 }
