@@ -1,0 +1,8 @@
+{
+  "/api": {
+    "target": "http://BACKEND_HOST:PORT",
+    "secure": false,
+    "changeOrigin": true,
+    "pathRewrite": { "^/api": "" }
+  }
+}

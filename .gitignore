@@ -21,3 +21,4 @@ Cargo.lock
 # OpenCode
 .opencode/config.json
 .opencode/auth.json
+web-ui/proxy.conf.json
