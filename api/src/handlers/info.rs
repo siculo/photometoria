@@ -3,7 +3,7 @@
 
 use crate::app_state::AppState;
 use crate::handlers::app_error::AppError;
-use crate::models::info::{GeneralInfo, InfoResult, ServerInfo};
+use crate::models::info::{GeneralInfo, InfoResult, LimitsInfo, ServerInfo};
 use crate::storage::{JobStore, PhotoStore};
 use axum::Json;
 use axum::extract::State;
@@ -27,6 +27,8 @@ pub async fn info(State(state): State<AppState>) -> Result<Json<InfoResult>, App
         .map_err(|e| AppError::internal_error(e.to_string()))?;
     let running_jobs_count = count_active_jobs(&state.job_store).await?;
 
+    let available_space_bytes = allocated_space_bytes.saturating_sub(used_space_bytes);
+
     let info = InfoResult {
         general: GeneralInfo {
             version: version.to_string(),
@@ -34,10 +36,16 @@ pub async fn info(State(state): State<AppState>) -> Result<Json<InfoResult>, App
         server: ServerInfo {
             allocated_space_bytes,
             used_space_bytes,
+            available_space_bytes,
             available_providers,
             default_provider,
             active_tasks_count,
             running_jobs_count,
+        },
+        limits: LimitsInfo {
+            max_photos_per_request: state.config.upload.max_photos_per_request,
+            max_photo_size_bytes: state.config.upload.max_photo_size.0,
+            max_concurrent_jobs: None,
         },
     };
     Ok(Json(info))
@@ -72,12 +80,25 @@ mod tests {
             ts.state.config.storage_max_size()
         );
         assert_eq!(info_result.server.used_space_bytes, 0);
+        assert_eq!(
+            info_result.server.available_space_bytes,
+            ts.state.config.storage_max_size()
+        );
         assert_eq!(info_result.server.active_tasks_count, 0);
         assert_eq!(info_result.server.running_jobs_count, 0);
         assert_eq!(
             info_result.server.available_providers,
             vec!["test".to_string()]
         );
+        assert_eq!(
+            info_result.limits.max_photos_per_request,
+            ts.state.config.upload.max_photos_per_request
+        );
+        assert_eq!(
+            info_result.limits.max_photo_size_bytes,
+            ts.state.config.upload.max_photo_size.0
+        );
+        assert_eq!(info_result.limits.max_concurrent_jobs, None);
     }
 
     #[tokio::test]
@@ -114,6 +135,10 @@ mod tests {
         assert_eq!(info_result.server.active_tasks_count, 2);
         assert_eq!(info_result.server.running_jobs_count, 2);
         assert_eq!(info_result.server.used_space_bytes, 5000);
+        assert_eq!(
+            info_result.server.available_space_bytes,
+            ts.state.config.storage_max_size() - 5000
+        );
     }
 
     #[tokio::test]
