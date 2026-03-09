@@ -109,14 +109,12 @@ MockData.providers = {
 	},
 }
 
-MockData.selectedPhotos = {
-	count = 47,
-	sizeBytes = 1288490189,
-}
-
-MockData.allPhotos = {
-	count = 312,
-	sizeBytes = 9018753434,
+MockData.targetPhotos = {
+	total = 47,
+	uploadable = 44,
+	missing = 2,
+	videos = 1,
+	photos = {},
 }
 
 return MockData

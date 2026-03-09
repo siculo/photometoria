@@ -14,6 +14,7 @@
 "$$$/Photometoria/Status/InvalidResponse=Risposta non valida dal server"
 "$$$/Photometoria/Error/NoServer=Server non configurato. Impostare l'indirizzo del server nel Plugin Manager."
 "$$$/Photometoria/Progress/Connecting=Connessione al server..."
+"$$$/Photometoria/Progress/Validating=Verifica foto..."
 
 "$$$/Photometoria/Detail/StorageAllocated=Spazio allocato:"
 "$$$/Photometoria/Detail/StorageUsed=Spazio utilizzato:"
@@ -92,11 +93,15 @@
 "$$$/Photometoria/NewJob/CostConfirmMsg=Il provider ^1 ha un costo stimato di ~^2 per ^3 foto. Continuare?"
 
 "$$$/Photometoria/AddPhotos/Title=Aggiungi foto"
+"$$$/Photometoria/AddPhotos/AlreadyRunning=Aggiunta foto già in corso."
+
 "$$$/Photometoria/AddPhotos/PhotoSectionTitle=Foto da aggiungere"
-"$$$/Photometoria/AddPhotos/SelectedOnly=Solo selezionate"
-"$$$/Photometoria/AddPhotos/All=Tutte le foto del catalogo"
-"$$$/Photometoria/AddPhotos/PhotosLabel=foto selezionate"
-"$$$/Photometoria/AddPhotos/Estimated=stimate"
+"$$$/Photometoria/AddPhotos/SummaryNoPhotos=Nessuna foto nel target"
+"$$$/Photometoria/AddPhotos/SummaryPhotos=^1 foto"
+"$$$/Photometoria/AddPhotos/SummaryUploadable=^1 caricabili"
+"$$$/Photometoria/AddPhotos/SummaryMissing=^1 mancanti"
+"$$$/Photometoria/AddPhotos/SummaryVideos=^1 video"
+"$$$/Photometoria/AddPhotos/StorageFree=Spazio disponibile: ^1"
 "$$$/Photometoria/AddPhotos/DestSectionTitle=Destinazione"
 "$$$/Photometoria/AddPhotos/NewTask=Aggiungi a nuovo task"
 "$$$/Photometoria/AddPhotos/ExistingTask=Aggiungi a task esistente"

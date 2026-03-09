@@ -9,44 +9,15 @@ local LrPrefs = import 'LrPrefs'
 local LrProgressScope = import 'LrProgressScope'
 local LrTasks = import 'LrTasks'
 
+local LrApplication = import 'LrApplication'
+
 local ServerConnection = require 'ServerConnection'
+local PhotoValidator = require 'PhotoValidator'
 local MockData = require 'MockData'
+local Guard = require 'Guard'
 
 local bind = LrView.bind
 local LABEL_WIDTH = 80
-
---- Formats a byte count into a human-readable string.
-local function formatBytes(bytes)
-	if bytes < 1024 then
-		return string.format('%d B', bytes)
-	elseif bytes < 1024 * 1024 then
-		return string.format('%.1f KB', bytes / 1024)
-	elseif bytes < 1024 * 1024 * 1024 then
-		return string.format('%.1f MB', bytes / (1024 * 1024))
-	else
-		return string.format('%.1f GB', bytes / (1024 * 1024 * 1024))
-	end
-end
-
---- Returns the mock photo data for the current photo choice.
-local function getPhotoData(choice)
-	if choice == 'all' then
-		return MockData.allPhotos
-	end
-	return MockData.selectedPhotos
-end
-
---- Updates the photo summary text.
-local function updatePhotoSummary(props)
-	local data = getPhotoData(props.photoChoice)
-	props.photoSummary = string.format(
-		'%d %s \194\183 %s %s',
-		data.count,
-		LOC "$$$/Photometoria/AddPhotos/PhotosLabel=photos selected",
-		formatBytes(data.sizeBytes),
-		LOC "$$$/Photometoria/AddPhotos/Estimated=estimated"
-	)
-end
 
 --- Updates the existing task summary text.
 local function updateExistingTaskSummary(props)
@@ -64,28 +35,29 @@ local function updateExistingTaskSummary(props)
 		return
 	end
 
-	local photoData = getPhotoData(props.photoChoice)
-	local afterCount = task.photoCount + photoData.count
-	local afterSize = task.sizeBytes + photoData.sizeBytes
+	local afterCount = task.photoCount + props.uploadableCount
 
 	props.existingTaskSummary = string.format(
-		'%d %s \194\183 %s',
+		'%d %s',
 		task.photoCount,
-		LOC "$$$/Photometoria/AddPhotos/PhotosPresent=photos already present",
-		formatBytes(task.sizeBytes)
+		LOC "$$$/Photometoria/AddPhotos/PhotosPresent=photos already present"
 	)
 
 	props.existingTaskAfterSummary = string.format(
-		'%s ~%d %s \194\183 ~%s',
+		'%s %d %s',
 		LOC "$$$/Photometoria/AddPhotos/AfterAdding=After adding:",
 		afterCount,
-		LOC "$$$/Photometoria/AddPhotos/Photos=photos",
-		formatBytes(afterSize)
+		LOC "$$$/Photometoria/AddPhotos/Photos=photos"
 	)
 end
 
 --- Updates the confirm button enabled state.
 local function updateConfirmEnabled(props)
+	if props.uploadableCount < 1 then
+		props.confirmEnabled = false
+		return
+	end
+
 	if props.destination == 'new' then
 		props.confirmEnabled = (props.taskName ~= nil and props.taskName ~= '')
 	else
@@ -106,9 +78,10 @@ local function buildTaskPopupItems(tasks)
 end
 
 --- Initializes all bindable properties.
-local function initProperties(props)
-	props.photoChoice = 'selected'
-	props.photoSummary = ''
+local function initProperties(props, validation, serverData)
+	props.uploadableCount = validation.uploadable
+	props.photoSummary = PhotoValidator.formatSummary(validation)
+	props.storageFree = LOC("$$$/Photometoria/AddPhotos/StorageFree=Available storage: ^1", serverData.storageFree)
 
 	props.destination = 'new'
 	props.newTaskVisible = true
@@ -123,35 +96,22 @@ local function initProperties(props)
 	props.existingTaskAfterSummary = ''
 
 	props.confirmEnabled = false
-
-	updatePhotoSummary(props)
 end
 
---- Builds the photo selection section.
+--- Builds the photo summary section.
 local function buildPhotoSection(f, props)
 	return f:group_box {
 		title = LOC "$$$/Photometoria/AddPhotos/PhotoSectionTitle=Photos to add",
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
 
-		f:row {
-			spacing = f:control_spacing(),
-
-			f:radio_button {
-				title = LOC "$$$/Photometoria/AddPhotos/SelectedOnly=Selected only",
-				value = bind 'photoChoice',
-				checked_value = 'selected',
-			},
-
-			f:radio_button {
-				title = LOC "$$$/Photometoria/AddPhotos/All=All photos in catalog",
-				value = bind 'photoChoice',
-				checked_value = 'all',
-			},
+		f:static_text {
+			title = bind 'photoSummary',
+			fill_horizontal = 1,
 		},
 
 		f:static_text {
-			title = bind 'photoSummary',
+			title = bind 'storageFree',
 			fill_horizontal = 1,
 			font = '<system/small>',
 		},
@@ -282,6 +242,15 @@ local function buildContents(f, props)
 end
 
 LrTasks.startAsyncTask(function()
+	if not Guard.acquire('AddPhotosDialog') then
+		LrDialogs.message(
+			LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+			LOC "$$$/Photometoria/AddPhotos/AlreadyRunning=Add Photos is already in progress.",
+			'info'
+		)
+		return
+	end
+
 	local prefs = LrPrefs.prefsForPlugin()
 	local host = prefs.serverHost or ''
 
@@ -291,6 +260,7 @@ LrTasks.startAsyncTask(function()
 			LOC "$$$/Photometoria/Error/NoServer=Server not configured. Please set the server address in Plugin Manager.",
 			'critical'
 		)
+		Guard.release('AddPhotosDialog')
 		return
 	end
 
@@ -298,7 +268,7 @@ LrTasks.startAsyncTask(function()
 		title = LOC "$$$/Photometoria/Progress/Connecting=Connecting to server...",
 	}
 
-	local success, data = ServerConnection.fetch(host)
+	local success, data = ServerConnection.info(host)
 	progressScope:done()
 
 	if not success then
@@ -307,6 +277,21 @@ LrTasks.startAsyncTask(function()
 			data.message,
 			'critical'
 		)
+		Guard.release('AddPhotosDialog')
+		return
+	end
+
+	local catalog = LrApplication.activeCatalog()
+
+	local validationScope = LrProgressScope {
+		title = LOC "$$$/Photometoria/Progress/Validating=Checking photos...",
+	}
+
+	local validation = PhotoValidator.validate(catalog, validationScope)
+	validationScope:done()
+
+	if not validation then
+		Guard.release('AddPhotosDialog')
 		return
 	end
 
@@ -314,13 +299,7 @@ LrTasks.startAsyncTask(function()
 		local f = LrView.osFactory()
 
 		local props = LrBinding.makePropertyTable(context)
-		initProperties(props)
-
-		props:addObserver('photoChoice', function(propTable)
-			updatePhotoSummary(propTable)
-			updateExistingTaskSummary(propTable)
-			updateConfirmEnabled(propTable)
-		end)
+		initProperties(props, validation, data)
 
 		props:addObserver('destination', function(propTable, key, value)
 			propTable.newTaskVisible = (value == 'new')
@@ -362,4 +341,6 @@ LrTasks.startAsyncTask(function()
 			)
 		end
 	end)
+
+	Guard.release('AddPhotosDialog')
 end)

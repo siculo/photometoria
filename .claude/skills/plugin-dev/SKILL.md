@@ -165,6 +165,35 @@ A reusable progress bar is implemented in `TaskDialog.lua` using:
 
 ---
 
+## Lua 5.1 Runtime Constraints
+
+**`pcall` is incompatible with async SDK calls:**
+
+- Lua 5.1 `pcall` is implemented in C and does **not** allow coroutine yields
+  through its stack frame.
+- Any SDK function that performs I/O (`LrHttp.get`, `LrFileUtils.exists`,
+  `LrDialogs.presentModalDialog`, etc.) will crash with:
+  `"Yielding is not allowed within a C or metamethod call"`
+  if called inside `pcall`.
+- This is fixed in Lua 5.2+ (coroutine-friendly pcall), but Lightroom is
+  locked to 5.1.
+- **Workaround**: use explicit cleanup (`running = false` at each return point)
+  instead of try/finally patterns. For reentrancy guards, use a module-level
+  `local running = false` flag with reset at every exit path.
+
+**`LrLibraryMenuItems` cannot be dynamically enabled/disabled:**
+
+- `Info.lua` is a static table evaluated once at plugin load.
+- `enabledWhen` only accepts predefined SDK values (e.g. `"photosAvailable"`),
+  not custom Lua expressions or bound properties.
+- To prevent concurrent execution from menu items, use `Guard.lua` — a shared
+  module loaded via `require` (cached by Lua). Call `Guard.acquire('name')` at
+  the start and `Guard.release('name')` at every exit point.
+- **Do NOT use `local` flags** in menu item scripts — the file is re-executed
+  fresh each time (`dofile`-style), so locals are re-initialized on every click.
+
+---
+
 ## Testing
 
 Tests run **outside Lightroom** using a standalone Lua 5.1 interpreter:
@@ -193,4 +222,5 @@ lua plugin/tests/test_json.lua
 The plugin communicates with the Photometoria API server via `ServerConnection.lua`:
 - Connection endpoint: `GET /api/info` (server capabilities and status)
 - Host format validation: `host:port` (e.g., `localhost:3000`)
-- Async with callback pattern: `ServerConnection.connect(host, callback)`
+- Sync: `ServerConnection.info(host)` — returns `(success, data)`, must be called from async context
+- Async with callback: `ServerConnection.infoAsync(host, callback)`

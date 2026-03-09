@@ -57,11 +57,11 @@ local function formatBytes(bytes)
 	end
 end
 
---- Fetches server info synchronously. Must be called from within an async task.
+--- Retrieves server info synchronously. Must be called from within an async task.
 --- Returns `(true, data)` on success or `(false, data)` on failure.
 --- On success, data contains server details formatted for display.
 --- On failure, data contains a `message` field with the error description.
-function ServerConnection.fetch(host)
+function ServerConnection.info(host)
 	local url = 'http://' .. host .. '/api/info'
 
 	local body, headers = LrHttp.get(url, nil, TIMEOUT_SECONDS)
@@ -97,6 +97,7 @@ function ServerConnection.fetch(host)
 		storageAllocated = formatBytes(allocated),
 		storageUsed      = formatBytes(used),
 		storageFree      = formatBytes(free),
+		storageFreeBytes = free,
 		providers        = providers,
 		defaultProvider  = defaultProvider,
 		version          = info.general and info.general.version or '',
@@ -105,11 +106,11 @@ function ServerConnection.fetch(host)
 	}
 end
 
---- Connects to a Photometoria server and retrieves its info.
---- Calls `callback(success, data)` asynchronously.
-function ServerConnection.connect(host, callback)
+--- Retrieves server info asynchronously.
+--- Calls `callback(success, data)` when done.
+function ServerConnection.infoAsync(host, callback)
 	LrTasks.startAsyncTask(function()
-		local success, data = ServerConnection.fetch(host)
+		local success, data = ServerConnection.info(host)
 		callback(success, data)
 	end)
 end

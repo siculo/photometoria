@@ -618,7 +618,7 @@ LrTasks.startAsyncTask(function()
 		title = LOC "$$$/Photometoria/Progress/Connecting=Connecting to server...",
 	}
 
-	local success, data = ServerConnection.fetch(host)
+	local success, data = ServerConnection.info(host)
 	progressScope:done()
 
 	if not success then
