@@ -41,6 +41,12 @@ fn calculate_task_size(photos: &[Photo]) -> Option<u64> {
 
 ## Testing Guidelines (CRITICAL)
 
+### Test-First Strategy
+
+When fixing bugs or adding behaviour, **write a failing test first** that
+captures the expected behaviour, then implement the fix or feature to make
+it pass. This ensures the change is verifiable and prevents regressions.
+
 ### WHERE to Write Tests
 
 - **Handler tests** (`handlers/{module}.rs`) — Business logic, error handling, custom validations
