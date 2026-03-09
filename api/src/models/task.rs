@@ -184,7 +184,7 @@ pub struct TaskSummary {
     pub job_count: usize,
 }
 
-/// Detailed information about a task including associated jobs.
+/// Detailed information about a task including aggregated data.
 ///
 /// Used by: `GET /api/tasks/{task_id}` (detailed view)
 ///
@@ -196,12 +196,10 @@ pub struct TaskSummary {
 ///   "context": "vacation in SF",
 ///   "created_at": "2024-01-15T10:30:00Z",
 ///   "photo_count": 15,
-///   "storage_used": 42378436
+///   "storage_used": 42378436,
+///   "job_count": 2
 /// }
 /// ```
-///
-/// Note: The `jobs` field is currently commented out and will be added
-/// once the Job model is implemented.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskDetail {
     /// Unique task identifier
@@ -221,9 +219,9 @@ pub struct TaskDetail {
 
     /// Total storage used by photos in this task in bytes
     pub storage_used: u64,
-    // TODO: Uncomment and use Vec<JobSummary> when job model is implemented
-    // /// List of jobs associated with this task
-    // pub jobs: Vec<JobSummary>,
+
+    /// Number of jobs associated with this task
+    pub job_count: usize,
 }
 
 /// Request body for updating an existing task.

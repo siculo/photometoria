@@ -218,11 +218,10 @@ Returns detailed information about a specific task.
   "context": "vacation in SF",
   "created_at": "2024-01-15T10:30:00Z",
   "photo_count": 15,
-  "storage_used": 47395430
+  "storage_used": 47395430,
+  "job_count": 2
 }
 ```
-
-**Note:** A `jobs` field is planned but not yet included in the response.
 
 **Errors:**
 
@@ -380,6 +379,33 @@ Deletes a specific photo.
 - `409` - Task has active jobs (`job_active`)
 
 ## Job Endpoints
+
+### GET /api/tasks/{task_id}/jobs
+
+Returns a summary list of all jobs belonging to a specific task.
+
+**Response:** `200 OK` — JSON array
+
+```json
+[
+  {
+    "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
+    "status": "completed",
+    "model": "qwen3-vl",
+    "photo_count": 15,
+    "queued_photo_count": 0,
+    "processed_photo_count": 15,
+    "created_at": "2024-01-15T10:35:00Z",
+    "completed_at": "2024-01-15T10:45:00Z"
+  }
+]
+```
+
+`completed_at` is omitted when the job has not yet finished.
+
+**Errors:**
+
+- `404` - Task not found
 
 ### POST /api/tasks/{task_id}/jobs
 

@@ -75,9 +75,8 @@ pub async fn list_tasks(State(state): State<AppState>) -> Result<Json<Vec<TaskSu
     match state.task_store.list().await {
         Ok(tasks) => {
             let mut summaries = Vec::with_capacity(tasks.len());
-            let photo_store = &state.photo_store;
             for task in tasks {
-                let summary = get_task_summary(photo_store, task).await;
+                let summary = get_task_summary(&state.photo_store, &state.job_store, task).await;
                 summaries.push(summary);
             }
             Ok(Json(summaries))
@@ -86,12 +85,17 @@ pub async fn list_tasks(State(state): State<AppState>) -> Result<Json<Vec<TaskSu
     }
 }
 
-async fn get_task_summary(photo_store: &Arc<dyn PhotoStore>, task: Task) -> TaskSummary {
+async fn get_task_summary(
+    photo_store: &Arc<dyn PhotoStore>,
+    job_store: &Arc<dyn JobStore>,
+    task: Task,
+) -> TaskSummary {
     let photo_count = photo_store.count_by_task(task.task_id).await.unwrap_or(0);
     let storage_used = photo_store
         .total_size_by_task(task.task_id)
         .await
-        .unwrap_or(0); // TODO: è corretto che in caso di errore il risultato sia zero?
+        .unwrap_or(0);
+    let job_count = job_store.count_by_task(task.task_id).await.unwrap_or(0);
     TaskSummary {
         task_id: task.task_id,
         name: task.name,
@@ -99,7 +103,7 @@ async fn get_task_summary(photo_store: &Arc<dyn PhotoStore>, task: Task) -> Task
         photo_count,
         storage_used,
         created_at: task.created_at,
-        job_count: 0, // JobStore not implemented yet
+        job_count,
     }
 }
 
@@ -154,6 +158,7 @@ pub async fn get_task(
         created_at: task.created_at,
         photo_count: state.photo_store.count_by_task(task_id).await.unwrap(),
         storage_used: state.photo_store.total_size_by_task(task_id).await.unwrap(),
+        job_count: state.job_store.count_by_task(task_id).await.unwrap_or(0),
     };
     Ok(Json(detail))
 }
@@ -217,7 +222,7 @@ pub async fn delete_task(
 mod tests {
     use super::*;
     use crate::handlers::test_utils::fixtures::create_test_state;
-    use crate::models::Photo;
+    use crate::models::{Job, Photo};
     use chrono::Utc;
     use uuid::Uuid;
 
@@ -365,6 +370,7 @@ mod tests {
         assert_eq!(detail.context, "test task");
         assert_eq!(detail.photo_count, 0);
         assert_eq!(detail.storage_used, 0);
+        assert_eq!(detail.job_count, 0);
     }
 
     #[tokio::test]
@@ -748,5 +754,76 @@ mod tests {
             .unwrap();
         assert_eq!(summary2.photo_count, 1);
         assert_eq!(summary2.storage_used, 500000);
+    }
+
+    #[tokio::test]
+    async fn test_list_tasks_job_count() {
+        let ts = create_test_state().await;
+
+        let (_, Json(task1)) = create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest {
+                name: "Task 1".to_string(),
+                context: "task 1".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+        let (_, Json(task2)) = create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest {
+                name: "Task 2".to_string(),
+                context: "task 2".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let job1 = Job::new(task1.task_id, "llava".to_string(), vec![]);
+        let job2 = Job::new(task1.task_id, "llava".to_string(), vec![]);
+        let job3 = Job::new(task2.task_id, "llava".to_string(), vec![]);
+        ts.state.job_store.create(job1).await.unwrap();
+        ts.state.job_store.create(job2).await.unwrap();
+        ts.state.job_store.create(job3).await.unwrap();
+
+        let Json(summaries) = list_tasks(State(ts.state.clone())).await.unwrap();
+
+        let summary1 = summaries
+            .iter()
+            .find(|s| s.task_id == task1.task_id)
+            .unwrap();
+        assert_eq!(summary1.job_count, 2);
+
+        let summary2 = summaries
+            .iter()
+            .find(|s| s.task_id == task2.task_id)
+            .unwrap();
+        assert_eq!(summary2.job_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_task_job_count() {
+        let ts = create_test_state().await;
+
+        let (_, Json(task)) = create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest {
+                name: "Task".to_string(),
+                context: "task".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let job1 = Job::new(task.task_id, "llava".to_string(), vec![]);
+        let job2 = Job::new(task.task_id, "llava".to_string(), vec![]);
+        ts.state.job_store.create(job1).await.unwrap();
+        ts.state.job_store.create(job2).await.unwrap();
+
+        let Json(detail) = get_task(State(ts.state.clone()), AppPath(task.task_id))
+            .await
+            .unwrap();
+
+        assert_eq!(detail.job_count, 2);
     }
 }

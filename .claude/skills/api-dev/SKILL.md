@@ -80,6 +80,20 @@ Full details: `api/docs/development.md` — Testing section
 
 ---
 
+## Documentation (CRITICAL)
+
+When adding, modifying, or removing endpoints, models, or response structures,
+**always update all affected documentation in the same change**:
+
+- `api/docs/api-reference.md` — Endpoint reference and response examples
+- `api/docs/Photometoria.postman_collection.json` — Postman collection
+- `api/docs/development.md` — curl examples in the manual testing section
+- `api/CLAUDE.md` — API workflow overview
+
+Do not consider the work complete until documentation is in sync with code.
+
+---
+
 ## Technology Stack
 
 ### Rust Crates

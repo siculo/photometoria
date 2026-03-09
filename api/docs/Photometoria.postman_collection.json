@@ -1005,6 +1005,86 @@
 					]
 				},
 				{
+					"name": "List Task Jobs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"{{task_id}}",
+								"jobs"
+							]
+						},
+						"description": "Returns a summary list of all jobs belonging to a specific task."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}",
+										"jobs"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen3-vl\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    }\n]"
+						},
+						{
+							"name": "Task Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/tasks/nonexistent/jobs",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"nonexistent",
+										"jobs"
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Task with id 'nonexistent' not found\"\n}"
+						}
+					]
+				},
+				{
 					"name": "List Jobs",
 					"request": {
 						"method": "GET",

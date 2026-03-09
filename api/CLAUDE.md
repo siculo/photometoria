@@ -10,11 +10,12 @@
 5. POST /api/tasks                         → Create task (working session)
 6. POST /api/tasks/{id}/photos             → Upload photos (multipart)
 7. POST /api/tasks/{id}/jobs               → Start job (choose AI model)
-8. [TODO #11] SSE streaming                → Monitor progress
-9. POST /api/jobs/{id}/cancel              → Cancel job (optional)
-10. GET /api/jobs/{id}/results             → Retrieve generated metadata
-11. POST /api/jobs/{id}/retry              → Retry failed/unprocessed photos
-12. DELETE /api/tasks/{id}                 → Cleanup
+8. GET  /api/tasks/{id}/jobs               → List jobs for a task
+9. [TODO #11] SSE streaming                → Monitor progress
+10. POST /api/jobs/{id}/cancel             → Cancel job (optional)
+11. GET /api/jobs/{id}/results             → Retrieve generated metadata
+12. POST /api/jobs/{id}/retry              → Retry failed/unprocessed photos
+13. DELETE /api/tasks/{id}                 → Cleanup
 ```
 
 ---

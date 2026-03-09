@@ -90,6 +90,24 @@ async fn get_existing_job(job_store: &Arc<dyn JobStore>, job_id: Uuid) -> Result
     }
 }
 
+/// Handler for GET /api/tasks/{task_id}/jobs
+///
+/// Lists all jobs belonging to a specific task with summary information.
+pub async fn list_task_jobs(
+    State(state): State<AppState>,
+    AppPath(task_id): AppPath<Uuid>,
+) -> Result<Json<Vec<JobSummary>>, AppError> {
+    get_existing_task(&state.task_store, task_id).await?;
+
+    match state.job_store.list_by_task(task_id).await {
+        Ok(jobs) => {
+            let summaries: Vec<JobSummary> = jobs.iter().map(|job| job.into()).collect();
+            Ok(Json(summaries))
+        }
+        Err(e) => Err(AppError::internal_error(e.to_string())),
+    }
+}
+
 /// Handler for GET /api/jobs
 ///
 /// Lists all jobs with summary information.
@@ -1091,5 +1109,65 @@ mod tests {
         let error = result.unwrap_err();
         assert_eq!(error.body.error, "not_found");
         assert!(error.body.message.contains(&nonexistent_job_id.to_string()));
+    }
+
+    // ========================================================================
+    // Tests for list_task_jobs handler
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_list_task_jobs_empty() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let result = list_task_jobs(State(ts.state.clone()), AppPath(task_id)).await;
+
+        assert!(result.is_ok());
+        let Json(jobs) = result.unwrap();
+        assert!(jobs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_task_jobs_returns_only_task_jobs() {
+        let ts = create_test_state().await;
+
+        let task1 = Task::new("Task 1".to_string(), "task 1".to_string());
+        let task2 = Task::new("Task 2".to_string(), "task 2".to_string());
+        let task1_id = task1.task_id;
+        let task2_id = task2.task_id;
+        ts.state.task_store.create(task1).await.unwrap();
+        ts.state.task_store.create(task2).await.unwrap();
+
+        let job1 = Job::new(task1_id, "llava".to_string(), vec![]);
+        let job2 = Job::new(task1_id, "llava".to_string(), vec![]);
+        let job3 = Job::new(task2_id, "llava".to_string(), vec![]);
+        let job1_id = job1.job_id;
+        let job2_id = job2.job_id;
+        ts.state.job_store.create(job1).await.unwrap();
+        ts.state.job_store.create(job2).await.unwrap();
+        ts.state.job_store.create(job3).await.unwrap();
+
+        let Json(jobs) = list_task_jobs(State(ts.state.clone()), AppPath(task1_id))
+            .await
+            .unwrap();
+
+        assert_eq!(jobs.len(), 2);
+        let job_ids: Vec<Uuid> = jobs.iter().map(|j| j.job_id).collect();
+        assert!(job_ids.contains(&job1_id));
+        assert!(job_ids.contains(&job2_id));
+    }
+
+    #[tokio::test]
+    async fn test_list_task_jobs_task_not_found() {
+        let ts = create_test_state().await;
+        let nonexistent_task_id = Uuid::new_v4();
+
+        let result = list_task_jobs(State(ts.state.clone()), AppPath(nonexistent_task_id)).await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "not_found");
     }
 }

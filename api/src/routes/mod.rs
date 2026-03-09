@@ -4,7 +4,8 @@
 use crate::app_state::AppState;
 use crate::handlers::info::info;
 use crate::handlers::jobs::{
-    cancel_job, create_job, delete_job, get_job, get_job_results, list_jobs, retry_job,
+    cancel_job, create_job, delete_job, get_job, get_job_results, list_jobs, list_task_jobs,
+    retry_job,
 };
 use crate::handlers::photos::{delete_photo, get_photo, task_photos};
 use crate::handlers::providers::{list_default_provider_models, list_providers, provider_details};
@@ -42,7 +43,10 @@ pub fn create_router(state: AppState) -> Router {
             "/api/photos/{photo_id}",
             get(get_photo).delete(delete_photo),
         )
-        .route("/api/tasks/{task_id}/jobs", post(create_job))
+        .route(
+            "/api/tasks/{task_id}/jobs",
+            get(list_task_jobs).post(create_job),
+        )
         .route("/api/jobs", get(list_jobs))
         .route("/api/jobs/{job_id}", get(get_job).delete(delete_job))
         .route("/api/jobs/{job_id}/results", get(get_job_results))
