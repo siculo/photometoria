@@ -14,14 +14,13 @@ local LrApplication = import 'LrApplication'
 local ServerConnection = require 'ServerConnection'
 local PhotoValidator = require 'PhotoValidator'
 local TaskDialogUI = require 'TaskDialogUI'
-local MockData = require 'MockData'
 local Guard = require 'Guard'
 
 local bind = LrView.bind
 local LABEL_WIDTH = 80
 
 --- Updates the existing task summary text.
-local function updateExistingTaskSummary(props)
+local function updateExistingTaskSummary(props, tasks)
 	if #props.existingTaskItems == 0 then
 		props.existingTaskSummary = LOC "$$$/Photometoria/AddPhotos/NoTasks=No tasks on the server. Create a new task first."
 		props.existingTaskAfterSummary = ''
@@ -29,18 +28,19 @@ local function updateExistingTaskSummary(props)
 	end
 
 	local taskIndex = props.existingTask
-	local task = MockData.tasks[taskIndex]
+	local task = tasks[taskIndex]
 	if not task then
 		props.existingTaskSummary = ''
 		props.existingTaskAfterSummary = ''
 		return
 	end
 
-	local afterCount = task.photoCount + props.uploadableCount
+	local photoCount = task.photo_count or 0
+	local afterCount = photoCount + props.uploadableCount
 
 	props.existingTaskSummary = string.format(
 		'%d %s',
-		task.photoCount,
+		photoCount,
 		LOC "$$$/Photometoria/AddPhotos/PhotosPresent=photos already present"
 	)
 
@@ -79,7 +79,7 @@ local function buildTaskPopupItems(tasks)
 end
 
 --- Initializes all bindable properties.
-local function initProperties(props, validation, serverData)
+local function initProperties(props, validation, serverData, tasks)
 	props.uploadableCount = validation.uploadable
 	props.photoSummary = PhotoValidator.formatSummary(validation)
 	props.storageFree = LOC("$$$/Photometoria/AddPhotos/StorageFree=Available storage: ^1", serverData.storageFree)
@@ -92,7 +92,7 @@ local function initProperties(props, validation, serverData)
 	props.taskContext = ''
 
 	props.existingTask = 1
-	props.existingTaskItems = buildTaskPopupItems(MockData.tasks)
+	props.existingTaskItems = buildTaskPopupItems(tasks)
 	props.existingTaskSummary = ''
 	props.existingTaskAfterSummary = ''
 
@@ -296,20 +296,37 @@ LrTasks.startAsyncTask(function()
 		return
 	end
 
+	local taskScope = LrProgressScope {
+		title = LOC "$$$/Photometoria/Progress/LoadingTasks=Loading tasks...",
+	}
+
+	local taskSuccess, tasks = ServerConnection.listTasks(host)
+	taskScope:done()
+
+	if not taskSuccess then
+		LrDialogs.message(
+			LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+			tasks.message,
+			'critical'
+		)
+		Guard.release('AddPhotosDialog')
+		return
+	end
+
 	local openTaskDialog = false
 
 	LrFunctionContext.callWithContext('AddPhotosDialog', function(context)
 		local f = LrView.osFactory()
 
 		local props = LrBinding.makePropertyTable(context)
-		initProperties(props, validation, data)
+		initProperties(props, validation, data, tasks)
 
 		props:addObserver('destination', function(propTable, key, value)
 			propTable.newTaskVisible = (value == 'new')
 			propTable.existingTaskVisible = (value == 'existing')
 			updateConfirmEnabled(propTable)
 			if value == 'existing' then
-				updateExistingTaskSummary(propTable)
+				updateExistingTaskSummary(propTable, tasks)
 			else
 				propTable.existingTaskSummary = ''
 				propTable.existingTaskAfterSummary = ''
@@ -321,7 +338,7 @@ LrTasks.startAsyncTask(function()
 		end)
 
 		props:addObserver('existingTask', function(propTable)
-			updateExistingTaskSummary(propTable)
+			updateExistingTaskSummary(propTable, tasks)
 		end)
 
 		local done = false

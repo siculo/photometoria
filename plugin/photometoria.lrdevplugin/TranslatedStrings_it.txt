@@ -15,6 +15,7 @@
 "$$$/Photometoria/Error/NoServer=Server non configurato. Impostare l'indirizzo del server nel Plugin Manager."
 "$$$/Photometoria/Progress/Connecting=Connessione al server..."
 "$$$/Photometoria/Progress/Validating=Verifica foto..."
+"$$$/Photometoria/Progress/LoadingTasks=Caricamento task..."
 
 "$$$/Photometoria/Detail/StorageAllocated=Spazio allocato:"
 "$$$/Photometoria/Detail/StorageUsed=Spazio utilizzato:"

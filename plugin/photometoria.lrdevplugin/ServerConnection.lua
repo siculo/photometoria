@@ -143,6 +143,52 @@ function ServerConnection.createTask(host, name, context)
 	}
 end
 
+--- Performs a GET request and decodes the JSON response.
+--- Returns `(true, data)` on success or `(false, error)` on failure.
+local function getJson(host, path)
+	local url = 'http://' .. host .. path
+
+	local body, headers = LrHttp.get(url, nil, TIMEOUT_SECONDS)
+
+	if not body or not headers then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/CannotReach=Could not reach server at ^1", host),
+		}
+	end
+
+	if headers.status ~= 200 then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(headers.status)),
+		}
+	end
+
+	local data = JSON.decode(body)
+	if not data then
+		return false, {
+			message = LOC "$$$/Photometoria/Status/InvalidResponse=Invalid response from server",
+		}
+	end
+
+	return true, data
+end
+
+--- Retrieves the list of tasks from the server. Must be called from within an async task.
+--- Returns `(true, tasks)` on success or `(false, error)` on failure.
+--- On success, tasks is an array of TaskSummary objects with fields:
+--- task_id, name, context, photo_count, storage_used, created_at, job_count.
+function ServerConnection.listTasks(host)
+	return getJson(host, '/api/tasks')
+end
+
+--- Retrieves the list of jobs for a task. Must be called from within an async task.
+--- Returns `(true, jobs)` on success or `(false, error)` on failure.
+--- On success, jobs is an array of JobSummary objects with fields:
+--- job_id, status, model, photo_count, queued_photo_count, processed_photo_count,
+--- created_at, completed_at.
+function ServerConnection.listTaskJobs(host, taskId)
+	return getJson(host, '/api/tasks/' .. taskId .. '/jobs')
+end
+
 --- Retrieves server info asynchronously.
 --- Calls `callback(success, data)` when done.
 function ServerConnection.infoAsync(host, callback)
