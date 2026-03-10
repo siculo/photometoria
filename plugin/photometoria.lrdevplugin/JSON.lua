@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
---- Minimal JSON decoder for Lightroom plugin use.
+--- Minimal JSON encoder/decoder for Lightroom plugin use.
 --- Supports objects, arrays, strings, numbers, booleans, and null.
 
 local JSON = {}
@@ -172,6 +172,67 @@ function JSON.decode(str)
 		return result
 	else
 		return nil, 'JSON parse error'
+	end
+end
+
+local function encodeString(s)
+	s = s:gsub('\\', '\\\\')
+	s = s:gsub('"', '\\"')
+	s = s:gsub('\n', '\\n')
+	s = s:gsub('\r', '\\r')
+	s = s:gsub('\t', '\\t')
+	return '"' .. s .. '"'
+end
+
+local encodeValue
+
+local function encodeTable(tbl)
+	if #tbl > 0 then
+		local parts = {}
+		for i = 1, #tbl do
+			parts[i] = encodeValue(tbl[i])
+		end
+		return '[' .. table.concat(parts, ',') .. ']'
+	end
+
+	local parts = {}
+	for k, v in pairs(tbl) do
+		if type(k) == 'string' then
+			parts[#parts + 1] = encodeString(k) .. ':' .. encodeValue(v)
+		end
+	end
+	return '{' .. table.concat(parts, ',') .. '}'
+end
+
+encodeValue = function(val)
+	if val == nil then
+		return 'null'
+	end
+
+	local t = type(val)
+	if t == 'boolean' then
+		return val and 'true' or 'false'
+	elseif t == 'number' then
+		return tostring(val)
+	elseif t == 'string' then
+		return encodeString(val)
+	elseif t == 'table' then
+		return encodeTable(val)
+	end
+	return 'null'
+end
+
+--- Encodes a Lua value into a JSON string.
+--- Returns the JSON string, or nil and an error message on failure.
+function JSON.encode(value)
+	local ok, result = pcall(function()
+		return encodeValue(value)
+	end)
+
+	if ok then
+		return result
+	else
+		return nil, 'JSON encode error'
 	end
 end
 

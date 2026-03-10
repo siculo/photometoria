@@ -13,6 +13,7 @@ local LrApplication = import 'LrApplication'
 
 local ServerConnection = require 'ServerConnection'
 local PhotoValidator = require 'PhotoValidator'
+local TaskDialogUI = require 'TaskDialogUI'
 local MockData = require 'MockData'
 local Guard = require 'Guard'
 
@@ -295,6 +296,8 @@ LrTasks.startAsyncTask(function()
 		return
 	end
 
+	local openTaskDialog = false
+
 	LrFunctionContext.callWithContext('AddPhotosDialog', function(context)
 		local f = LrView.osFactory()
 
@@ -321,26 +324,56 @@ LrTasks.startAsyncTask(function()
 			updateExistingTaskSummary(propTable)
 		end)
 
-		local result = LrDialogs.presentModalDialog {
-			title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
-			contents = buildContents(f, props),
-			actionVerb = LOC "$$$/Photometoria/Button/ConfirmAdd=Confirm and Go to Task",
-			actionBinding = {
-				enabled = {
-					bind_to_object = props,
-					key = 'confirmEnabled',
+		local done = false
+		while not done do
+			local result = LrDialogs.presentModalDialog {
+				title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+				contents = buildContents(f, props),
+				actionVerb = LOC "$$$/Photometoria/Button/ConfirmAdd=Confirm and Go to Task",
+				actionBinding = {
+					enabled = {
+						bind_to_object = props,
+						key = 'confirmEnabled',
+					},
 				},
-			},
-		}
+			}
 
-		if result == 'ok' then
-			LrDialogs.message(
-				LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
-				LOC "$$$/Photometoria/Mock/AddPhotosMsg=This would add the photos and open the Task window.",
-				'info'
-			)
+			if result ~= 'ok' then
+				done = true
+			elseif props.destination == 'new' then
+				local progressScope = LrProgressScope {
+					title = LOC "$$$/Photometoria/Progress/CreatingTask=Creating task...",
+				}
+
+				local ok, taskData = ServerConnection.createTask(host, props.taskName, props.taskContext)
+				progressScope:done()
+
+				if ok then
+					done = true
+					openTaskDialog = true
+				elseif taskData.duplicate then
+					LrDialogs.message(
+						LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+						LOC "$$$/Photometoria/Error/DuplicateName=A task with this name already exists. Please choose a different name.",
+						'warning'
+					)
+				else
+					LrDialogs.message(
+						LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+						taskData.message,
+						'critical'
+					)
+				end
+			else
+				done = true
+				openTaskDialog = true
+			end
 		end
 	end)
 
 	Guard.release('AddPhotosDialog')
+
+	if openTaskDialog then
+		TaskDialogUI.showDialog()
+	end
 end)

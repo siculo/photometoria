@@ -106,6 +106,43 @@ function ServerConnection.info(host)
 	}
 end
 
+--- Creates a new task on the server. Must be called from within an async task.
+--- Returns `(true, data)` on success or `(false, data)` on failure.
+--- On success, data contains the task details (task_id, name, context, created_at).
+--- On failure, data contains `message` and optionally `duplicate = true` for 409.
+function ServerConnection.createTask(host, name, context)
+	local url = 'http://' .. host .. '/api/tasks'
+	local body = JSON.encode({ name = name, context = context })
+
+	local headers = {
+		{ field = 'Content-Type', value = 'application/json' },
+	}
+
+	local respBody, respHeaders = LrHttp.post(url, body, headers, 'POST', TIMEOUT_SECONDS)
+
+	if not respBody or not respHeaders then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/CannotReach=Could not reach server at ^1", host),
+		}
+	end
+
+	if respHeaders.status == 201 then
+		local data = JSON.decode(respBody)
+		return true, data or {}
+	end
+
+	if respHeaders.status == 409 then
+		return false, {
+			message = LOC "$$$/Photometoria/Error/DuplicateName=A task with this name already exists. Please choose a different name.",
+			duplicate = true,
+		}
+	end
+
+	return false, {
+		message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(respHeaders.status)),
+	}
+end
+
 --- Retrieves server info asynchronously.
 --- Calls `callback(success, data)` when done.
 function ServerConnection.infoAsync(host, callback)
