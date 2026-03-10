@@ -391,6 +391,9 @@ LrTasks.startAsyncTask(function()
 	Guard.release('AddPhotosDialog')
 
 	if openTaskDialog then
-		TaskDialogUI.showDialog()
+		local refreshOk, refreshedTasks = ServerConnection.listTasks(host)
+		if refreshOk then
+			TaskDialogUI.showDialog(host, refreshedTasks)
+		end
 	end
 end)

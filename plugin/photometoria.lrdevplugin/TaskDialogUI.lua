@@ -7,8 +7,9 @@ local LrView = import 'LrView'
 local LrColor = import 'LrColor'
 local LrBinding = import 'LrBinding'
 
-local MockData = require 'MockData'
+local ServerConnection = require 'ServerConnection'
 local NewJobDialog = require 'NewJobDialog'
+local MockData = require 'MockData'
 
 local TaskDialogUI = {}
 
@@ -82,11 +83,11 @@ end
 
 --- Returns a text status icon for a job status.
 local function jobStatusIcon(status)
-	if status == 'running' then
+	if status == 'processing' or status == 'queued' then
 		return '\226\159\179'
 	elseif status == 'completed' then
 		return '\226\156\147'
-	elseif status == 'errored' then
+	elseif status == 'failed' then
 		return '\226\154\160'
 	elseif status == 'cancelled' then
 		return '\226\156\149'
@@ -96,11 +97,13 @@ end
 
 --- Returns a localized label for a job status.
 local function jobStatusLabel(status)
-	if status == 'running' then
+	if status == 'processing' then
 		return LOC "$$$/Photometoria/JobStatus/Running=In progress"
+	elseif status == 'queued' then
+		return LOC "$$$/Photometoria/JobStatus/Queued=Queued"
 	elseif status == 'completed' then
 		return LOC "$$$/Photometoria/JobStatus/Completed=Completed"
-	elseif status == 'errored' then
+	elseif status == 'failed' then
 		return LOC "$$$/Photometoria/JobStatus/Errored=With errors"
 	elseif status == 'cancelled' then
 		return LOC "$$$/Photometoria/JobStatus/Cancelled=Cancelled"
@@ -108,97 +111,94 @@ local function jobStatusLabel(status)
 	return status
 end
 
---- Builds status icon summary for a task's jobs.
-local function taskJobIcons(task)
-	local hasRunning, hasCompleted, hasErrored, hasCancelled = false, false, false, false
-	for _, job in ipairs(task.jobs) do
-		if job.status == 'running' then hasRunning = true
-		elseif job.status == 'completed' then hasCompleted = true
-		elseif job.status == 'errored' then hasErrored = true
-		elseif job.status == 'cancelled' then hasCancelled = true
-		end
-	end
-	local icons = {}
-	if hasCompleted then icons[#icons + 1] = '\226\156\147' end
-	if hasErrored then icons[#icons + 1] = '\226\154\160' end
-	if hasCancelled then icons[#icons + 1] = '\226\156\149' end
-	if hasRunning then icons[#icons + 1] = '\226\159\179' end
-	if #icons == 0 then
-		return ''
-	end
-	return '  (' .. table.concat(icons, ' ') .. ')'
-end
-
 --- Builds popup_menu items from the task list.
 local function buildTaskPopupItems(tasks)
 	local items = {}
 	for i, task in ipairs(tasks) do
+		local jobInfo = ''
+		local jobCount = task.job_count or 0
+		if jobCount > 0 then
+			jobInfo = string.format('  (%d %s)', jobCount, LOC "$$$/Photometoria/Task/Jobs=job")
+		end
 		items[#items + 1] = {
-			title = task.name .. taskJobIcons(task),
+			title = task.name .. jobInfo,
 			value = i,
 		}
 	end
 	return items
 end
 
---- Builds simple_list items from a task's job list.
-local function buildJobListItems(task)
+--- Builds simple_list items from a job list.
+local function buildJobListItems(jobs)
 	local items = {}
-	if not task or not task.jobs then
+	if not jobs then
 		return items
 	end
-	for i, job in ipairs(task.jobs) do
+	for i, job in ipairs(jobs) do
 		items[#items + 1] = {
-			title = job.provider .. ' \194\183 ' .. job.model .. '  ' .. jobStatusIcon(job.status),
+			title = job.model .. '  ' .. jobStatusIcon(job.status),
 			value = i,
 		}
 	end
 	return items
 end
 
---- Formats a job info string for running jobs.
+--- Formats a job info string for processing/queued jobs.
 local function formatJobRunningInfo(job)
-	local text = string.format(
+	local processed = job.processed_photo_count or 0
+	local total = job.photo_count or 0
+	return string.format(
 		'%d/%d %s',
-		job.photosProcessed, job.photosTotal,
+		processed, total,
 		LOC "$$$/Photometoria/Job/Photos=foto processate"
 	)
-	if job.estimatedRemaining ~= '' then
-		text = text .. ' \226\128\148 ' .. LOC(
-			"$$$/Photometoria/Job/Remaining=~^1. rimanenti",
-			job.estimatedRemaining
-		)
-	end
-	return text
 end
 
---- Formats a job info string for completed/errored/cancelled jobs.
+--- Formats a job info string for completed/failed/cancelled jobs.
 local function formatJobCompletedInfo(job)
+	local processed = job.processed_photo_count or 0
+	local total = job.photo_count or 0
+	local failed = total - processed
 	local text = string.format(
 		'%d/%d %s',
-		job.photosProcessed, job.photosTotal,
+		processed, total,
 		LOC "$$$/Photometoria/Job/Photos=foto processate"
 	)
-	if job.status == 'errored' and job.errorCount > 0 then
+	if job.status == 'failed' and failed > 0 then
 		text = text .. ' \226\128\148 ' .. LOC(
 			"$$$/Photometoria/Job/Failed=^1 fallite",
-			job.errorCount
-		)
-	end
-	if job.duration ~= '' then
-		text = text .. ' \226\128\148 ' .. LOC(
-			"$$$/Photometoria/Job/CompletedIn=completato in ^1.",
-			job.duration
+			failed
 		)
 	end
 	return text
 end
 
+local currentJobs = {}
+local jobsByTaskId = {}
 local onJobSelected
+
+--- Fetches jobs for all tasks and stores them in jobsByTaskId.
+local function prefetchAllJobs(host, tasks)
+	jobsByTaskId = {}
+	for _, task in ipairs(tasks) do
+		local ok, jobs = ServerConnection.listTaskJobs(host, task.task_id)
+		jobsByTaskId[task.task_id] = ok and jobs or {}
+	end
+end
+
+--- Clears the job detail panel.
+local function clearJobDetail(props)
+	props.jobDetailVisible = false
+	props.btnApplyEnabled = false
+	props.btnRetryEnabled = false
+	props.btnRestartEnabled = false
+	props.btnCancelEnabled = false
+	props.btnRemoveEnabled = false
+end
 
 --- Initializes all bindable properties.
 local function initProperties(props, tasks)
-	props.selectedTask = 1
+	props.selectedTask = (#tasks > 0) and 1 or nil
 	props.taskPopupItems = buildTaskPopupItems(tasks)
 
 	props.taskSummary = ''
@@ -228,24 +228,36 @@ local function initProperties(props, tasks)
 end
 
 --- Updates the detail panel when a task is selected.
+--- Reads jobs from the prefetched jobsByTaskId table.
 local function onTaskSelected(props, tasks, index)
 	local task = tasks[index]
 	if not task then
 		return
 	end
 
+	local photoCount = task.photo_count or 0
+	local storageUsed = task.storage_used or 0
+	local jobCount = task.job_count or 0
+
 	props.taskSummary = string.format(
 		'%d %s \194\183 %s \194\183 %d %s',
-		task.photoCount,
+		photoCount,
 		LOC "$$$/Photometoria/Task/Photos=photos",
-		formatBytes(task.sizeBytes),
-		#task.jobs,
+		formatBytes(storageUsed),
+		jobCount,
 		LOC "$$$/Photometoria/Task/Jobs=job"
 	)
 
+	props.contextText = task.context or ''
+	props.contextSavedText = task.context or ''
+	props.contextModified = false
+
+	local jobs = jobsByTaskId[task.task_id] or {}
+	currentJobs = jobs
+
 	local hasActiveJobs = false
-	for _, job in ipairs(task.jobs) do
-		if job.status == 'running' then
+	for _, job in ipairs(jobs) do
+		if job.status == 'processing' or job.status == 'queued' then
 			hasActiveJobs = true
 			break
 		end
@@ -261,56 +273,43 @@ local function onTaskSelected(props, tasks, index)
 		props.deleteDisabledReason = ''
 	end
 
-	props.contextText = task.context or ''
-	props.contextSavedText = task.context or ''
-	props.contextModified = false
+	props.jobListItems = buildJobListItems(jobs)
+	props.selectedJobValue = (#jobs > 0) and { 1 } or {}
 
-	props.jobListItems = buildJobListItems(task)
-	props.selectedJobValue = (#task.jobs > 0) and { 1 } or {}
-
-	onJobSelected(props, tasks)
+	onJobSelected(props)
 end
 
 --- Updates job detail panel when a job is selected.
-onJobSelected = function(props, tasks)
-	local task = tasks[props.selectedTask]
-	if not task then
-		props.jobDetailVisible = false
-		return
-	end
-
+onJobSelected = function(props)
 	local selectedJob = props.selectedJobValue
 	local jobIndex = selectedJob and selectedJob[1]
-	local job = jobIndex and task.jobs[jobIndex]
+	local job = jobIndex and currentJobs[jobIndex]
 	if not job then
-		props.jobDetailVisible = false
-		props.btnApplyEnabled = false
-		props.btnRetryEnabled = false
-		props.btnRestartEnabled = false
-		props.btnCancelEnabled = false
-		props.btnRemoveEnabled = false
+		clearJobDetail(props)
 		return
 	end
 
 	props.jobDetailVisible = true
-	props.jobProviderModel = job.provider .. ' \194\183 ' .. job.model
+	props.jobProviderModel = job.model
 	props.jobStatusIndicator = '[' .. jobStatusIcon(job.status) .. ' ' .. jobStatusLabel(job.status) .. ']'
 
-	if job.status == 'running' then
+	if job.status == 'processing' or job.status == 'queued' then
 		props.jobProgressVisible = true
 		props.jobInfoText = formatJobRunningInfo(job)
-		ProgressBar.set(props, 'jobDetail_pb', job.photosProcessed, job.photosTotal)
+		local processed = job.processed_photo_count or 0
+		local total = job.photo_count or 0
+		ProgressBar.set(props, 'jobDetail_pb', processed, total)
 	else
 		props.jobProgressVisible = false
 		props.jobInfoText = formatJobCompletedInfo(job)
 		ProgressBar.clear(props, 'jobDetail_pb')
 	end
 
-	props.btnApplyEnabled = (job.status == 'completed' or job.status == 'errored')
-	props.btnRetryEnabled = (job.status == 'errored' and job.errorCount > 0)
+	props.btnApplyEnabled = (job.status == 'completed' or job.status == 'failed')
+	props.btnRetryEnabled = (job.status == 'failed')
 	props.btnRestartEnabled = (job.status == 'cancelled')
-	props.btnCancelEnabled = (job.status == 'running')
-	props.btnRemoveEnabled = (job.status ~= 'running')
+	props.btnCancelEnabled = (job.status == 'processing' or job.status == 'queued')
+	props.btnRemoveEnabled = (job.status ~= 'processing' and job.status ~= 'queued')
 end
 
 --- Builds the task selector row: popup_menu + Delete button.
@@ -553,27 +552,12 @@ local function buildJobsSection(f, props, tasks)
 						end
 						local selection = NewJobDialog.showDialog(
 							MockData.providers,
-							task.photoCount
+							task.photo_count or 0
 						)
 						if not selection then
 							return
 						end
-						local newJob = {
-							id = 'job-new-' .. tostring(#task.jobs + 1),
-							provider = selection.provider,
-							model = selection.model,
-							status = 'running',
-							photosTotal = task.photoCount,
-							photosProcessed = 0,
-							estimatedRemaining = '',
-							duration = '',
-							errorCount = 0,
-						}
-						task.jobs[#task.jobs + 1] = newJob
-						props.taskPopupItems = buildTaskPopupItems(tasks)
-						props.jobListItems = buildJobListItems(task)
-						props.selectedJobValue = { #task.jobs }
-						onJobSelected(props, tasks)
+						onTaskSelected(props, tasks, props.selectedTask)
 					end,
 				},
 			},
@@ -599,10 +583,13 @@ local function buildContents(f, props, tasks)
 end
 
 --- Shows the task management dialog. Must be called from within an async task.
-function TaskDialogUI.showDialog()
+--- @param host string Server host:port
+--- @param tasks table Array of TaskSummary from the server
+function TaskDialogUI.showDialog(host, tasks)
+	prefetchAllJobs(host, tasks)
+
 	LrFunctionContext.callWithContext('TaskDialog', function(context)
 		local f = LrView.osFactory()
-		local tasks = MockData.tasks
 
 		local props = LrBinding.makePropertyTable(context)
 		initProperties(props, tasks)
@@ -614,14 +601,16 @@ function TaskDialogUI.showDialog()
 		end)
 
 		props:addObserver('selectedJobValue', function(propTable)
-			onJobSelected(propTable, tasks)
+			onJobSelected(propTable)
 		end)
 
 		props:addObserver('contextText', function(propTable, key, value)
 			propTable.contextModified = (value ~= propTable.contextSavedText)
 		end)
 
-		onTaskSelected(props, tasks, 1)
+		if #tasks > 0 then
+			onTaskSelected(props, tasks, 1)
+		end
 
 		LrDialogs.presentModalDialog {
 			title = LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",

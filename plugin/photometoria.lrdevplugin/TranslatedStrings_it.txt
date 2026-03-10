@@ -39,6 +39,7 @@
 "$$$/Photometoria/TaskStatus/Errors=Errori"
 
 "$$$/Photometoria/JobStatus/Running=In corso"
+"$$$/Photometoria/JobStatus/Queued=In coda"
 "$$$/Photometoria/JobStatus/Completed=Completato"
 "$$$/Photometoria/JobStatus/Errored=Con errori"
 "$$$/Photometoria/JobStatus/Cancelled=Annullato"

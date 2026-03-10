@@ -38,5 +38,21 @@ LrTasks.startAsyncTask(function()
 		return
 	end
 
-	TaskDialogUI.showDialog()
+	local taskScope = LrProgressScope {
+		title = LOC "$$$/Photometoria/Progress/LoadingTasks=Loading tasks...",
+	}
+
+	local taskSuccess, tasks = ServerConnection.listTasks(host)
+	taskScope:done()
+
+	if not taskSuccess then
+		LrDialogs.message(
+			LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+			tasks.message,
+			'critical'
+		)
+		return
+	end
+
+	TaskDialogUI.showDialog(host, tasks)
 end)

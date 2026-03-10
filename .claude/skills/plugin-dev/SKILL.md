@@ -181,6 +181,19 @@ A reusable progress bar is implemented in `TaskDialog.lua` using:
   instead of try/finally patterns. For reentrancy guards, use a module-level
   `local running = false` flag with reset at every exit path.
 
+**`addObserver` callbacks cannot call async SDK functions:**
+
+- Observer callbacks (`props:addObserver`) run in a C stack frame — same yield
+  restriction as `pcall`.
+- Calling `LrHttp.get`, `LrHttp.post`, or any I/O SDK function inside an
+  observer crashes with:
+  `"Yielding is not allowed within a C or metamethod call (inside the callback for addObserver for condition <key>)"`
+- **Workaround**: prefetch all needed data **before** opening the dialog
+  (while still in the free async task context) and store it in a Lua table.
+  The observer reads from the table instead of making network calls.
+- This applies to all observer callbacks, not just `selectedTask` — any
+  `props:addObserver(key, fn)` where `fn` calls an async SDK function will fail.
+
 **`LrLibraryMenuItems` cannot be dynamically enabled/disabled:**
 
 - `Info.lua` is a static table evaluated once at plugin load.
