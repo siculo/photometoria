@@ -14,6 +14,7 @@ local LrApplication = import 'LrApplication'
 local ServerConnection = require 'ServerConnection'
 local PhotoValidator = require 'PhotoValidator'
 local TaskDialogUI = require 'TaskDialogUI'
+local PhotoUploader = require 'PhotoUploader'
 local Guard = require 'Guard'
 local TaskUtils = require 'TaskUtils'
 
@@ -320,7 +321,7 @@ LrTasks.startAsyncTask(function()
 		return
 	end
 
-	local openTaskDialog = false
+	local confirmedTaskId = nil
 
 	LrFunctionContext.callWithContext('AddPhotosDialog', function(context)
 		local f = LrView.osFactory()
@@ -353,7 +354,7 @@ LrTasks.startAsyncTask(function()
 			local result = LrDialogs.presentModalDialog {
 				title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
 				contents = buildContents(f, props),
-				actionVerb = LOC "$$$/Photometoria/Button/ConfirmAdd=Confirm and Go to Task",
+				actionVerb = LOC "$$$/Photometoria/Button/ConfirmAdd=Confirm",
 				actionBinding = {
 					enabled = {
 						bind_to_object = props,
@@ -365,17 +366,17 @@ LrTasks.startAsyncTask(function()
 			if result ~= 'ok' then
 				done = true
 			elseif props.destination == 'new' then
-				local progressScope = LrProgressScope {
+				local createScope = LrProgressScope {
 					title = LOC "$$$/Photometoria/Progress/CreatingTask=Creating task...",
 				}
 
 				local ok, taskData = ServerConnection.createTask(host, props.taskName, props.taskContext)
-				progressScope:done()
+				createScope:done()
 
 				if ok then
+					confirmedTaskId = taskData.task_id
 					prefs.lastActiveTaskId = taskData.task_id
 					done = true
-					openTaskDialog = true
 				elseif taskData.duplicate then
 					LrDialogs.message(
 						LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
@@ -392,20 +393,50 @@ LrTasks.startAsyncTask(function()
 			else
 				local selectedTask = tasks[props.existingTask]
 				if selectedTask then
+					confirmedTaskId = selectedTask.task_id
 					prefs.lastActiveTaskId = selectedTask.task_id
 				end
 				done = true
-				openTaskDialog = true
 			end
 		end
 	end)
 
 	Guard.release('AddPhotosDialog')
 
-	if openTaskDialog then
-		local refreshOk, refreshedTasks = ServerConnection.listTasks(host)
-		if refreshOk then
-			TaskDialogUI.showDialog(host, refreshedTasks)
+	if confirmedTaskId then
+		local uploadResult = PhotoUploader.run(host, confirmedTaskId, validation.photos, data.maxPhotosPerRequest)
+
+		local title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos"
+
+		if uploadResult.cancelled then
+			LrDialogs.message(
+				title,
+				LOC("$$$/Photometoria/Upload/Cancelled=Upload cancelled. ^1 of ^2 photos uploaded.",
+					tostring(uploadResult.uploaded), tostring(uploadResult.total)),
+				'info'
+			)
+		else
+			local body
+			if uploadResult.failed == 0 then
+				body = LOC("$$$/Photometoria/Upload/Success=^1 photos uploaded successfully. Open the task window?",
+					tostring(uploadResult.uploaded))
+			else
+				body = LOC("$$$/Photometoria/Upload/Partial=^1 of ^2 photos uploaded (^3 failed). Open the task window?",
+					tostring(uploadResult.uploaded), tostring(uploadResult.total), tostring(uploadResult.failed))
+			end
+
+			local action = LrDialogs.confirm(
+				title,
+				body,
+				LOC "$$$/Photometoria/Button/OpenTask=Open Task Window"
+			)
+
+			if action == 'ok' then
+				local refreshOk, refreshedTasks = ServerConnection.listTasks(host)
+				if refreshOk then
+					TaskDialogUI.showDialog(host, refreshedTasks)
+				end
+			end
 		end
 	end
 end)
