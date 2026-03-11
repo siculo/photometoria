@@ -201,8 +201,11 @@ local function initProperties(props, tasks)
 	props.selectedTask = (#tasks > 0) and 1 or nil
 	props.taskPopupItems = buildTaskPopupItems(tasks)
 
+	props.taskSelected = (#tasks > 0)
+	props.noTasksVisible = (#tasks == 0)
+
 	props.taskSummary = ''
-	props.deleteEnabled = true
+	props.deleteEnabled = (#tasks > 0)
 	props.deleteDisabledReason = ''
 	props.deleteDisabledVisible = false
 
@@ -321,6 +324,7 @@ local function buildTaskSelectorRow(f, props)
 		f:popup_menu {
 			value = bind 'selectedTask',
 			items = bind 'taskPopupItems',
+			enabled = bind 'taskSelected',
 			width = 280,
 		},
 
@@ -363,6 +367,7 @@ local function buildTaskSection(f, props)
 
 			f:push_button {
 				title = LOC "$$$/Photometoria/Button/ShowPhotos=Show Photos in Library",
+				enabled = bind 'taskSelected',
 				place_horizontal = 1,
 				action = function()
 					LrDialogs.message(
@@ -377,10 +382,12 @@ local function buildTaskSection(f, props)
 		f:static_text {
 			title = LOC "$$$/Photometoria/Dialog/ContextLabel=Context",
 			font = '<system/bold>',
+			enabled = bind 'taskSelected',
 		},
 
 		f:edit_field {
 			value = bind 'contextText',
+			enabled = bind 'taskSelected',
 			fill_horizontal = 1,
 			height_in_lines = 4,
 			immediate = true,
@@ -538,12 +545,14 @@ local function buildJobsSection(f, props, tasks)
 				f:simple_list {
 					value = bind 'selectedJobValue',
 					items = bind 'jobListItems',
+					enabled = bind 'taskSelected',
 					width = 240,
 					height = 120,
 				},
 
 				f:push_button {
 					title = LOC "$$$/Photometoria/Button/NewJob=+ Start New Job",
+					enabled = bind 'taskSelected',
 					fill_horizontal = 1,
 					action = function()
 						local task = tasks[props.selectedTask]
@@ -575,6 +584,12 @@ local function buildContents(f, props, tasks)
 		fill_horizontal = 1,
 
 		buildTaskSelectorRow(f, props),
+
+		f:static_text {
+			visible = bind 'noTasksVisible',
+			title = LOC "$$$/Photometoria/Task/NoTasks=No tasks available. Create a task by adding photos via the plugin menu.",
+			fill_horizontal = 1,
+		},
 
 		buildTaskSection(f, props),
 
