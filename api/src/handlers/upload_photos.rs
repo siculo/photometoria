@@ -75,10 +75,11 @@ struct FileData {
 /// Processes the entire multipart request, returning the result of the upload operation.
 ///
 /// Expects:
-/// - A `client_ids` field with a JSON array of strings
+/// - An optional `client_ids` field with a JSON array of strings
 /// - One or more `files` fields with the actual image data
 ///
-/// The number of client_ids must match the number of files.
+/// If `client_ids` is provided, its length must match the number of files.
+/// If omitted, all photos are stored with `client_id = None`.
 async fn process_multipart(
     state: &AppState,
     task_id: Uuid,
@@ -87,7 +88,6 @@ async fn process_multipart(
     let mut client_ids: Option<Vec<String>> = None;
     let mut files: Vec<FileData> = vec![];
 
-    // First pass: collect client_ids and files
     loop {
         let field = match multipart.next_field().await {
             Ok(Some(field)) => field,
@@ -143,30 +143,23 @@ async fn process_multipart(
         }
     }
 
-    // Validate: client_ids is required
-    let client_ids = client_ids.ok_or_else(|| {
-        error!("Missing required field: client_ids");
-        AppError::bad_request(
-            "missing_client_ids",
-            "Missing required field: client_ids (JSON array of strings)",
-        )
-    })?;
-
-    // Validate: counts must match
-    if client_ids.len() != files.len() {
-        error!(
-            "Mismatch: {} client_ids but {} files",
-            client_ids.len(),
-            files.len()
-        );
-        return Err(AppError::bad_request(
-            "client_ids_mismatch",
-            format!(
-                "Number of client_ids ({}) does not match number of files ({})",
-                client_ids.len(),
+    // Validate: if client_ids is provided, counts must match
+    if let Some(ref ids) = client_ids {
+        if ids.len() != files.len() {
+            error!(
+                "Mismatch: {} client_ids but {} files",
+                ids.len(),
                 files.len()
-            ),
-        ));
+            );
+            return Err(AppError::bad_request(
+                "client_ids_mismatch",
+                format!(
+                    "Number of client_ids ({}) does not match number of files ({})",
+                    ids.len(),
+                    files.len()
+                ),
+            ));
+        }
     }
 
     // Process files
@@ -180,7 +173,7 @@ async fn process_multipart(
     let mut uploaded_size_bytes: u64 = 0;
 
     for (idx, file) in files.into_iter().enumerate() {
-        let client_id = client_ids[idx].clone();
+        let client_id = client_ids.as_ref().map(|ids| ids[idx].clone());
 
         let result = process_field(
             file.data,
@@ -215,7 +208,7 @@ async fn process_multipart(
 async fn process_field(
     data: Bytes,
     filename: String,
-    client_id: String,
+    client_id: Option<String>,
     task_id: Uuid,
     uploaded_count: usize,
     used_storage: u64,
@@ -234,7 +227,7 @@ async fn process_field(
     }
 
     // Create photo and save to store
-    let photo = Photo::new(task_id, filename.clone(), data_size);
+    let photo = Photo::new(task_id, client_id.clone(), filename.clone(), data_size);
     match photo_store.create(photo.clone()).await {
         Ok(_) => {
             // Save actual image data

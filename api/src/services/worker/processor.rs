@@ -233,10 +233,16 @@ impl PhotoProcessor {
         job.queued_photo_ids.retain(|id| id != &photo.photo_id);
         job.processed_photo_ids.push(photo.photo_id);
 
+        // Retrieve client_id from the photo store
+        let client_id = match self.photo_store.get(photo.photo_id).await {
+            Ok(Some(stored_photo)) => stored_photo.client_id,
+            _ => None,
+        };
+
         // Store result
         job.results.insert(
             photo.photo_id,
-            Self::build_photo_result(photo.photo_id, analysis),
+            Self::build_photo_result(photo.photo_id, client_id, analysis),
         );
 
         // Complete job when all photos have been processed
@@ -252,10 +258,15 @@ impl PhotoProcessor {
             .map_err(|e| format!("Failed to persist job {}: {}", photo.job_id, e))
     }
 
-    fn build_photo_result(photo_id: Uuid, analysis: Result<&str, &str>) -> PhotoResult {
+    fn build_photo_result(
+        photo_id: Uuid,
+        client_id: Option<String>,
+        analysis: Result<&str, &str>,
+    ) -> PhotoResult {
         match analysis {
             Ok(tags) => PhotoResult {
                 photo_id,
+                client_id,
                 status: PhotoResultStatus::Completed,
                 tags: Some(tags.to_string()),
                 error: None,
@@ -263,6 +274,7 @@ impl PhotoProcessor {
             },
             Err(error) => PhotoResult {
                 photo_id,
+                client_id,
                 status: PhotoResultStatus::Failed,
                 tags: None,
                 error: Some(error.to_string()),
@@ -405,7 +417,7 @@ mod tests {
             .unwrap();
 
         let photo_id = Uuid::new_v4();
-        let photo = crate::models::Photo::new(task.task_id, "test.jpg".to_string(), 100);
+        let photo = crate::models::Photo::new(task.task_id, None, "test.jpg".to_string(), 100);
         let photo = crate::models::Photo { photo_id, ..photo };
         fixture.photo_store.create(photo).await.unwrap();
         fixture
@@ -563,7 +575,7 @@ mod tests {
         let photo_id_2 = Uuid::new_v4();
 
         for (id, name) in [(photo_id_1, "a.jpg"), (photo_id_2, "b.jpg")] {
-            let photo = crate::models::Photo::new(task.task_id, name.to_string(), 100);
+            let photo = crate::models::Photo::new(task.task_id, None, name.to_string(), 100);
             let photo = crate::models::Photo {
                 photo_id: id,
                 ..photo
@@ -628,7 +640,7 @@ mod tests {
 
         // Create photo metadata but no binary data
         let photo_id = Uuid::new_v4();
-        let photo = crate::models::Photo::new(task.task_id, "ghost.jpg".to_string(), 0);
+        let photo = crate::models::Photo::new(task.task_id, None, "ghost.jpg".to_string(), 0);
         let photo = crate::models::Photo { photo_id, ..photo };
         fixture.photo_store.create(photo).await.unwrap();
 

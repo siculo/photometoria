@@ -33,6 +33,10 @@ pub struct Photo {
     /// Reference to the parent Task
     pub task_id: Uuid,
 
+    /// Client-provided identifier for reconciliation (opaque string)
+    #[serde(default)]
+    pub client_id: Option<String>,
+
     /// Original filename from upload
     pub filename: String,
 
@@ -48,6 +52,7 @@ impl Photo {
     ///
     /// # Arguments
     /// * `task_id` - The UUID of the parent Task
+    /// * `client_id` - Optional client-provided identifier for reconciliation
     /// * `filename` - Original filename from upload
     /// * `size_bytes` - File size in bytes
     ///
@@ -58,14 +63,21 @@ impl Photo {
     ///
     /// let photo = Photo::new(
     ///     Uuid::new_v4(),
+    ///     Some("lr:123456".to_string()),
     ///     "IMG_1234.jpg".to_string(),
     ///     4_200_000,
     /// );
     /// ```
-    pub fn new(task_id: Uuid, filename: String, size_bytes: u64) -> Self {
+    pub fn new(
+        task_id: Uuid,
+        client_id: Option<String>,
+        filename: String,
+        size_bytes: u64,
+    ) -> Self {
         Self {
             photo_id: Uuid::new_v4(),
             task_id,
+            client_id,
             filename,
             size_bytes,
             uploaded_at: Utc::now(),
@@ -86,6 +98,7 @@ impl Photo {
 /// {
 ///   "photo_id": "550e8400-e29b-41d4-a716-446655440000",
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440001",
+///   "client_id": "lr:123456",
 ///   "filename": "IMG_1234.jpg",
 ///   "size_bytes": 4200000,
 ///   "uploaded_at": "2024-01-15T10:32:00Z"
@@ -98,6 +111,10 @@ pub struct PhotoResponse {
 
     /// Parent task identifier
     pub task_id: Uuid,
+
+    /// Client-provided identifier for reconciliation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
 
     /// Original filename
     pub filename: String,
@@ -125,6 +142,10 @@ pub struct PhotoResponse {
 pub struct PhotoSummary {
     /// Unique photo identifier
     pub photo_id: Uuid,
+
+    /// Client-provided identifier for reconciliation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
 
     /// Original filename
     pub filename: String,
@@ -171,7 +192,8 @@ pub struct UploadPhotosResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadedPhoto {
     /// Client-provided identifier for tracking
-    pub client_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
 
     /// Unique photo identifier
     pub photo_id: Uuid,
@@ -187,7 +209,8 @@ pub struct UploadedPhoto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FailedUpload {
     /// Client-provided identifier for tracking
-    pub client_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
 
     /// Original filename
     pub filename: String,
@@ -225,6 +248,7 @@ impl From<Photo> for PhotoResponse {
         Self {
             photo_id: photo.photo_id,
             task_id: photo.task_id,
+            client_id: photo.client_id,
             filename: photo.filename,
             size_bytes: photo.size_bytes,
             uploaded_at: photo.uploaded_at,
@@ -237,6 +261,7 @@ impl From<&Photo> for PhotoResponse {
         Self {
             photo_id: photo.photo_id,
             task_id: photo.task_id,
+            client_id: photo.client_id.clone(),
             filename: photo.filename.clone(),
             size_bytes: photo.size_bytes,
             uploaded_at: photo.uploaded_at,
@@ -248,6 +273,7 @@ impl From<Photo> for PhotoSummary {
     fn from(photo: Photo) -> Self {
         Self {
             photo_id: photo.photo_id,
+            client_id: photo.client_id,
             filename: photo.filename,
             size_bytes: photo.size_bytes,
         }
@@ -258,6 +284,7 @@ impl From<&Photo> for PhotoSummary {
     fn from(photo: &Photo) -> Self {
         Self {
             photo_id: photo.photo_id,
+            client_id: photo.client_id.clone(),
             filename: photo.filename.clone(),
             size_bytes: photo.size_bytes,
         }
@@ -275,27 +302,53 @@ mod tests {
     #[test]
     fn test_photo_new_generates_uuid() {
         let task_id = Uuid::new_v4();
-        let photo = Photo::new(task_id, "test.jpg".to_string(), 1_000_000);
+        let photo = Photo::new(task_id, None, "test.jpg".to_string(), 1_000_000);
         assert!(!photo.photo_id.is_nil());
     }
 
     #[test]
     fn test_photo_new_sets_fields() {
         let task_id = Uuid::new_v4();
-        let photo = Photo::new(task_id, "vacation.jpg".to_string(), 5_242_880);
+        let photo = Photo::new(task_id, None, "vacation.jpg".to_string(), 5_242_880);
         assert_eq!(photo.task_id, task_id);
+        assert!(photo.client_id.is_none());
         assert_eq!(photo.filename, "vacation.jpg");
         assert_eq!(photo.size_bytes, 5_242_880);
     }
 
     #[test]
+    fn test_photo_new_with_client_id() {
+        let task_id = Uuid::new_v4();
+        let photo = Photo::new(
+            task_id,
+            Some("lr:123456".to_string()),
+            "photo.jpg".to_string(),
+            2_000_000,
+        );
+        assert_eq!(photo.client_id, Some("lr:123456".to_string()));
+    }
+
+    #[test]
+    fn test_photo_deserialization_without_client_id() {
+        let json = r#"{"photo_id":"550e8400-e29b-41d4-a716-446655440000","task_id":"550e8400-e29b-41d4-a716-446655440001","filename":"test.jpg","size_bytes":1000,"uploaded_at":"2024-01-15T10:32:00Z"}"#;
+        let photo: Photo = serde_json::from_str(json).unwrap();
+        assert!(photo.client_id.is_none());
+    }
+
+    #[test]
     fn test_photo_to_response_conversion() {
         let task_id = Uuid::new_v4();
-        let photo = Photo::new(task_id, "test.jpg".to_string(), 2_097_152);
+        let photo = Photo::new(
+            task_id,
+            Some("lr:42".to_string()),
+            "test.jpg".to_string(),
+            2_097_152,
+        );
         let response: PhotoResponse = (&photo).into();
 
         assert_eq!(response.photo_id, photo.photo_id);
         assert_eq!(response.task_id, photo.task_id);
+        assert_eq!(response.client_id, photo.client_id);
         assert_eq!(response.filename, photo.filename);
         assert_eq!(response.size_bytes, photo.size_bytes);
         assert_eq!(response.uploaded_at, photo.uploaded_at);
@@ -304,10 +357,16 @@ mod tests {
     #[test]
     fn test_photo_to_summary_conversion() {
         let task_id = Uuid::new_v4();
-        let photo = Photo::new(task_id, "test.jpg".to_string(), 1_048_576);
+        let photo = Photo::new(
+            task_id,
+            Some("lr:99".to_string()),
+            "test.jpg".to_string(),
+            1_048_576,
+        );
         let summary: PhotoSummary = (&photo).into();
 
         assert_eq!(summary.photo_id, photo.photo_id);
+        assert_eq!(summary.client_id, photo.client_id);
         assert_eq!(summary.filename, photo.filename);
         assert_eq!(summary.size_bytes, photo.size_bytes);
     }
@@ -315,11 +374,17 @@ mod tests {
     #[test]
     fn test_photo_serialization() {
         let task_id = Uuid::new_v4();
-        let photo = Photo::new(task_id, "test.jpg".to_string(), 1_000_000);
+        let photo = Photo::new(
+            task_id,
+            Some("lr:1".to_string()),
+            "test.jpg".to_string(),
+            1_000_000,
+        );
         let json = serde_json::to_string(&photo).unwrap();
 
         assert!(json.contains("photo_id"));
         assert!(json.contains("task_id"));
+        assert!(json.contains("client_id"));
         assert!(json.contains("filename"));
         assert!(json.contains("size_bytes"));
         assert!(json.contains("uploaded_at"));
@@ -330,6 +395,7 @@ mod tests {
         let response = PhotoResponse {
             photo_id: Uuid::new_v4(),
             task_id: Uuid::new_v4(),
+            client_id: Some("lr:42".to_string()),
             filename: "test.jpg".to_string(),
             size_bytes: 4_200_000,
             uploaded_at: Utc::now(),
@@ -344,20 +410,20 @@ mod tests {
         let response = UploadPhotosResponse {
             uploaded: vec![
                 UploadedPhoto {
-                    client_id: "/path/to/IMG_001.jpg".to_string(),
+                    client_id: Some("lr:001".to_string()),
                     photo_id: Uuid::new_v4(),
                     filename: "IMG_001.jpg".to_string(),
                     size_bytes: 4_200_000,
                 },
                 UploadedPhoto {
-                    client_id: "/path/to/IMG_002.jpg".to_string(),
+                    client_id: Some("lr:002".to_string()),
                     photo_id: Uuid::new_v4(),
                     filename: "IMG_002.jpg".to_string(),
                     size_bytes: 4_300_000,
                 },
             ],
             failed: vec![FailedUpload {
-                client_id: "/path/to/IMG_003.jpg".to_string(),
+                client_id: Some("lr:003".to_string()),
                 filename: "IMG_003.jpg".to_string(),
                 reason: "file_too_large".to_string(),
             }],

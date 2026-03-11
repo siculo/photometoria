@@ -35,6 +35,10 @@ pub struct PhotoResult {
     /// ID of the photo this result belongs to
     pub photo_id: Uuid,
 
+    /// Client-provided identifier for reconciliation
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+
     /// Status of the analysis (completed or failed)
     pub status: PhotoResultStatus,
 
@@ -1027,6 +1031,7 @@ mod tests {
             photo1,
             PhotoResult {
                 photo_id: photo1,
+                client_id: None,
                 status: PhotoResultStatus::Completed,
                 tags: Some("test".to_string()),
                 error: None,
@@ -1038,6 +1043,7 @@ mod tests {
             photo2,
             PhotoResult {
                 photo_id: photo2,
+                client_id: None,
                 status: PhotoResultStatus::Failed,
                 tags: None,
                 error: Some("error".to_string()),
@@ -1095,6 +1101,7 @@ mod tests {
             photo1,
             PhotoResult {
                 photo_id: photo1,
+                client_id: None,
                 status: PhotoResultStatus::Completed,
                 tags: Some("test".to_string()),
                 error: None,
@@ -1106,6 +1113,7 @@ mod tests {
             photo2,
             PhotoResult {
                 photo_id: photo2,
+                client_id: None,
                 status: PhotoResultStatus::Failed,
                 tags: None,
                 error: Some("error".to_string()),
@@ -1117,6 +1125,7 @@ mod tests {
             photo3,
             PhotoResult {
                 photo_id: photo3,
+                client_id: None,
                 status: PhotoResultStatus::Failed,
                 tags: None,
                 error: Some("another error".to_string()),
@@ -1191,6 +1200,7 @@ mod tests {
             photo1,
             PhotoResult {
                 photo_id: photo1,
+                client_id: None,
                 status: PhotoResultStatus::Completed,
                 tags: Some("test".to_string()),
                 error: None,
@@ -1223,6 +1233,7 @@ mod tests {
             photo1,
             PhotoResult {
                 photo_id: photo1,
+                client_id: None,
                 status: PhotoResultStatus::Completed,
                 tags: Some("test".to_string()),
                 error: None,
@@ -1234,6 +1245,7 @@ mod tests {
             photo2,
             PhotoResult {
                 photo_id: photo2,
+                client_id: None,
                 status: PhotoResultStatus::Failed,
                 tags: None,
                 error: Some("error".to_string()),
@@ -1253,6 +1265,7 @@ mod tests {
     fn test_photo_result_skips_none_fields() {
         let result = PhotoResult {
             photo_id: Uuid::new_v4(),
+            client_id: None,
             status: PhotoResultStatus::Failed,
             tags: None,
             error: Some("error".to_string()),

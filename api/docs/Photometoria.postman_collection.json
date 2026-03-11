@@ -662,9 +662,17 @@
 								"tasks",
 								"{{task_id}}",
 								"photos"
+							],
+							"query": [
+								{
+									"key": "client_id",
+									"value": "",
+									"description": "Filter photos by client_id value (exact match)",
+									"disabled": true
+								}
 							]
 						},
-						"description": "Returns the list of photo IDs belonging to a task.\n\nUses the task_id saved from creation or replace it manually."
+						"description": "Returns the list of photo IDs belonging to a task.\n\nOptional query parameter:\n- client_id: filter photos by client_id value (exact match)\n\nUses the task_id saved from creation or replace it manually."
 					},
 					"response": [
 						{
@@ -739,7 +747,7 @@
 									"key": "client_ids",
 									"type": "text",
 									"value": "[\"/path/to/photo1.jpg\", \"/path/to/photo2.jpg\"]",
-									"description": "JSON array of client identifiers, one per file (required)"
+									"description": "JSON array of client identifiers, one per file (optional). Opaque strings supplied by the client for reconciliation. If omitted, all photos get client_id = null."
 								},
 								{
 									"key": "files",
@@ -761,7 +769,7 @@
 								"photos"
 							]
 						},
-						"description": "Uploads one or more photos to a task.\n\nRequires two fields:\n- client_ids: JSON array of identifiers (e.g., local file paths)\n- files: The actual image files\n\nThe number of client_ids must match the number of files.\n\nSupported formats: JPEG, PNG.\nReturns 201 if at least one photo was uploaded, 200 otherwise."
+						"description": "Uploads one or more photos to a task.\n\nFields:\n- client_ids: JSON array of identifiers (optional, e.g., local file paths)\n- files: The actual image files\n\nWhen client_ids is provided, the array must have the same length as the number of files. When omitted, all photos get client_id = null.\n\nSupported formats: JPEG, PNG.\nReturns 201 if at least one photo was uploaded, 200 otherwise."
 					},
 					"response": [
 						{
@@ -1339,7 +1347,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"results\": [\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"status\": \"completed\",\n            \"tags\": \"landscape, mountain, sunset, golden hour, nature\",\n            \"processed_at\": \"2024-01-15T10:36:00Z\"\n        },\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440003\",\n            \"status\": \"failed\",\n            \"error\": \"Model timeout\",\n            \"processed_at\": \"2024-01-15T10:37:00Z\"\n        }\n    ],\n    \"summary\": {\n        \"total\": 15,\n        \"completed\": 12,\n        \"failed\": 3\n    }\n}"
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"results\": [\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"client_id\": \"/Users/photos/IMG_001.jpg\",\n            \"status\": \"completed\",\n            \"tags\": \"landscape, mountain, sunset, golden hour, nature\",\n            \"processed_at\": \"2024-01-15T10:36:00Z\"\n        },\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440003\",\n            \"client_id\": \"/Users/photos/IMG_002.jpg\",\n            \"status\": \"failed\",\n            \"error\": \"Model timeout\",\n            \"processed_at\": \"2024-01-15T10:37:00Z\"\n        }\n    ],\n    \"summary\": {\n        \"total\": 15,\n        \"completed\": 12,\n        \"failed\": 3\n    }\n}"
 						},
 						{
 							"name": "Not Found",
@@ -1784,7 +1792,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"photo_id\": \"f0e1d2c3-b4a5-6789-0fed-cba987654321\",\n    \"task_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"filename\": \"IMG_1234.jpg\",\n    \"size_bytes\": 4200000,\n    \"uploaded_at\": \"2024-01-15T10:32:00Z\"\n}"
+							"body": "{\n    \"photo_id\": \"f0e1d2c3-b4a5-6789-0fed-cba987654321\",\n    \"task_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"client_id\": \"/Users/photos/IMG_1234.jpg\",\n    \"filename\": \"IMG_1234.jpg\",\n    \"size_bytes\": 4200000,\n    \"uploaded_at\": \"2024-01-15T10:32:00Z\"\n}"
 						},
 						{
 							"name": "Not Found",

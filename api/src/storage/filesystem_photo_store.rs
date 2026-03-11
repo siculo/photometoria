@@ -254,6 +254,37 @@ impl PhotoStore for FileSystemPhotoStore {
         Ok(photos)
     }
 
+    async fn find_by_client_id(
+        &self,
+        task_id: Uuid,
+        client_id: &str,
+    ) -> PhotoStoreResult<Vec<Photo>> {
+        debug!(
+            "Finding photos by client_id '{}' in task {}",
+            client_id, task_id
+        );
+
+        let mut photos: Vec<Photo> = self
+            .photos
+            .iter()
+            .filter(|entry| {
+                let photo = entry.value();
+                photo.task_id == task_id && photo.client_id.as_deref() == Some(client_id)
+            })
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        photos.sort_by_key(|photo| photo.uploaded_at);
+
+        debug!(
+            "Found {} photos with client_id '{}' in task {}",
+            photos.len(),
+            client_id,
+            task_id
+        );
+        Ok(photos)
+    }
+
     async fn delete(&self, photo_id: Uuid) -> PhotoStoreResult<()> {
         debug!("Deleting photo: {}", photo_id);
 
@@ -452,7 +483,7 @@ mod tests {
 
     // Helper function to create a test photo
     fn create_test_photo(task_id: Uuid, filename: &str, size_bytes: u64) -> Photo {
-        Photo::new(task_id, filename.to_string(), size_bytes)
+        Photo::new(task_id, None, filename.to_string(), size_bytes)
     }
 
     #[tokio::test]
@@ -915,5 +946,104 @@ mod tests {
             !wrong_path.exists(),
             "Photo should NOT be in task root directory"
         );
+    }
+
+    // ========================================================================
+    // find_by_client_id Tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_find_by_client_id_returns_matching_photos() {
+        let ts = create_store().await;
+        let task_id = Uuid::new_v4();
+        create_task_dir(&ts, task_id).await;
+
+        let photo1 = Photo::new(
+            task_id,
+            Some("lr:42".to_string()),
+            "a.jpg".to_string(),
+            1000,
+        );
+        let photo2 = Photo::new(
+            task_id,
+            Some("lr:42".to_string()),
+            "b.jpg".to_string(),
+            2000,
+        );
+        let photo3 = Photo::new(
+            task_id,
+            Some("lr:99".to_string()),
+            "c.jpg".to_string(),
+            3000,
+        );
+
+        let photo1_id = photo1.photo_id;
+        let photo2_id = photo2.photo_id;
+
+        ts.store.create(photo1).await.unwrap();
+        ts.store.create(photo2).await.unwrap();
+        ts.store.create(photo3).await.unwrap();
+
+        let results = ts.store.find_by_client_id(task_id, "lr:42").await.unwrap();
+
+        assert_eq!(results.len(), 2);
+        let ids: Vec<Uuid> = results.iter().map(|p| p.photo_id).collect();
+        assert!(ids.contains(&photo1_id));
+        assert!(ids.contains(&photo2_id));
+    }
+
+    #[tokio::test]
+    async fn test_find_by_client_id_no_match() {
+        let ts = create_store().await;
+        let task_id = Uuid::new_v4();
+        create_task_dir(&ts, task_id).await;
+
+        let photo = Photo::new(
+            task_id,
+            Some("lr:42".to_string()),
+            "a.jpg".to_string(),
+            1000,
+        );
+        ts.store.create(photo).await.unwrap();
+
+        let results = ts.store.find_by_client_id(task_id, "lr:999").await.unwrap();
+
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_find_by_client_id_scoped_to_task() {
+        let ts = create_store().await;
+        let task_a = Uuid::new_v4();
+        let task_b = Uuid::new_v4();
+        create_task_dir(&ts, task_a).await;
+        create_task_dir(&ts, task_b).await;
+
+        let photo_a = Photo::new(task_a, Some("lr:42".to_string()), "a.jpg".to_string(), 1000);
+        let photo_b = Photo::new(task_b, Some("lr:42".to_string()), "b.jpg".to_string(), 2000);
+
+        let photo_a_id = photo_a.photo_id;
+
+        ts.store.create(photo_a).await.unwrap();
+        ts.store.create(photo_b).await.unwrap();
+
+        let results = ts.store.find_by_client_id(task_a, "lr:42").await.unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].photo_id, photo_a_id);
+    }
+
+    #[tokio::test]
+    async fn test_find_by_client_id_ignores_none_client_id() {
+        let ts = create_store().await;
+        let task_id = Uuid::new_v4();
+        create_task_dir(&ts, task_id).await;
+
+        let photo = Photo::new(task_id, None, "a.jpg".to_string(), 1000);
+        ts.store.create(photo).await.unwrap();
+
+        let results = ts.store.find_by_client_id(task_id, "lr:42").await.unwrap();
+
+        assert!(results.is_empty());
     }
 }

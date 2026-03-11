@@ -273,13 +273,14 @@ Uploads one or more photos to a task using multipart/form-data.
 **Request:**
 
 - Content-Type: multipart/form-data
-- Field `client_ids`: JSON array of strings, one identifier per file (required)
+- Field `client_ids`: JSON array of strings, one identifier per file (optional)
 - Field `files`: image files (can be repeated for multiple files)
 - Limits: max_photos_per_request, max_photo_size (from config)
 
-The `client_ids` array must have the same length as the number of `files` fields.
-Each client_id is returned in the response, allowing the client to track which
-local file corresponds to which photo_id.
+Each `client_id` is an opaque string supplied by the client for reconciliation
+(e.g., a local file path). When `client_ids` is provided, the array must have the
+same length as the number of `files` fields. When omitted, all photos receive
+`client_id = null`.
 
 **Behavior:**
 
@@ -334,6 +335,12 @@ The response always includes both `uploaded` (successful) and `failed` arrays.
 
 Returns list of photo IDs in the task.
 
+**Query Parameters:**
+
+| Parameter   | Type   | Description |
+|-------------|--------|-------------|
+| `client_id` | string | Filter photos by `client_id` value (exact match) |
+
 **Response:**
 
 ```json
@@ -359,11 +366,14 @@ Returns detailed information about a specific photo.
 {
   "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "client_id": "/Users/photos/IMG_1234.jpg",
   "filename": "IMG_1234.jpg",
   "size_bytes": 4200000,
   "uploaded_at": "2024-01-15T10:32:00Z"
 }
 ```
+
+- `client_id` is omitted when not set
 
 ### DELETE /api/photos/{photo_id}
 
@@ -557,12 +567,14 @@ Returns the AI analysis results for all processed photos in a job. Available for
   "results": [
     {
       "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
+      "client_id": "/Users/photos/IMG_001.jpg",
       "status": "completed",
       "tags": "golden gate bridge, sunset, long exposure, red suspension cables",
       "processed_at": "2024-01-15T10:36:00Z"
     },
     {
       "photo_id": "a9b8c7d6-e5f4-3210-9876-543210fedcba",
+      "client_id": "/Users/photos/IMG_002.jpg",
       "status": "failed",
       "error": "ollama timeout",
       "processed_at": "2024-01-15T10:37:00Z"
@@ -576,6 +588,7 @@ Returns the AI analysis results for all processed photos in a job. Available for
 }
 ```
 
+- `client_id` is omitted when not set
 - `tags` is omitted when `status` is `failed`
 - `error` is omitted when `status` is `completed`
 - `processed_at` may be omitted for photos not yet processed
@@ -619,11 +632,14 @@ Deletes a job. The job must be in a terminal state (`completed`, `failed`, or `c
 {
   "photo_id": "string (UUID)",
   "task_id": "string (UUID)",
+  "client_id": "string | null",
   "filename": "string",
   "size_bytes": "number",
   "uploaded_at": "ISO 8601 timestamp"
 }
 ```
+
+- `client_id` — opaque string supplied by the client for reconciliation; omitted when not set
 
 ### Job
 
@@ -649,6 +665,7 @@ Deletes a job. The job must be in a terminal state (`completed`, `failed`, or `c
 ```json
 {
   "photo_id": "string (UUID)",
+  "client_id": "string | null",
   "status": "completed|failed",
   "tags": "string (comma-separated) | null",
   "error": "string | null",

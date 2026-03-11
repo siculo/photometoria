@@ -650,6 +650,7 @@ mod tests {
             .create(Photo {
                 photo_id: Uuid::new_v4(),
                 task_id,
+                client_id: None,
                 filename: "filename_1".to_string(),
                 size_bytes: 1570000,
                 uploaded_at: Utc::now(),
@@ -661,6 +662,7 @@ mod tests {
             .create(Photo {
                 photo_id: Uuid::new_v4(),
                 task_id,
+                client_id: None,
                 filename: "filename_2".to_string(),
                 size_bytes: 2003800,
                 uploaded_at: Utc::now(),
@@ -706,6 +708,7 @@ mod tests {
             .create(Photo {
                 photo_id: Uuid::new_v4(),
                 task_id: task1.task_id,
+                client_id: None,
                 filename: "photo1.jpg".to_string(),
                 size_bytes: 1000000,
                 uploaded_at: Utc::now(),
@@ -717,6 +720,7 @@ mod tests {
             .create(Photo {
                 photo_id: Uuid::new_v4(),
                 task_id: task1.task_id,
+                client_id: None,
                 filename: "photo2.jpg".to_string(),
                 size_bytes: 2000000,
                 uploaded_at: Utc::now(),
@@ -730,6 +734,7 @@ mod tests {
             .create(Photo {
                 photo_id: Uuid::new_v4(),
                 task_id: task2.task_id,
+                client_id: None,
                 filename: "photo3.jpg".to_string(),
                 size_bytes: 500000,
                 uploaded_at: Utc::now(),
