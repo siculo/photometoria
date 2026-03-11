@@ -93,6 +93,22 @@ pub trait PhotoStore: Send + Sync {
     /// Photos are sorted by `uploaded_at` (oldest first) for consistent ordering.
     async fn list_by_task(&self, task_id: Uuid) -> PhotoStoreResult<Vec<Photo>>;
 
+    /// Finds photos by client_id within a specific task.
+    ///
+    /// # Arguments
+    /// * `task_id` - The unique identifier of the parent task
+    /// * `client_id` - The client-provided identifier to search for
+    ///
+    /// # Returns
+    /// * `Ok(Vec<Photo>)` - Matching photos (may be empty; multiple matches possible
+    ///   since client_id has no uniqueness constraint)
+    /// * `Err(StorageError)` - If a storage-level error occurs
+    async fn find_by_client_id(
+        &self,
+        task_id: Uuid,
+        client_id: &str,
+    ) -> PhotoStoreResult<Vec<Photo>>;
+
     /// Deletes a photo from the store.
     ///
     /// # Arguments

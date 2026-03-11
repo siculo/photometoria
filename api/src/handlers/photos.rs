@@ -7,17 +7,39 @@ use crate::handlers::tasks::{check_no_active_jobs, get_existing_task};
 use crate::models::{Photo, PhotoListResponse, PhotoResponse};
 use crate::storage::PhotoStore;
 use axum::Json;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
+use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// Query parameters for listing photos in a task.
+#[derive(Debug, Deserialize)]
+pub struct TaskPhotosQuery {
+    /// Filter by client-provided identifier
+    pub client_id: Option<String>,
+}
 
 pub async fn task_photos(
     State(state): State<AppState>,
     AppPath(task_id): AppPath<Uuid>,
+    Query(query): Query<TaskPhotosQuery>,
 ) -> Result<Json<PhotoListResponse>, AppError> {
     get_existing_task(&state.task_store, task_id).await?;
-    list_task_photo(&state.photo_store, task_id).await
+
+    match query.client_id {
+        Some(client_id) => {
+            let photos = state
+                .photo_store
+                .find_by_client_id(task_id, &client_id)
+                .await
+                .map_err(|e| AppError::internal_error(e.to_string()))?;
+            let count = photos.len();
+            let photo_ids = photos.into_iter().map(|p| p.photo_id).collect();
+            Ok(Json(PhotoListResponse { photo_ids, count }))
+        }
+        None => list_task_photo(&state.photo_store, task_id).await,
+    }
 }
 
 pub async fn get_photo(
@@ -91,7 +113,12 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let result = task_photos(State(ts.state.clone()), AppPath(task_id)).await;
+        let result = task_photos(
+            State(ts.state.clone()),
+            AppPath(task_id),
+            Query(TaskPhotosQuery { client_id: None }),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(photo_list) = result.unwrap();
@@ -112,9 +139,9 @@ mod tests {
         ts.state.task_store.create(task).await.unwrap();
 
         // Create multiple photos
-        let photo1 = Photo::new(task_id, "photo1.jpg".to_string(), 1000);
-        let photo2 = Photo::new(task_id, "photo2.jpg".to_string(), 2000);
-        let photo3 = Photo::new(task_id, "photo3.jpg".to_string(), 3000);
+        let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
+        let photo2 = Photo::new(task_id, None, "photo2.jpg".to_string(), 2000);
+        let photo3 = Photo::new(task_id, None, "photo3.jpg".to_string(), 3000);
 
         let photo1_id = photo1.photo_id;
         let photo2_id = photo2.photo_id;
@@ -124,7 +151,12 @@ mod tests {
         ts.state.photo_store.create(photo2).await.unwrap();
         ts.state.photo_store.create(photo3).await.unwrap();
 
-        let result = task_photos(State(ts.state.clone()), AppPath(task_id)).await;
+        let result = task_photos(
+            State(ts.state.clone()),
+            AppPath(task_id),
+            Query(TaskPhotosQuery { client_id: None }),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(photo_list) = result.unwrap();
@@ -140,7 +172,12 @@ mod tests {
         let ts = create_test_state().await;
         let nonexistent_id = Uuid::new_v4();
 
-        let result = task_photos(State(ts.state.clone()), AppPath(nonexistent_id)).await;
+        let result = task_photos(
+            State(ts.state.clone()),
+            AppPath(nonexistent_id),
+            Query(TaskPhotosQuery { client_id: None }),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -161,7 +198,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let photo = Photo::new(task_id, "test.jpg".to_string(), 1_234_567);
+        let photo = Photo::new(task_id, None, "test.jpg".to_string(), 1_234_567);
         let photo_id = photo.photo_id;
         let uploaded_at = photo.uploaded_at;
         ts.state.photo_store.create(photo).await.unwrap();
@@ -203,7 +240,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let photo = Photo::new(task_id, "to_delete.jpg".to_string(), 5000);
+        let photo = Photo::new(task_id, None, "to_delete.jpg".to_string(), 5000);
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
@@ -237,7 +274,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let photo = Photo::new(task_id, "photo.jpg".to_string(), 1000);
+        let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
@@ -258,7 +295,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let photo = Photo::new(task_id, "photo.jpg".to_string(), 1000);
+        let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
@@ -280,7 +317,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let photo = Photo::new(task_id, "photo.jpg".to_string(), 1000);
+        let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
@@ -292,5 +329,125 @@ mod tests {
         let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
+    }
+
+    // ========================================================================
+    // Tests for client_id support
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_get_photo_returns_client_id() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(
+            task_id,
+            Some("lr:42".to_string()),
+            "test.jpg".to_string(),
+            1000,
+        );
+        let photo_id = photo.photo_id;
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let result = get_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+
+        assert!(result.is_ok());
+        let Json(response) = result.unwrap();
+        assert_eq!(response.client_id, Some("lr:42".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_get_photo_returns_none_client_id() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, None, "test.jpg".to_string(), 1000);
+        let photo_id = photo.photo_id;
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let result = get_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+
+        assert!(result.is_ok());
+        let Json(response) = result.unwrap();
+        assert!(response.client_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_task_photos_filter_by_client_id() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo1 = Photo::new(
+            task_id,
+            Some("lr:100".to_string()),
+            "photo1.jpg".to_string(),
+            1000,
+        );
+        let photo2 = Photo::new(
+            task_id,
+            Some("lr:200".to_string()),
+            "photo2.jpg".to_string(),
+            2000,
+        );
+        let photo3 = Photo::new(task_id, None, "photo3.jpg".to_string(), 3000);
+        let photo1_id = photo1.photo_id;
+
+        ts.state.photo_store.create(photo1).await.unwrap();
+        ts.state.photo_store.create(photo2).await.unwrap();
+        ts.state.photo_store.create(photo3).await.unwrap();
+
+        let result = task_photos(
+            State(ts.state.clone()),
+            AppPath(task_id),
+            Query(TaskPhotosQuery {
+                client_id: Some("lr:100".to_string()),
+            }),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let Json(photo_list) = result.unwrap();
+        assert_eq!(photo_list.count, 1);
+        assert_eq!(photo_list.photo_ids, vec![photo1_id]);
+    }
+
+    #[tokio::test]
+    async fn test_task_photos_filter_by_client_id_no_match() {
+        let ts = create_test_state().await;
+
+        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(
+            task_id,
+            Some("lr:100".to_string()),
+            "photo.jpg".to_string(),
+            1000,
+        );
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let result = task_photos(
+            State(ts.state.clone()),
+            AppPath(task_id),
+            Query(TaskPhotosQuery {
+                client_id: Some("lr:999".to_string()),
+            }),
+        )
+        .await;
+
+        assert!(result.is_ok());
+        let Json(photo_list) = result.unwrap();
+        assert_eq!(photo_list.count, 0);
+        assert!(photo_list.photo_ids.is_empty());
     }
 }

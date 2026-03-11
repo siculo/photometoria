@@ -276,8 +276,8 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let photo1 = Photo::new(task_id, "photo1.jpg".to_string(), 1000);
-        let photo2 = Photo::new(task_id, "photo2.jpg".to_string(), 2000);
+        let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
+        let photo2 = Photo::new(task_id, None, "photo2.jpg".to_string(), 2000);
         let photo1_id = photo1.photo_id;
         let photo2_id = photo2.photo_id;
 
@@ -321,9 +321,9 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let photo1 = Photo::new(task_id, "photo1.jpg".to_string(), 1000);
-        let photo2 = Photo::new(task_id, "photo2.jpg".to_string(), 2000);
-        let photo3 = Photo::new(task_id, "photo3.jpg".to_string(), 3000);
+        let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
+        let photo2 = Photo::new(task_id, None, "photo2.jpg".to_string(), 2000);
+        let photo3 = Photo::new(task_id, None, "photo3.jpg".to_string(), 3000);
         let photo1_id = photo1.photo_id;
         let photo2_id = photo2.photo_id;
 
@@ -417,7 +417,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let photo1 = Photo::new(task_id, "photo1.jpg".to_string(), 1000);
+        let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo1).await.unwrap();
 
         // Try to create job with a photo_id that doesn't belong to this task
@@ -494,7 +494,7 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let photo1 = Photo::new(task_id, "photo1.jpg".to_string(), 1000);
+        let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo1).await.unwrap();
 
         // Create multiple jobs
@@ -667,6 +667,7 @@ mod tests {
             photo1,
             crate::models::PhotoResult {
                 photo_id: photo1,
+                client_id: None,
                 status: crate::models::PhotoResultStatus::Completed,
                 tags: Some("test tags".to_string()),
                 error: None,
@@ -678,6 +679,7 @@ mod tests {
             photo2,
             crate::models::PhotoResult {
                 photo_id: photo2,
+                client_id: None,
                 status: crate::models::PhotoResultStatus::Failed,
                 tags: None,
                 error: Some("test error".to_string()),
@@ -746,6 +748,7 @@ mod tests {
             photo1,
             crate::models::PhotoResult {
                 photo_id: photo1,
+                client_id: None,
                 status: crate::models::PhotoResultStatus::Completed,
                 tags: Some("test".to_string()),
                 error: None,
@@ -757,6 +760,7 @@ mod tests {
             photo2,
             crate::models::PhotoResult {
                 photo_id: photo2,
+                client_id: None,
                 status: crate::models::PhotoResultStatus::Failed,
                 tags: None,
                 error: Some("error".to_string()),
@@ -768,6 +772,7 @@ mod tests {
             photo3,
             crate::models::PhotoResult {
                 photo_id: photo3,
+                client_id: None,
                 status: crate::models::PhotoResultStatus::Failed,
                 tags: None,
                 error: Some("error".to_string()),
@@ -858,6 +863,7 @@ mod tests {
             photo1,
             crate::models::PhotoResult {
                 photo_id: photo1,
+                client_id: None,
                 status: crate::models::PhotoResultStatus::Completed,
                 tags: Some("test".to_string()),
                 error: None,
@@ -903,6 +909,7 @@ mod tests {
             photo1,
             crate::models::PhotoResult {
                 photo_id: photo1,
+                client_id: None,
                 status: crate::models::PhotoResultStatus::Failed,
                 tags: None,
                 error: Some("timeout".to_string()),

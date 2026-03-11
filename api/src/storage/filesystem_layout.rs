@@ -274,7 +274,7 @@ mod tests {
     }
 
     fn create_test_photo(task_id: Uuid) -> Photo {
-        Photo::new(task_id, "test.jpg".to_string(), 1000)
+        Photo::new(task_id, None, "test.jpg".to_string(), 1000)
     }
 
     fn create_test_job(task_id: Uuid) -> Job {

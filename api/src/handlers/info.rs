@@ -112,7 +112,7 @@ mod tests {
         let task2 = Task::new("Task 2".to_string(), "task 2".to_string());
         ts.state.task_store.create(task2).await.unwrap();
 
-        let photo = Photo::new(task1_id, "photo1.jpg".to_string(), 5000);
+        let photo = Photo::new(task1_id, None, "photo1.jpg".to_string(), 5000);
         ts.state.photo_store.create(photo).await.unwrap();
 
         let job = Job::new(task1_id, "test".to_string(), vec![]);
