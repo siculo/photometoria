@@ -15,6 +15,7 @@ local ServerConnection = require 'ServerConnection'
 local PhotoValidator = require 'PhotoValidator'
 local TaskDialogUI = require 'TaskDialogUI'
 local Guard = require 'Guard'
+local TaskUtils = require 'TaskUtils'
 
 local bind = LrView.bind
 local LABEL_WIDTH = 80
@@ -79,24 +80,30 @@ local function buildTaskPopupItems(tasks)
 end
 
 --- Initializes all bindable properties.
-local function initProperties(props, validation, serverData, tasks)
+local function initProperties(props, validation, serverData, tasks, prefs)
 	props.uploadableCount = validation.uploadable
 	props.photoSummary = PhotoValidator.formatSummary(validation)
 	props.storageFree = LOC("$$$/Photometoria/AddPhotos/StorageFree=Available storage: ^1", serverData.storageFree)
 
-	props.destination = 'new'
-	props.newTaskVisible = true
-	props.existingTaskVisible = false
+	local hasTasks = (#tasks > 0)
+	props.destination = hasTasks and 'existing' or 'new'
+	props.newTaskVisible = not hasTasks
+	props.existingTaskVisible = hasTasks
 
 	props.taskName = ''
 	props.taskContext = ''
 
-	props.existingTask = 1
 	props.existingTaskItems = buildTaskPopupItems(tasks)
+	props.existingTask = TaskUtils.findTaskIndex(tasks, prefs.lastActiveTaskId) or 1
 	props.existingTaskSummary = ''
 	props.existingTaskAfterSummary = ''
 
 	props.confirmEnabled = false
+
+	if hasTasks then
+		updateExistingTaskSummary(props, tasks)
+		updateConfirmEnabled(props)
+	end
 end
 
 --- Builds the photo summary section.
@@ -125,6 +132,51 @@ local function buildDestinationSection(f, props)
 		title = LOC "$$$/Photometoria/AddPhotos/DestSectionTitle=Destination",
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
+
+		f:radio_button {
+			title = LOC "$$$/Photometoria/AddPhotos/ExistingTask=Add to existing task",
+			value = bind 'destination',
+			checked_value = 'existing',
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = LABEL_WIDTH },
+
+			f:popup_menu {
+				value = bind 'existingTask',
+				items = bind 'existingTaskItems',
+				enabled = bind 'existingTaskVisible',
+				width = 250,
+			},
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = LABEL_WIDTH },
+
+			f:static_text {
+				title = bind 'existingTaskSummary',
+				fill_horizontal = 1,
+				font = '<system/small>',
+			},
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = LABEL_WIDTH },
+
+			f:static_text {
+				title = bind 'existingTaskAfterSummary',
+				fill_horizontal = 1,
+				font = '<system/small>',
+			},
+		},
+
+		f:spacer { height = 8 },
 
 		f:radio_button {
 			title = LOC "$$$/Photometoria/AddPhotos/NewTask=Add to new task",
@@ -178,51 +230,6 @@ local function buildDestinationSection(f, props)
 				fill_horizontal = 1,
 				font = '<system/small>',
 				enabled = bind 'newTaskVisible',
-			},
-		},
-
-		f:spacer { height = 8 },
-
-		f:radio_button {
-			title = LOC "$$$/Photometoria/AddPhotos/ExistingTask=Add to existing task",
-			value = bind 'destination',
-			checked_value = 'existing',
-		},
-
-		f:row {
-			spacing = f:label_spacing(),
-
-			f:spacer { width = LABEL_WIDTH },
-
-			f:popup_menu {
-				value = bind 'existingTask',
-				items = bind 'existingTaskItems',
-				enabled = bind 'existingTaskVisible',
-				width = 250,
-			},
-		},
-
-		f:row {
-			spacing = f:label_spacing(),
-
-			f:spacer { width = LABEL_WIDTH },
-
-			f:static_text {
-				title = bind 'existingTaskSummary',
-				fill_horizontal = 1,
-				font = '<system/small>',
-			},
-		},
-
-		f:row {
-			spacing = f:label_spacing(),
-
-			f:spacer { width = LABEL_WIDTH },
-
-			f:static_text {
-				title = bind 'existingTaskAfterSummary',
-				fill_horizontal = 1,
-				font = '<system/small>',
 			},
 		},
 	}
@@ -319,7 +326,7 @@ LrTasks.startAsyncTask(function()
 		local f = LrView.osFactory()
 
 		local props = LrBinding.makePropertyTable(context)
-		initProperties(props, validation, data, tasks)
+		initProperties(props, validation, data, tasks, prefs)
 
 		props:addObserver('destination', function(propTable, key, value)
 			propTable.newTaskVisible = (value == 'new')
@@ -366,6 +373,7 @@ LrTasks.startAsyncTask(function()
 				progressScope:done()
 
 				if ok then
+					prefs.lastActiveTaskId = taskData.task_id
 					done = true
 					openTaskDialog = true
 				elseif taskData.duplicate then
@@ -382,6 +390,10 @@ LrTasks.startAsyncTask(function()
 					)
 				end
 			else
+				local selectedTask = tasks[props.existingTask]
+				if selectedTask then
+					prefs.lastActiveTaskId = selectedTask.task_id
+				end
 				done = true
 				openTaskDialog = true
 			end

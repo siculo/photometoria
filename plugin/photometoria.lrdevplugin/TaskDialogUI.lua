@@ -6,8 +6,10 @@ local LrDialogs = import 'LrDialogs'
 local LrView = import 'LrView'
 local LrColor = import 'LrColor'
 local LrBinding = import 'LrBinding'
+local LrPrefs = import 'LrPrefs'
 
 local ServerConnection = require 'ServerConnection'
+local TaskUtils = require 'TaskUtils'
 local NewJobDialog = require 'NewJobDialog'
 local MockData = require 'MockData'
 
@@ -198,7 +200,8 @@ end
 
 --- Initializes all bindable properties.
 local function initProperties(props, tasks)
-	props.selectedTask = (#tasks > 0) and 1 or nil
+	local prefs = LrPrefs.prefsForPlugin()
+	props.selectedTask = TaskUtils.findTaskIndex(tasks, prefs.lastActiveTaskId) or (#tasks > 0 and 1 or nil)
 	props.taskPopupItems = buildTaskPopupItems(tasks)
 
 	props.taskSelected = (#tasks > 0)
@@ -332,6 +335,12 @@ local function buildTaskSelectorRow(f, props)
 			title = LOC "$$$/Photometoria/Button/Delete=Delete",
 			enabled = bind 'deleteEnabled',
 			action = function()
+				-- TODO: implement actual deletion, then clear lastActiveTaskId:
+				-- local prefs = LrPrefs.prefsForPlugin()
+				-- local task = tasks[props.selectedTask]
+				-- if task and prefs.lastActiveTaskId == task.task_id then
+				--     prefs.lastActiveTaskId = nil
+				-- end
 				LrDialogs.message(
 					LOC "$$$/Photometoria/Mock/Delete=Delete Task",
 					LOC "$$$/Photometoria/Mock/DeleteMsg=This would open the task deletion confirmation dialog.",
@@ -400,6 +409,7 @@ local function buildTaskSection(f, props)
 				enabled = bind 'contextModified',
 				title = LOC "$$$/Photometoria/Button/SaveContext=Save",
 				action = function()
+					-- TODO: send context update to server, then update lastActiveTaskId
 					props.contextSavedText = props.contextText
 					props.contextModified = false
 					LrDialogs.message(
@@ -423,6 +433,8 @@ local function buildTaskSection(f, props)
 end
 
 --- Builds the job detail panel (right column of jobs section).
+--- TODO: job mutation actions (start, retry, restart, cancel, remove) should
+--- update prefs.lastActiveTaskId with the current task's task_id.
 local function buildJobDetailPanel(f, props)
 	return f:column {
 		visible = bind 'jobDetailVisible',
@@ -623,8 +635,8 @@ function TaskDialogUI.showDialog(host, tasks)
 			propTable.contextModified = (value ~= propTable.contextSavedText)
 		end)
 
-		if #tasks > 0 then
-			onTaskSelected(props, tasks, 1)
+		if props.selectedTask then
+			onTaskSelected(props, tasks, props.selectedTask)
 		end
 
 		LrDialogs.presentModalDialog {
