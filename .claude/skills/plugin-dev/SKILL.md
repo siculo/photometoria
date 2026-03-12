@@ -194,6 +194,18 @@ A reusable progress bar is implemented in `TaskDialog.lua` using:
 - This applies to all observer callbacks, not just `selectedTask` — any
   `props:addObserver(key, fn)` where `fn` calls an async SDK function will fail.
 
+**`push_button` action handlers cannot call async SDK functions directly:**
+
+- Button action callbacks inside `presentModalDialog` run in a context where
+  `LrHttp.get`, `LrHttp.post`, and other I/O SDK functions **silently fail** —
+  no error is raised, the call simply does nothing.
+- Same yield restriction as `pcall` and `addObserver`.
+- **Workaround**: wrap the server call in `LrTasks.startAsyncTask` inside the
+  action handler. The dialog stays open and property bindings remain active, so
+  UI updates from within the async task work normally.
+- Capture property values as locals **before** entering `startAsyncTask` to
+  avoid race conditions if the user edits fields while the request is in flight.
+
 **`LrLibraryMenuItems` cannot be dynamically enabled/disabled:**
 
 - `Info.lua` is a static table evaluated once at plugin load.
