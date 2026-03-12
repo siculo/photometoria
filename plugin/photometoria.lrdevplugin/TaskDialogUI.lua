@@ -674,11 +674,11 @@ local function buildJobDetailPanel(f, props)
 		f:row {
 			spacing = f:label_spacing(),
 
-			f:edit_field {
-				value = bind('jobDetail_pb_bar'),
+			f:static_text {
+				title = bind('jobDetail_pb_bar'),
 				visible = bind 'jobProgressVisible',
 				font = { name = 'Courier New', size = 11 },
-				enabled = false,
+				text_color = LrColor(0.3, 0.3, 0.3),
 				fill_horizontal = 1,
 			},
 
