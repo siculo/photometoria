@@ -85,8 +85,10 @@ end
 
 --- Returns a text status icon for a job status.
 local function jobStatusIcon(status)
-	if status == 'processing' or status == 'queued' then
+	if status == 'processing' then
 		return '\226\159\179'
+	elseif status == 'queued' then
+		return '\226\143\179'
 	elseif status == 'completed' then
 		return '\226\156\147'
 	elseif status == 'failed' then
