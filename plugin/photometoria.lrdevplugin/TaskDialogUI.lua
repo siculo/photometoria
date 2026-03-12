@@ -642,7 +642,7 @@ end
 --- Builds the job detail panel (right column of jobs section).
 --- TODO: job mutation actions (start, retry, restart, cancel, remove) should
 --- update prefs.lastActiveTaskId with the current task's task_id.
-local function buildJobDetailPanel(f, props)
+local function buildJobDetailPanel(f, props, host, tasks)
 	return f:column {
 		visible = bind 'jobDetailVisible',
 		fill_horizontal = 1,
@@ -760,11 +760,39 @@ local function buildJobDetailPanel(f, props)
 				enabled = bind 'btnRemoveEnabled',
 				title = '\240\159\151\145 ' .. LOC "$$$/Photometoria/Button/RemoveJob=Elimina",
 				action = function()
-					LrDialogs.message(
-						LOC "$$$/Photometoria/Mock/RemoveJob=Elimina",
-						LOC "$$$/Photometoria/Mock/RemoveJobMsg=This would open the job removal confirmation dialog.",
-						'info'
+					local task = tasks[props.selectedTask]
+					local jobIndex = props.selectedJobValue and props.selectedJobValue[1]
+					local job = jobIndex and currentJobs[jobIndex]
+					if not task or not job then
+						return
+					end
+
+					local confirmed = LrDialogs.confirm(
+						LOC "$$$/Photometoria/Confirm/RemoveJobTitle=Delete job",
+						LOC("$$$/Photometoria/Confirm/RemoveJobMsg=Delete job ^1? This action cannot be undone.", job.model)
 					)
+					if confirmed ~= 'ok' then
+						return
+					end
+
+					LrTasks.startAsyncTask(function()
+						local ok, data = ServerConnection.deleteJob(host, job.job_id)
+						if ok then
+							local jOk, jobs = ServerConnection.listTaskJobs(host, task.task_id)
+							if jOk then
+								jobsByTaskId[task.task_id] = jobs
+								task.job_count = #jobs
+							end
+							props.taskPopupItems = buildTaskPopupItems(tasks)
+							refreshJobsUI(props, tasks)
+						else
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								data.message,
+								'critical'
+							)
+						end
+					end)
 				end,
 			},
 		},
@@ -855,7 +883,7 @@ local function buildJobsSection(f, props, host, tasks)
 				},
 			},
 
-			buildJobDetailPanel(f, props),
+			buildJobDetailPanel(f, props, host, tasks),
 		},
 	}
 end

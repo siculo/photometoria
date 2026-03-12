@@ -98,6 +98,9 @@
 "$$$/Photometoria/NewJob/CostConfirmMsg=Il provider ^1 ha un costo stimato di ~^2 per ^3 foto. Continuare?"
 "$$$/Photometoria/NewJob/NoModels=Nessun modello disponibile per questo provider"
 "$$$/Photometoria/Error/NoProviders=Nessun provider AI configurato sul server."
+"$$$/Photometoria/Error/JobNotFound=Job non trovato sul server."
+"$$$/Photometoria/Confirm/RemoveJobTitle=Elimina job"
+"$$$/Photometoria/Confirm/RemoveJobMsg=Eliminare il job ^1? Questa azione non può essere annullata."
 
 "$$$/Photometoria/AddPhotos/Title=Aggiungi foto"
 "$$$/Photometoria/AddPhotos/AlreadyRunning=Aggiunta foto già in corso."

@@ -252,6 +252,38 @@ function ServerConnection.createJob(host, taskId, model)
 	}
 end
 
+--- Deletes a finished job. Must be called from within an async task.
+--- Returns `(true, nil)` on success or `(false, data)` on failure.
+function ServerConnection.deleteJob(host, jobId)
+	local url = 'http://' .. host .. '/api/jobs/' .. jobId
+
+	local headers = {
+		{ field = 'Content-Type', value = 'application/json' },
+	}
+
+	local respBody, respHeaders = LrHttp.post(url, '', headers, 'DELETE', TIMEOUT_SECONDS)
+
+	if not respBody or not respHeaders then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/CannotReach=Could not reach server at ^1", host),
+		}
+	end
+
+	if respHeaders.status == 204 or respHeaders.status == 200 then
+		return true, nil
+	end
+
+	if respHeaders.status == 404 then
+		return false, {
+			message = LOC "$$$/Photometoria/Error/JobNotFound=Job not found on the server.",
+		}
+	end
+
+	return false, {
+		message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(respHeaders.status)),
+	}
+end
+
 --- Uploads photos to a task via multipart form data. Must be called from an async task.
 --- files: array of { clientId, filePath, fileName }.
 --- Returns `(true, data)` on success or `(false, error)` on failure.
