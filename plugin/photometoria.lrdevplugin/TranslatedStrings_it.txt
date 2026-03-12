@@ -101,6 +101,8 @@
 "$$$/Photometoria/Error/JobNotFound=Job non trovato sul server."
 "$$$/Photometoria/Confirm/RemoveJobTitle=Elimina job"
 "$$$/Photometoria/Confirm/RemoveJobMsg=Eliminare il job ^1? Questa azione non può essere annullata."
+"$$$/Photometoria/Confirm/CancelJobTitle=Interrompi job"
+"$$$/Photometoria/Confirm/CancelJobMsg=Interrompere il job ^1? Le foto non ancora processate verranno saltate."
 
 "$$$/Photometoria/AddPhotos/Title=Aggiungi foto"
 "$$$/Photometoria/AddPhotos/AlreadyRunning=Aggiunta foto già in corso."

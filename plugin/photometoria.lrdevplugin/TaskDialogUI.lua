@@ -748,11 +748,37 @@ local function buildJobDetailPanel(f, props, host, tasks)
 				enabled = bind 'btnCancelEnabled',
 				title = '\226\156\149 ' .. LOC "$$$/Photometoria/Button/CancelJob=Interrompi",
 				action = function()
-					LrDialogs.message(
-						LOC "$$$/Photometoria/Mock/CancelJob=Interrompi",
-						LOC "$$$/Photometoria/Mock/CancelJobMsg=This would open the job cancellation confirmation dialog.",
-						'info'
+					local task = tasks[props.selectedTask]
+					local jobIndex = props.selectedJobValue and props.selectedJobValue[1]
+					local job = jobIndex and currentJobs[jobIndex]
+					if not task or not job then
+						return
+					end
+
+					local confirmed = LrDialogs.confirm(
+						LOC "$$$/Photometoria/Confirm/CancelJobTitle=Cancel job",
+						LOC("$$$/Photometoria/Confirm/CancelJobMsg=Cancel job ^1? Photos not yet processed will be skipped.", job.model)
 					)
+					if confirmed ~= 'ok' then
+						return
+					end
+
+					LrTasks.startAsyncTask(function()
+						local ok, data = ServerConnection.cancelJob(host, job.job_id)
+						if ok then
+							local jOk, jobs = ServerConnection.listTaskJobs(host, task.task_id)
+							if jOk then
+								jobsByTaskId[task.task_id] = jobs
+							end
+							refreshJobsUI(props, tasks)
+						else
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								data.message,
+								'critical'
+							)
+						end
+					end)
 				end,
 			},
 
