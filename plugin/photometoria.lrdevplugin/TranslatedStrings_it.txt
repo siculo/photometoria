@@ -94,6 +94,8 @@
 "$$$/Photometoria/NewJob/Start=Avvia job"
 "$$$/Photometoria/NewJob/CostConfirmTitle=Conferma costo"
 "$$$/Photometoria/NewJob/CostConfirmMsg=Il provider ^1 ha un costo stimato di ~^2 per ^3 foto. Continuare?"
+"$$$/Photometoria/NewJob/NoModels=Nessun modello disponibile per questo provider"
+"$$$/Photometoria/Error/NoProviders=Nessun provider AI configurato sul server."
 
 "$$$/Photometoria/AddPhotos/Title=Aggiungi foto"
 "$$$/Photometoria/AddPhotos/AlreadyRunning=Aggiunta foto già in corso."

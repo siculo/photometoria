@@ -194,6 +194,64 @@ function ServerConnection.listTaskJobs(host, taskId)
 	return getJson(host, '/api/tasks/' .. taskId .. '/jobs')
 end
 
+--- Retrieves the list of AI providers. Must be called from within an async task.
+--- Returns `(true, data)` on success or `(false, error)` on failure.
+--- On success, data contains `providers` (array of {name}) and `default` (string or nil).
+function ServerConnection.listProviders(host)
+	return getJson(host, '/api/providers')
+end
+
+--- Retrieves details for a single provider, including models and availability.
+--- Must be called from within an async task.
+--- Returns `(true, data)` on success or `(false, error)` on failure.
+--- On success, data contains `name` and `models` (array of {name, description, available}).
+function ServerConnection.providerDetails(host, providerName)
+	return getJson(host, '/api/providers/' .. providerName)
+end
+
+--- Creates a new job for a task. Must be called from within an async task.
+--- Returns `(true, data)` on success or `(false, data)` on failure.
+--- On success, data contains job_id, task_id, status, model, photo_count, created_at.
+--- On failure, data contains `message` with the error description.
+function ServerConnection.createJob(host, taskId, model)
+	local url = 'http://' .. host .. '/api/tasks/' .. taskId .. '/jobs'
+	local body = JSON.encode({ model = model })
+
+	local headers = {
+		{ field = 'Content-Type', value = 'application/json' },
+	}
+
+	local respBody, respHeaders = LrHttp.post(url, body, headers, 'POST', TIMEOUT_SECONDS)
+
+	if not respBody or not respHeaders then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/CannotReach=Could not reach server at ^1", host),
+		}
+	end
+
+	if respHeaders.status == 200 or respHeaders.status == 201 then
+		local data = JSON.decode(respBody)
+		return true, data or {}
+	end
+
+	if respHeaders.status == 404 then
+		return false, {
+			message = LOC "$$$/Photometoria/Error/TaskNotFound=Task not found on the server.",
+		}
+	end
+
+	if respHeaders.status == 400 then
+		local data = JSON.decode(respBody)
+		if data and data.message then
+			return false, { message = data.message }
+		end
+	end
+
+	return false, {
+		message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(respHeaders.status)),
+	}
+end
+
 --- Uploads photos to a task via multipart form data. Must be called from an async task.
 --- files: array of { clientId, filePath, fileName }.
 --- Returns `(true, data)` on success or `(false, error)` on failure.

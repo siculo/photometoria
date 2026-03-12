@@ -5,16 +5,33 @@ local LrFunctionContext = import 'LrFunctionContext'
 local LrDialogs = import 'LrDialogs'
 local LrView = import 'LrView'
 local LrBinding = import 'LrBinding'
+local LrColor = import 'LrColor'
 
 local bind = LrView.bind
 
 local NewJobDialog = {}
 
---- Builds popup_menu items from a provider's model list.
+--- Returns the first available model name for a provider, or nil.
+local function firstAvailableModel(provider)
+	for _, model in ipairs(provider.models) do
+		if model.available then
+			return model.name
+		end
+	end
+	return nil
+end
+
+--- Builds popup_menu items from a provider's available models.
 local function buildModelItems(provider)
 	local items = {}
 	for _, model in ipairs(provider.models) do
-		items[#items + 1] = { title = model, value = model }
+		if model.available then
+			local title = model.name
+			if model.description then
+				title = title .. ' \226\128\148 ' .. model.description
+			end
+			items[#items + 1] = { title = title, value = model.name }
+		end
 	end
 	return items
 end
@@ -28,32 +45,37 @@ local function buildProviderItems(providers)
 	return items
 end
 
---- Formats the cost info text for a provider, or empty string if local.
-local function formatCostInfo(provider, photoCount)
-	if not provider.estimatedCost then
-		return ''
-	end
-	return LOC(
-		"$$$/Photometoria/NewJob/CostEstimate=Estimated cost: ~^1 for ^2 photos",
-		provider.estimatedCost,
-		photoCount
-	)
-end
-
 --- Shows the New Job dialog. Returns {provider, model} or nil if cancelled.
-function NewJobDialog.showDialog(providers, photoCount)
+--- providers: array of {name, models: [{name, description, available}]}
+--- photoCount: number of photos in the task
+--- defaultProviderName: optional provider name to pre-select
+function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 	local result = nil
+
+	local defaultIndex = 1
+	if defaultProviderName then
+		for i, p in ipairs(providers) do
+			if p.name == defaultProviderName then
+				defaultIndex = i
+				break
+			end
+		end
+	end
 
 	LrFunctionContext.callWithContext('NewJobDialog', function(context)
 		local f = LrView.osFactory()
 		local props = LrBinding.makePropertyTable(context)
 
+		local firstProvider = providers[defaultIndex]
+		local modelItems = buildModelItems(firstProvider)
+		local firstModel = firstAvailableModel(firstProvider)
+
 		props.providerItems = buildProviderItems(providers)
-		props.selectedProvider = 1
-		props.modelItems = buildModelItems(providers[1])
-		props.selectedModel = providers[1].models[1]
-		props.costInfoText = formatCostInfo(providers[1], photoCount)
-		props.costInfoVisible = (providers[1].estimatedCost ~= nil)
+		props.selectedProvider = defaultIndex
+		props.modelItems = modelItems
+		props.selectedModel = firstModel
+		props.noModelsVisible = (#modelItems == 0)
+		props.confirmEnabled = (firstModel ~= nil)
 		props.photoSummary = string.format(
 			'%d %s',
 			photoCount,
@@ -65,10 +87,16 @@ function NewJobDialog.showDialog(providers, photoCount)
 			if not provider then
 				return
 			end
-			propTable.modelItems = buildModelItems(provider)
-			propTable.selectedModel = provider.models[1]
-			propTable.costInfoText = formatCostInfo(provider, photoCount)
-			propTable.costInfoVisible = (provider.estimatedCost ~= nil)
+			local items = buildModelItems(provider)
+			local model = firstAvailableModel(provider)
+			propTable.modelItems = items
+			propTable.selectedModel = model
+			propTable.noModelsVisible = (#items == 0)
+			propTable.confirmEnabled = (model ~= nil)
+		end)
+
+		props:addObserver('selectedModel', function(propTable, key, value)
+			propTable.confirmEnabled = (value ~= nil)
 		end)
 
 		local contents = f:column {
@@ -112,10 +140,11 @@ function NewJobDialog.showDialog(providers, photoCount)
 				},
 
 				f:static_text {
-					title = bind 'costInfoText',
-					visible = bind 'costInfoVisible',
+					title = LOC "$$$/Photometoria/NewJob/NoModels=No available models for this provider",
+					visible = bind 'noModelsVisible',
 					fill_horizontal = 1,
 					font = '<system/small>',
+					text_color = LrColor(0.85, 0.2, 0.2),
 				},
 			},
 
@@ -129,24 +158,16 @@ function NewJobDialog.showDialog(providers, photoCount)
 			title = LOC "$$$/Photometoria/NewJob/Title=New Job",
 			contents = contents,
 			actionVerb = '\226\150\182 ' .. LOC "$$$/Photometoria/NewJob/Start=Start Job",
+			actionBinding = {
+				enabled = {
+					bind_to_object = props,
+					key = 'confirmEnabled',
+				},
+			},
 		}
 
 		if dialogResult == 'ok' then
 			local provider = providers[props.selectedProvider]
-			if provider.estimatedCost then
-				local confirmed = LrDialogs.confirm(
-					LOC "$$$/Photometoria/NewJob/CostConfirmTitle=Cost confirmation",
-					LOC(
-						"$$$/Photometoria/NewJob/CostConfirmMsg=The provider ^1 has an estimated cost of ~^2 for ^3 photos. Continue?",
-						provider.name,
-						provider.estimatedCost,
-						photoCount
-					)
-				)
-				if confirmed ~= 'ok' then
-					return
-				end
-			end
 			result = {
 				provider = provider.name,
 				model = props.selectedModel,

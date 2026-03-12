@@ -12,7 +12,6 @@ local LrTasks = import 'LrTasks'
 local ServerConnection = require 'ServerConnection'
 local TaskUtils = require 'TaskUtils'
 local NewJobDialog = require 'NewJobDialog'
-local MockData = require 'MockData'
 
 local TaskDialogUI = {}
 
@@ -178,6 +177,8 @@ end
 
 local currentJobs = {}
 local jobsByTaskId = {}
+local providers = {}
+local defaultProviderName = nil
 local onJobSelected
 
 --- Fetches jobs for all tasks and stores them in jobsByTaskId.
@@ -186,6 +187,23 @@ local function prefetchAllJobs(host, tasks)
 	for _, task in ipairs(tasks) do
 		local ok, jobs = ServerConnection.listTaskJobs(host, task.task_id)
 		jobsByTaskId[task.task_id] = ok and jobs or {}
+	end
+end
+
+--- Fetches provider list and model details, stores in module-level tables.
+local function prefetchProviders(host)
+	providers = {}
+	defaultProviderName = nil
+	local ok, data = ServerConnection.listProviders(host)
+	if not ok then
+		return
+	end
+	defaultProviderName = data.default
+	for _, entry in ipairs(data.providers or {}) do
+		local detailOk, detail = ServerConnection.providerDetails(host, entry.name)
+		if detailOk then
+			providers[#providers + 1] = detail
+		end
 	end
 end
 
@@ -594,7 +612,7 @@ local function buildJobDetailPanel(f, props)
 end
 
 --- Builds the jobs section with master-detail layout.
-local function buildJobsSection(f, props, tasks)
+local function buildJobsSection(f, props, host, tasks)
 	return f:group_box {
 		title = LOC "$$$/Photometoria/Dialog/JobsTitle=Task jobs",
 		spacing = f:control_spacing(),
@@ -625,14 +643,43 @@ local function buildJobsSection(f, props, tasks)
 						if not task then
 							return
 						end
+
+						if #providers == 0 then
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC "$$$/Photometoria/Error/NoProviders=No AI providers configured on the server.",
+								'warning'
+							)
+							return
+						end
+
 						local selection = NewJobDialog.showDialog(
-							MockData.providers,
-							task.photo_count or 0
+							providers,
+							task.photo_count or 0,
+							defaultProviderName
 						)
 						if not selection then
 							return
 						end
-						onTaskSelected(props, tasks, props.selectedTask)
+
+						LrTasks.startAsyncTask(function()
+							local ok, data = ServerConnection.createJob(host, task.task_id, selection.model)
+							if ok then
+								local jOk, jobs = ServerConnection.listTaskJobs(host, task.task_id)
+								if jOk then
+									jobsByTaskId[task.task_id] = jobs
+									task.job_count = #jobs
+								end
+								props.taskPopupItems = buildTaskPopupItems(tasks)
+								onTaskSelected(props, tasks, props.selectedTask)
+							else
+								LrDialogs.message(
+									LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+									data.message,
+									'critical'
+								)
+							end
+						end)
 					end,
 				},
 			},
@@ -659,7 +706,7 @@ local function buildContents(f, props, host, tasks)
 
 		buildTaskSection(f, props, host, tasks),
 
-		buildJobsSection(f, props, tasks),
+		buildJobsSection(f, props, host, tasks),
 	}
 end
 
@@ -668,6 +715,7 @@ end
 --- @param tasks table Array of TaskSummary from the server
 function TaskDialogUI.showDialog(host, tasks)
 	prefetchAllJobs(host, tasks)
+	prefetchProviders(host)
 
 	LrFunctionContext.callWithContext('TaskDialog', function(context)
 		local f = LrView.osFactory()
