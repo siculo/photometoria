@@ -252,6 +252,47 @@ function ServerConnection.createJob(host, taskId, model)
 	}
 end
 
+--- Retries failed/unprocessed photos from a job. Must be called from within an async task.
+--- Returns `(true, data)` on success or `(false, data)` on failure.
+--- On success, data contains the new retry job (job_id, task_id, status, model, photo_count).
+function ServerConnection.retryJob(host, jobId)
+	local url = 'http://' .. host .. '/api/jobs/' .. jobId .. '/retry'
+
+	local headers = {
+		{ field = 'Content-Type', value = 'application/json' },
+	}
+
+	local respBody, respHeaders = LrHttp.post(url, '', headers, 'POST', TIMEOUT_SECONDS)
+
+	if not respBody or not respHeaders then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/CannotReach=Could not reach server at ^1", host),
+		}
+	end
+
+	if respHeaders.status == 200 or respHeaders.status == 201 then
+		local data = JSON.decode(respBody)
+		return true, data or {}
+	end
+
+	if respHeaders.status == 404 then
+		return false, {
+			message = LOC "$$$/Photometoria/Error/JobNotFound=Job not found on the server.",
+		}
+	end
+
+	if respHeaders.status == 400 then
+		local data = JSON.decode(respBody)
+		if data and data.message then
+			return false, { message = data.message }
+		end
+	end
+
+	return false, {
+		message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(respHeaders.status)),
+	}
+end
+
 --- Cancels an active job. Must be called from within an async task.
 --- Returns `(true, data)` on success or `(false, data)` on failure.
 function ServerConnection.cancelJob(host, jobId)

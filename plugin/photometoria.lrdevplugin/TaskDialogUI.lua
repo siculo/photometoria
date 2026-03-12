@@ -373,7 +373,7 @@ onJobSelected = function(props)
 		ProgressBar.clear(props, 'jobDetail_pb')
 	end
 
-	props.btnApplyEnabled = (job.status == 'completed' or job.status == 'failed')
+	props.btnApplyEnabled = (job.status == 'completed' or job.status == 'failed' or job.status == 'cancelled')
 	props.btnRetryEnabled = (job.status == 'failed')
 	props.btnRestartEnabled = (job.status == 'cancelled')
 	props.btnCancelEnabled = (job.status == 'processing' or job.status == 'queued')
@@ -724,11 +724,50 @@ local function buildJobDetailPanel(f, props, host, tasks)
 				enabled = bind 'btnRetryEnabled',
 				title = '\226\154\160 ' .. LOC "$$$/Photometoria/Button/RetryFailed=Ritenta falliti",
 				action = function()
-					LrDialogs.message(
-						LOC "$$$/Photometoria/Mock/RetryFailed=Ritenta falliti",
-						LOC "$$$/Photometoria/Mock/RetryFailedMsg=This would open the retry failed confirmation dialog.",
-						'info'
+					local task = tasks[props.selectedTask]
+					local jobIndex = props.selectedJobValue and props.selectedJobValue[1]
+					local job = jobIndex and currentJobs[jobIndex]
+					if not task or not job then
+						return
+					end
+
+					local confirmed = LrDialogs.confirm(
+						LOC "$$$/Photometoria/Confirm/RetryJobTitle=Retry failed photos",
+						LOC("$$$/Photometoria/Confirm/RetryJobMsg=Create a new job to retry failed photos from ^1?", job.model)
 					)
+					if confirmed ~= 'ok' then
+						return
+					end
+
+					LrTasks.startAsyncTask(function()
+						local ok, data = ServerConnection.retryJob(host, job.job_id)
+						if ok then
+							local newJobId = data.job_id
+							local jOk, jobs = ServerConnection.listTaskJobs(host, task.task_id)
+							if jOk then
+								jobsByTaskId[task.task_id] = jobs
+								task.job_count = #jobs
+							end
+							props.taskPopupItems = buildTaskPopupItems(tasks)
+							refreshJobsUI(props, tasks)
+
+							if newJobId then
+								local freshJobs = jobsByTaskId[task.task_id] or {}
+								for i, j in ipairs(freshJobs) do
+									if j.job_id == newJobId then
+										props.selectedJobValue = { i }
+										break
+									end
+								end
+							end
+						else
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								data.message,
+								'critical'
+							)
+						end
+					end)
 				end,
 			},
 
@@ -736,11 +775,50 @@ local function buildJobDetailPanel(f, props, host, tasks)
 				enabled = bind 'btnRestartEnabled',
 				title = '\226\159\179 ' .. LOC "$$$/Photometoria/Button/Restart=Riavvia",
 				action = function()
-					LrDialogs.message(
-						LOC "$$$/Photometoria/Mock/Restart=Riavvia",
-						LOC "$$$/Photometoria/Mock/RestartMsg=This would open the restart confirmation dialog.",
-						'info'
+					local task = tasks[props.selectedTask]
+					local jobIndex = props.selectedJobValue and props.selectedJobValue[1]
+					local job = jobIndex and currentJobs[jobIndex]
+					if not task or not job then
+						return
+					end
+
+					local confirmed = LrDialogs.confirm(
+						LOC "$$$/Photometoria/Confirm/RestartJobTitle=Restart job",
+						LOC("$$$/Photometoria/Confirm/RestartJobMsg=Create a new job to reprocess unfinished photos from ^1?", job.model)
 					)
+					if confirmed ~= 'ok' then
+						return
+					end
+
+					LrTasks.startAsyncTask(function()
+						local ok, data = ServerConnection.retryJob(host, job.job_id)
+						if ok then
+							local newJobId = data.job_id
+							local jOk, jobs = ServerConnection.listTaskJobs(host, task.task_id)
+							if jOk then
+								jobsByTaskId[task.task_id] = jobs
+								task.job_count = #jobs
+							end
+							props.taskPopupItems = buildTaskPopupItems(tasks)
+							refreshJobsUI(props, tasks)
+
+							if newJobId then
+								local freshJobs = jobsByTaskId[task.task_id] or {}
+								for i, j in ipairs(freshJobs) do
+									if j.job_id == newJobId then
+										props.selectedJobValue = { i }
+										break
+									end
+								end
+							end
+						else
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								data.message,
+								'critical'
+							)
+						end
+					end)
 				end,
 			},
 

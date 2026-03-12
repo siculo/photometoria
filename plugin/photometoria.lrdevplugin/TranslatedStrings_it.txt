@@ -103,6 +103,10 @@
 "$$$/Photometoria/Confirm/RemoveJobMsg=Eliminare il job ^1? Questa azione non può essere annullata."
 "$$$/Photometoria/Confirm/CancelJobTitle=Interrompi job"
 "$$$/Photometoria/Confirm/CancelJobMsg=Interrompere il job ^1? Le foto non ancora processate verranno saltate."
+"$$$/Photometoria/Confirm/RetryJobTitle=Ritenta foto fallite"
+"$$$/Photometoria/Confirm/RetryJobMsg=Creare un nuovo job per ritentare le foto fallite di ^1?"
+"$$$/Photometoria/Confirm/RestartJobTitle=Riavvia job"
+"$$$/Photometoria/Confirm/RestartJobMsg=Creare un nuovo job per riprocessare le foto non completate di ^1?"
 
 "$$$/Photometoria/AddPhotos/Title=Aggiungi foto"
 "$$$/Photometoria/AddPhotos/AlreadyRunning=Aggiunta foto già in corso."
