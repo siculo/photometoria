@@ -252,6 +252,38 @@ function ServerConnection.createJob(host, taskId, model)
 	}
 end
 
+--- Deletes a task. Must be called from within an async task.
+--- Returns `(true, nil)` on success or `(false, data)` on failure.
+function ServerConnection.deleteTask(host, taskId)
+	local url = 'http://' .. host .. '/api/tasks/' .. taskId
+
+	local headers = {
+		{ field = 'Content-Type', value = 'application/json' },
+	}
+
+	local respBody, respHeaders = LrHttp.post(url, '', headers, 'DELETE', TIMEOUT_SECONDS)
+
+	if not respBody or not respHeaders then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/CannotReach=Could not reach server at ^1", host),
+		}
+	end
+
+	if respHeaders.status == 204 or respHeaders.status == 200 then
+		return true, nil
+	end
+
+	if respHeaders.status == 404 then
+		return false, {
+			message = LOC "$$$/Photometoria/Error/TaskNotFound=Task not found on the server.",
+		}
+	end
+
+	return false, {
+		message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(respHeaders.status)),
+	}
+end
+
 --- Retries failed/unprocessed photos from a job. Must be called from within an async task.
 --- Returns `(true, data)` on success or `(false, data)` on failure.
 --- On success, data contains the new retry job (job_id, task_id, status, model, photo_count).

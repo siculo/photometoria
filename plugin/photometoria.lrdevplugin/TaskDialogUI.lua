@@ -477,7 +477,7 @@ local function startJobPolling(host, tasks, props)
 end
 
 --- Builds the task selector row: popup_menu + Delete button.
-local function buildTaskSelectorRow(f, props)
+local function buildTaskSelectorRow(f, props, host, tasks)
 	return f:row {
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
@@ -493,17 +493,53 @@ local function buildTaskSelectorRow(f, props)
 			title = LOC "$$$/Photometoria/Button/Delete=Delete",
 			enabled = bind 'deleteEnabled',
 			action = function()
-				-- TODO: implement actual deletion, then clear lastActiveTaskId:
-				-- local prefs = LrPrefs.prefsForPlugin()
-				-- local task = tasks[props.selectedTask]
-				-- if task and prefs.lastActiveTaskId == task.task_id then
-				--     prefs.lastActiveTaskId = nil
-				-- end
-				LrDialogs.message(
-					LOC "$$$/Photometoria/Mock/Delete=Delete Task",
-					LOC "$$$/Photometoria/Mock/DeleteMsg=This would open the task deletion confirmation dialog.",
-					'info'
+				local task = tasks[props.selectedTask]
+				if not task then
+					return
+				end
+
+				local confirmed = LrDialogs.confirm(
+					LOC "$$$/Photometoria/Confirm/DeleteTaskTitle=Delete task",
+					LOC("$$$/Photometoria/Confirm/DeleteTaskMsg=Delete task '^1' and all its photos? This action cannot be undone.", task.name)
 				)
+				if confirmed ~= 'ok' then
+					return
+				end
+
+				LrTasks.startAsyncTask(function()
+					local ok, data = ServerConnection.deleteTask(host, task.task_id)
+					if ok then
+						local prefs = LrPrefs.prefsForPlugin()
+						if prefs.lastActiveTaskId == task.task_id then
+							prefs.lastActiveTaskId = nil
+						end
+
+						jobsByTaskId[task.task_id] = nil
+						table.remove(tasks, props.selectedTask)
+
+						props.taskPopupItems = buildTaskPopupItems(tasks)
+						props.taskSelected = (#tasks > 0)
+						props.noTasksVisible = (#tasks == 0)
+
+						if #tasks > 0 then
+							props.selectedTask = 1
+						else
+							props.selectedTask = nil
+							props.deleteEnabled = false
+							clearJobDetail(props)
+							props.taskSummary = ''
+							props.nameText = ''
+							props.contextText = ''
+							props.jobListItems = {}
+						end
+					else
+						LrDialogs.message(
+							LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+							data.message,
+							'critical'
+						)
+					end
+				end)
 			end,
 		},
 
@@ -999,7 +1035,7 @@ local function buildContents(f, props, host, tasks)
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
 
-		buildTaskSelectorRow(f, props),
+		buildTaskSelectorRow(f, props, host, tasks),
 
 		f:static_text {
 			visible = bind 'noTasksVisible',
