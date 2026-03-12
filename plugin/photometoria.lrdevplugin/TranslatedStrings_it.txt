@@ -52,6 +52,8 @@
 "$$$/Photometoria/Job/Photos=foto processate"
 "$$$/Photometoria/Job/Remaining=~^1. rimanenti"
 "$$$/Photometoria/Job/Failed=^1 fallite"
+"$$$/Photometoria/Job/Processing=Elaborazione in corso..."
+"$$$/Photometoria/Job/Waiting=In attesa..."
 "$$$/Photometoria/Job/CompletedIn=completato in ^1."
 "$$$/Photometoria/Job/Errors=errori"
 

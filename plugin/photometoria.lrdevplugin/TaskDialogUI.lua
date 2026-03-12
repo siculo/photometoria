@@ -34,8 +34,8 @@ end
 local ProgressBar = {}
 
 local PB_FILLED = '\226\150\136'
-local PB_EMPTY = ' '
-local PB_WIDTH = 20
+local PB_EMPTY = '_'
+local PB_WIDTH = 50
 
 --- Initializes the internal properties for a progress bar.
 function ProgressBar.init(props, key)
@@ -175,10 +175,26 @@ local function formatJobCompletedInfo(job)
 	return text
 end
 
+local SPINNER_FRAMES = {
+	'\226\160\139',
+	'\226\160\153',
+	'\226\160\185',
+	'\226\160\184',
+	'\226\160\188',
+	'\226\160\180',
+	'\226\160\166',
+	'\226\160\167',
+	'\226\160\135',
+	'\226\160\143',
+}
+local SPINNER_INTERVAL = 0.4
+
 local currentJobs = {}
 local jobsByTaskId = {}
 local providers = {}
 local defaultProviderName = nil
+local dialogOpen = false
+local spinnerActive = false
 local onJobSelected
 
 --- Fetches jobs for all tasks and stores them in jobsByTaskId.
@@ -210,6 +226,9 @@ end
 --- Clears the job detail panel.
 local function clearJobDetail(props)
 	props.jobDetailVisible = false
+	props.jobSpinnerVisible = false
+	props.jobWaitingVisible = false
+	spinnerActive = false
 	props.btnApplyEnabled = false
 	props.btnRetryEnabled = false
 	props.btnRestartEnabled = false
@@ -244,6 +263,9 @@ local function initProperties(props, tasks)
 	props.jobProviderModel = ''
 	props.jobStatusIndicator = ''
 	props.jobProgressVisible = false
+	props.jobSpinnerText = ''
+	props.jobSpinnerVisible = false
+	props.jobWaitingVisible = false
 	props.jobInfoText = ''
 	ProgressBar.init(props, 'jobDetail_pb')
 
@@ -322,14 +344,29 @@ onJobSelected = function(props)
 	props.jobProviderModel = job.model
 	props.jobStatusIndicator = '[' .. jobStatusIcon(job.status) .. ' ' .. jobStatusLabel(job.status) .. ']'
 
-	if job.status == 'processing' or job.status == 'queued' then
+	if job.status == 'processing' then
 		props.jobProgressVisible = true
+		props.jobSpinnerVisible = true
+		props.jobWaitingVisible = false
+		spinnerActive = true
+		props.jobInfoText = formatJobRunningInfo(job)
+		local processed = job.processed_photo_count or 0
+		local total = job.photo_count or 0
+		ProgressBar.set(props, 'jobDetail_pb', processed, total)
+	elseif job.status == 'queued' then
+		props.jobProgressVisible = true
+		props.jobSpinnerVisible = false
+		props.jobWaitingVisible = true
+		spinnerActive = false
 		props.jobInfoText = formatJobRunningInfo(job)
 		local processed = job.processed_photo_count or 0
 		local total = job.photo_count or 0
 		ProgressBar.set(props, 'jobDetail_pb', processed, total)
 	else
 		props.jobProgressVisible = false
+		props.jobSpinnerVisible = false
+		props.jobWaitingVisible = false
+		spinnerActive = false
 		props.jobInfoText = formatJobCompletedInfo(job)
 		ProgressBar.clear(props, 'jobDetail_pb')
 	end
@@ -339,6 +376,102 @@ onJobSelected = function(props)
 	props.btnRestartEnabled = (job.status == 'cancelled')
 	props.btnCancelEnabled = (job.status == 'processing' or job.status == 'queued')
 	props.btnRemoveEnabled = (job.status ~= 'processing' and job.status ~= 'queued')
+end
+
+--- Refreshes job-related UI for the current task without touching name/context.
+--- Used by the polling loop and after job creation.
+local function refreshJobsUI(props, tasks)
+	local taskIndex = props.selectedTask
+	local task = tasks[taskIndex]
+	if not task then
+		return
+	end
+
+	local jobs = jobsByTaskId[task.task_id] or {}
+	currentJobs = jobs
+
+	props.jobListItems = buildJobListItems(jobs)
+
+	local selectedIdx = props.selectedJobValue and props.selectedJobValue[1]
+	if not selectedIdx or selectedIdx > #jobs then
+		props.selectedJobValue = (#jobs > 0) and { 1 } or {}
+	end
+
+	onJobSelected(props)
+
+	local hasActiveJobs = false
+	for _, job in ipairs(jobs) do
+		if job.status == 'processing' or job.status == 'queued' then
+			hasActiveJobs = true
+			break
+		end
+	end
+
+	if hasActiveJobs then
+		props.deleteEnabled = false
+		props.deleteDisabledVisible = true
+		props.deleteDisabledReason = LOC "$$$/Photometoria/Task/CannotDelete=Task with active job \226\128\148 cannot delete"
+	else
+		props.deleteEnabled = true
+		props.deleteDisabledVisible = false
+		props.deleteDisabledReason = ''
+	end
+end
+
+local POLL_INTERVAL_SECONDS = 3
+
+--- Starts an async polling loop that updates job data for the selected task.
+--- Runs until dialogOpen becomes false.
+local function startJobPolling(host, tasks, props)
+	LrTasks.startAsyncTask(function()
+		while dialogOpen do
+			LrTasks.sleep(POLL_INTERVAL_SECONDS)
+			if not dialogOpen then
+				break
+			end
+
+			local taskIndex = props.selectedTask
+			local task = tasks[taskIndex]
+			if not task then
+				break
+			end
+
+			local hasActive = false
+			local jobs = jobsByTaskId[task.task_id] or {}
+			for _, job in ipairs(jobs) do
+				if job.status == 'processing' or job.status == 'queued' then
+					hasActive = true
+					break
+				end
+			end
+
+			if hasActive then
+				local polledTaskId = task.task_id
+				local ok, newJobs = ServerConnection.listTaskJobs(host, polledTaskId)
+				if ok then
+					jobsByTaskId[polledTaskId] = newJobs
+					local currentTask = tasks[props.selectedTask]
+					if currentTask and currentTask.task_id == polledTaskId then
+						refreshJobsUI(props, tasks)
+					end
+				end
+			end
+		end
+	end)
+
+	LrTasks.startAsyncTask(function()
+		local frame = 1
+		while dialogOpen do
+			LrTasks.sleep(SPINNER_INTERVAL)
+			if not dialogOpen then
+				break
+			end
+			if spinnerActive then
+				props.jobSpinnerText = SPINNER_FRAMES[frame]
+				frame = (frame % #SPINNER_FRAMES) + 1
+			end
+		end
+	end)
 end
 
 --- Builds the task selector row: popup_menu + Delete button.
@@ -530,12 +663,37 @@ local function buildJobDetailPanel(f, props)
 			},
 		},
 
-		f:column {
-			visible = bind 'jobProgressVisible',
+		f:static_text {
+			title = LOC "$$$/Photometoria/Job/Waiting=Waiting...",
+			visible = bind 'jobWaitingVisible',
 			fill_horizontal = 1,
-			spacing = f:control_spacing(),
+			font = '<system/small>',
+			enabled = false,
+		},
 
-			ProgressBar.build(f, 'jobDetail_pb'),
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:edit_field {
+				value = bind('jobDetail_pb_bar'),
+				visible = bind 'jobProgressVisible',
+				font = { name = 'Courier New', size = 11 },
+				enabled = false,
+				fill_horizontal = 1,
+			},
+
+			f:static_text {
+				title = bind('jobDetail_pb_pct'),
+				visible = bind 'jobProgressVisible',
+				width = 35,
+				alignment = 'right',
+			},
+
+			f:static_text {
+				title = bind 'jobSpinnerText',
+				visible = bind 'jobSpinnerVisible',
+				width_in_chars = 2,
+			},
 		},
 
 		f:static_text {
@@ -665,6 +823,7 @@ local function buildJobsSection(f, props, host, tasks)
 						LrTasks.startAsyncTask(function()
 							local ok, data = ServerConnection.createJob(host, task.task_id, selection.model)
 							if ok then
+								local newJobId = data.job_id
 								local jOk, jobs = ServerConnection.listTaskJobs(host, task.task_id)
 								if jOk then
 									jobsByTaskId[task.task_id] = jobs
@@ -672,6 +831,16 @@ local function buildJobsSection(f, props, host, tasks)
 								end
 								props.taskPopupItems = buildTaskPopupItems(tasks)
 								onTaskSelected(props, tasks, props.selectedTask)
+
+								if newJobId then
+									local freshJobs = jobsByTaskId[task.task_id] or {}
+									for i, job in ipairs(freshJobs) do
+										if job.job_id == newJobId then
+											props.selectedJobValue = { i }
+											break
+										end
+									end
+								end
 							else
 								LrDialogs.message(
 									LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
@@ -724,8 +893,22 @@ function TaskDialogUI.showDialog(host, tasks)
 		initProperties(props, tasks)
 
 		props:addObserver('selectedTask', function(propTable, key, value)
-			if value then
-				onTaskSelected(propTable, tasks, value)
+			if not value then
+				return
+			end
+			onTaskSelected(propTable, tasks, value)
+			local task = tasks[value]
+			if task then
+				LrTasks.startAsyncTask(function()
+					local ok, jobs = ServerConnection.listTaskJobs(host, task.task_id)
+					if ok then
+						jobsByTaskId[task.task_id] = jobs
+						local currentTask = tasks[propTable.selectedTask]
+						if currentTask and currentTask.task_id == task.task_id then
+							refreshJobsUI(propTable, tasks)
+						end
+					end
+				end)
 			end
 		end)
 
@@ -747,12 +930,17 @@ function TaskDialogUI.showDialog(host, tasks)
 			onTaskSelected(props, tasks, props.selectedTask)
 		end
 
+		dialogOpen = true
+		startJobPolling(host, tasks, props)
+
 		LrDialogs.presentModalDialog {
 			title = LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
 			contents = buildContents(f, props, host, tasks),
 			actionVerb = LOC "$$$/Photometoria/Button/Close=Close",
 			cancelVerb = '< exclude >',
 		}
+
+		dialogOpen = false
 	end)
 end
 
