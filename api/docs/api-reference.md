@@ -229,12 +229,13 @@ Returns detailed information about a specific task.
 
 ### PATCH /api/tasks/{task_id}
 
-Updates the task context.
+Updates the task name and/or context.
 
 **Request:**
 
 ```json
 {
+  "name": "Updated Name",
   "context": "updated context information"
 }
 ```
@@ -244,6 +245,7 @@ Updates the task context.
 ```json
 {
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "Updated Name",
   "context": "updated context information",
   "created_at": "2024-01-15T10:30:00Z"
 }
@@ -252,6 +254,7 @@ Updates the task context.
 **Errors:**
 
 - `404` - Task not found
+- `409` - Task name already taken (`name_taken`)
 
 ### DELETE /api/tasks/{task_id}
 

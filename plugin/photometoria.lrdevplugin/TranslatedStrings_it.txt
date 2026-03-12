@@ -31,6 +31,7 @@
 "$$$/Photometoria/Dialog/Title=Task Photometoria"
 "$$$/Photometoria/Dialog/TasksTitle=Task"
 "$$$/Photometoria/Dialog/TaskTitle=Dettaglio task"
+"$$$/Photometoria/Dialog/NameLabel=Nome"
 "$$$/Photometoria/Dialog/ContextLabel=Contesto"
 "$$$/Photometoria/Dialog/JobsTitle=Job del task"
 
@@ -56,8 +57,8 @@
 
 "$$$/Photometoria/Button/ShowPhotos=Mostra foto in libreria"
 "$$$/Photometoria/Button/Delete=Elimina"
-"$$$/Photometoria/Button/SaveContext=Salva"
-"$$$/Photometoria/Button/CancelContext=Annulla"
+"$$$/Photometoria/Button/SaveTask=Salva"
+"$$$/Photometoria/Button/CancelEdit=Annulla"
 "$$$/Photometoria/Button/RemoveCompleted=Rimuovi completati"
 "$$$/Photometoria/Button/RetryFailed=Ritenta falliti"
 "$$$/Photometoria/Button/ApplyTags=Applica tag"
@@ -71,8 +72,7 @@
 "$$$/Photometoria/Mock/ShowPhotosMsg=Questa azione selezionerebbe le foto del task nella libreria Lightroom."
 "$$$/Photometoria/Mock/Delete=Elimina task"
 "$$$/Photometoria/Mock/DeleteMsg=Questa azione aprirebbe la finestra di conferma eliminazione task."
-"$$$/Photometoria/Mock/SaveContext=Salva contesto"
-"$$$/Photometoria/Mock/SaveContextMsg=Contesto salvato con successo."
+
 "$$$/Photometoria/Mock/RemoveCompleted=Rimuovi completati"
 "$$$/Photometoria/Mock/RemoveCompletedMsg=Questa azione rimuoverebbe tutti i job completati dalla lista."
 "$$$/Photometoria/Mock/RetryFailed=Ritenta falliti"
@@ -126,3 +126,5 @@
 "$$$/Photometoria/Upload/Partial=^1 di ^2 foto caricate (^3 fallite). Aprire la finestra del task?"
 "$$$/Photometoria/Upload/Cancelled=Caricamento annullato. ^1 di ^2 foto caricate."
 "$$$/Photometoria/Error/DuplicateName=Esiste già un task con questo nome. Scegliere un nome diverso."
+"$$$/Photometoria/Error/TaskNotFound=Task non trovato sul server."
+"$$$/Photometoria/Error/EmptyName=Il nome del task non può essere vuoto."

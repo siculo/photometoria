@@ -7,6 +7,7 @@ local LrView = import 'LrView'
 local LrColor = import 'LrColor'
 local LrBinding = import 'LrBinding'
 local LrPrefs = import 'LrPrefs'
+local LrTasks = import 'LrTasks'
 
 local ServerConnection = require 'ServerConnection'
 local TaskUtils = require 'TaskUtils'
@@ -212,9 +213,11 @@ local function initProperties(props, tasks)
 	props.deleteDisabledReason = ''
 	props.deleteDisabledVisible = false
 
+	props.nameText = ''
+	props.nameSavedText = ''
 	props.contextText = ''
 	props.contextSavedText = ''
-	props.contextModified = false
+	props.taskModified = false
 
 	props.selectedJobValue = { 1 }
 	props.jobListItems = {}
@@ -254,9 +257,11 @@ local function onTaskSelected(props, tasks, index)
 		LOC "$$$/Photometoria/Task/Jobs=job"
 	)
 
+	props.nameText = task.name or ''
+	props.nameSavedText = task.name or ''
 	props.contextText = task.context or ''
 	props.contextSavedText = task.context or ''
-	props.contextModified = false
+	props.taskModified = false
 
 	local jobs = jobsByTaskId[task.task_id] or {}
 	currentJobs = jobs
@@ -360,7 +365,7 @@ local function buildTaskSelectorRow(f, props)
 end
 
 --- Builds the task section: summary, context, and action buttons.
-local function buildTaskSection(f, props)
+local function buildTaskSection(f, props, host, tasks)
 	return f:group_box {
 		title = LOC "$$$/Photometoria/Dialog/TaskTitle=Task detail",
 		spacing = f:control_spacing(),
@@ -388,44 +393,93 @@ local function buildTaskSection(f, props)
 			},
 		},
 
-		f:static_text {
-			title = LOC "$$$/Photometoria/Dialog/ContextLabel=Context",
-			font = '<system/bold>',
-			enabled = bind 'taskSelected',
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:static_text {
+				title = LOC "$$$/Photometoria/Dialog/NameLabel=Name",
+				alignment = 'right',
+				width = 80,
+				enabled = bind 'taskSelected',
+			},
+
+			f:edit_field {
+				value = bind 'nameText',
+				enabled = bind 'taskSelected',
+				fill_horizontal = 1,
+				immediate = true,
+			},
 		},
 
-		f:edit_field {
-			value = bind 'contextText',
-			enabled = bind 'taskSelected',
-			fill_horizontal = 1,
-			height_in_lines = 4,
-			immediate = true,
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:static_text {
+				title = LOC "$$$/Photometoria/Dialog/ContextLabel=Context",
+				alignment = 'right',
+				width = 80,
+				enabled = bind 'taskSelected',
+			},
+
+			f:edit_field {
+				value = bind 'contextText',
+				enabled = bind 'taskSelected',
+				fill_horizontal = 1,
+				height_in_lines = 4,
+				immediate = true,
+			},
 		},
 
 		f:row {
 			spacing = f:control_spacing(),
 
 			f:push_button {
-				enabled = bind 'contextModified',
-				title = LOC "$$$/Photometoria/Button/SaveContext=Save",
+				enabled = bind 'taskModified',
+				title = LOC "$$$/Photometoria/Button/SaveTask=Save",
 				action = function()
-					-- TODO: send context update to server, then update lastActiveTaskId
-					props.contextSavedText = props.contextText
-					props.contextModified = false
-					LrDialogs.message(
-						LOC "$$$/Photometoria/Mock/SaveContext=Save Context",
-						LOC "$$$/Photometoria/Mock/SaveContextMsg=Context saved successfully.",
-						'info'
-					)
+					local task = tasks[props.selectedTask]
+					if not task then
+						return
+					end
+
+					local trimmedName = props.nameText:match('^%s*(.-)%s*$')
+					if trimmedName == '' then
+						return
+					end
+
+					local contextText = props.contextText
+
+					LrTasks.startAsyncTask(function()
+						local ok, data = ServerConnection.updateTask(host, task.task_id, trimmedName, contextText)
+
+						if ok then
+							task.name = trimmedName
+							task.context = contextText
+							props.nameText = trimmedName
+							props.nameSavedText = trimmedName
+							props.contextSavedText = contextText
+							props.taskModified = false
+							props.taskPopupItems = buildTaskPopupItems(tasks)
+							local prefs = LrPrefs.prefsForPlugin()
+							prefs.lastActiveTaskId = task.task_id
+						else
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								data.message,
+								'critical'
+							)
+						end
+					end)
 				end,
 			},
 
 			f:push_button {
-				enabled = bind 'contextModified',
-				title = LOC "$$$/Photometoria/Button/CancelContext=Cancel",
+				enabled = bind 'taskModified',
+				title = LOC "$$$/Photometoria/Button/CancelEdit=Cancel",
 				action = function()
+					props.nameText = props.nameSavedText
 					props.contextText = props.contextSavedText
-					props.contextModified = false
+					props.taskModified = false
 				end,
 			},
 		},
@@ -589,7 +643,7 @@ local function buildJobsSection(f, props, tasks)
 end
 
 --- Builds the complete dialog contents.
-local function buildContents(f, props, tasks)
+local function buildContents(f, props, host, tasks)
 	return f:column {
 		bind_to_object = props,
 		spacing = f:control_spacing(),
@@ -603,7 +657,7 @@ local function buildContents(f, props, tasks)
 			fill_horizontal = 1,
 		},
 
-		buildTaskSection(f, props),
+		buildTaskSection(f, props, host, tasks),
 
 		buildJobsSection(f, props, tasks),
 	}
@@ -631,8 +685,14 @@ function TaskDialogUI.showDialog(host, tasks)
 			onJobSelected(propTable)
 		end)
 
+		props:addObserver('nameText', function(propTable, key, value)
+			propTable.taskModified = (value ~= propTable.nameSavedText)
+				or (propTable.contextText ~= propTable.contextSavedText)
+		end)
+
 		props:addObserver('contextText', function(propTable, key, value)
-			propTable.contextModified = (value ~= propTable.contextSavedText)
+			propTable.taskModified = (value ~= propTable.contextSavedText)
+				or (propTable.nameText ~= propTable.nameSavedText)
 		end)
 
 		if props.selectedTask then
@@ -641,7 +701,7 @@ function TaskDialogUI.showDialog(host, tasks)
 
 		LrDialogs.presentModalDialog {
 			title = LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
-			contents = buildContents(f, props, tasks),
+			contents = buildContents(f, props, host, tasks),
 			actionVerb = LOC "$$$/Photometoria/Button/Close=Close",
 			cancelVerb = '< exclude >',
 		}
