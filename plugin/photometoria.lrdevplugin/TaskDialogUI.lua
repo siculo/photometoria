@@ -8,6 +8,7 @@ local LrColor = import 'LrColor'
 local LrBinding = import 'LrBinding'
 local LrPrefs = import 'LrPrefs'
 local LrTasks = import 'LrTasks'
+local LrDate = import 'LrDate'
 
 local ServerConnection = require 'ServerConnection'
 local TaskUtils = require 'TaskUtils'
@@ -28,6 +29,22 @@ local function formatBytes(bytes)
 	else
 		return string.format('%.1f GB', bytes / (1024 * 1024 * 1024))
 	end
+end
+
+--- Formats an ISO 8601 date string as a locale-friendly date and time.
+local function formatDateTime(isoString)
+	if not isoString or isoString == '' then
+		return ''
+	end
+	local y, m, d, h, min, s = isoString:match('(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)')
+	if not y then
+		return ''
+	end
+	local time = LrDate.timeFromComponents(
+		tonumber(y), tonumber(m), tonumber(d),
+		tonumber(h), tonumber(min), tonumber(s), 'UTC'
+	)
+	return LrDate.formatMediumDate(time) .. ', ' .. LrDate.formatShortTime(time)
 end
 
 --- Reusable progress bar component for LrView.
@@ -290,13 +307,17 @@ local function onTaskSelected(props, tasks, index)
 	local storageUsed = task.storage_used or 0
 	local jobCount = task.job_count or 0
 
+	local createdAt = formatDateTime(task.created_at)
+
 	props.taskSummary = string.format(
-		'%d %s \194\183 %s \194\183 %d %s',
+		'%d %s \194\183 %s \194\183 %d %s \194\183 %s %s',
 		photoCount,
 		LOC "$$$/Photometoria/Task/Photos=photos",
 		formatBytes(storageUsed),
 		jobCount,
-		LOC "$$$/Photometoria/Task/Jobs=job"
+		LOC "$$$/Photometoria/Task/Jobs=job",
+		LOC "$$$/Photometoria/Task/CreatedOn=created on",
+		createdAt
 	)
 
 	props.nameText = task.name or ''

@@ -47,6 +47,7 @@
 
 "$$$/Photometoria/Task/Photos=foto"
 "$$$/Photometoria/Task/Jobs=job"
+"$$$/Photometoria/Task/CreatedOn=creato il"
 "$$$/Photometoria/Task/NoTasks=Nessun task disponibile. Aggiungi foto tramite il menu del plugin per creare un task."
 "$$$/Photometoria/Task/CannotDelete=Impossibile eliminare: il task ha job attivi"
 "$$$/Photometoria/Job/Photos=foto processate"
