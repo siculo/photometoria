@@ -226,14 +226,21 @@ pub struct FailedUpload {
 /// # Example JSON
 /// ```json
 /// {
-///   "photo_ids": ["550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440001"],
-///   "count": 2
+///   "photos": [
+///     {
+///       "photo_id": "550e8400-e29b-41d4-a716-446655440000",
+///       "client_id": "lr:123456",
+///       "filename": "IMG_1234.jpg",
+///       "size_bytes": 4200000
+///     }
+///   ],
+///   "count": 1
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhotoListResponse {
-    /// IDs of photos in the task
-    pub photo_ids: Vec<Uuid>,
+    /// Photo summaries
+    pub photos: Vec<PhotoSummary>,
 
     /// Total count of photos
     pub count: usize,

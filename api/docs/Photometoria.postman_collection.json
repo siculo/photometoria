@@ -702,7 +702,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"photo_ids\": [\n        \"f0e1d2c3-b4a5-6789-0fed-cba987654321\",\n        \"a9b8c7d6-e5f4-3210-9876-543210fedcba\",\n        \"11111111-2222-3333-4444-555555555555\"\n    ],\n    \"count\": 3\n}"
+							"body": "{\n    \"photos\": [\n        {\n            \"photo_id\": \"f0e1d2c3-b4a5-6789-0fed-cba987654321\",\n            \"client_id\": \"lr:123456\",\n            \"filename\": \"IMG_1234.jpg\",\n            \"size_bytes\": 4200000\n        },\n        {\n            \"photo_id\": \"a9b8c7d6-e5f4-3210-9876-543210fedcba\",\n            \"client_id\": \"lr:789012\",\n            \"filename\": \"IMG_5678.jpg\",\n            \"size_bytes\": 3100000\n        }\n    ],\n    \"count\": 2\n}"
 						},
 						{
 							"name": "Task Not Found",
