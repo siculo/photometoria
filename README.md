@@ -16,22 +16,27 @@ The main goal is to automate the photographic keywording process, drastically re
 
 ## Project Status
 
-**Current Version:** 0.1.0 (Early Development)
+**Current Version:** 0.2.0
 
-- ✅ Python testing scripts functional
-- ✅ Ollama service client implemented
-- ✅ Worker pool for job processing implemented
-- ✅ Job endpoints implemented (CRUD, retry, cancel)
-- ✅ Models endpoint implemented (`GET /api/models`)
-- 🚧 SSE streaming for job progress (#11)
-- 🚧 Input validations (#13)
-- 🚧 Configuration system (#5-6)
-- 🚧 CLI subcommands (#15)
-- 🚧 Lightroom Plugin (Lua) - planned (#12)
-- 📋 Integration tests expansion (#14)
-- 📋 Storage enhancements (#16-18)
+### v0.2.0 — Lightroom Plugin
 
-The project is in active development. Core API functionality is implemented and functional.
+Full-featured Lightroom Classic plugin with complete task and job management:
+
+- **Task management** — Create, delete, edit context, rename tasks directly from Lightroom
+- **Photo workflow** — Select, validate, export and upload photos to tasks; view task photos in Library
+- **Job lifecycle** — Start AI analysis jobs, monitor real-time progress, cancel, retry, delete jobs
+- **Keyword application** — Apply AI-generated tags as Lightroom keywords with confirmation dialog
+- **API enhancements** — Server info endpoint, provider/model listing, client-side photo reconciliation, task-job relationship exposure
+
+### v0.1.0 — Core API
+
+- REST API server with Axum framework
+- Ollama integration for local AI inference
+- Worker pool for GPU-bound job processing
+- Job endpoints (CRUD, retry, cancel)
+- Python testing scripts for model validation
+
+The project is in active development.
 
 ## Getting Started
 
