@@ -1,6 +1,8 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
+local LrApplication = import 'LrApplication'
+local LrApplicationView = import 'LrApplicationView'
 local LrFunctionContext = import 'LrFunctionContext'
 local LrDialogs = import 'LrDialogs'
 local LrView = import 'LrView'
@@ -595,11 +597,86 @@ local function buildTaskSection(f, props, host, tasks)
 				enabled = bind 'taskSelected',
 				place_horizontal = 1,
 				action = function()
-					LrDialogs.message(
-						LOC "$$$/Photometoria/Mock/ShowPhotos=Show Photos",
-						LOC "$$$/Photometoria/Mock/ShowPhotosMsg=This would select the task photos in the Lightroom library.",
-						'info'
-					)
+					local task = tasks[props.selectedTask]
+					if not task then return end
+					local currentHost = host
+
+					LrTasks.startAsyncTask(function()
+						local ok, data = ServerConnection.listTaskPhotos(currentHost, task.task_id)
+						if not ok then
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								data.message,
+								'critical'
+							)
+							return
+						end
+
+						if data.count == 0 then
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC "$$$/Photometoria/ShowPhotos/NoPhotos=This task has no photos.",
+								'info'
+							)
+							return
+						end
+
+						local catalog = LrApplication.activeCatalog()
+						local foundPhotos = {}
+						local missingCount = 0
+
+						for _, summary in ipairs(data.photos) do
+							if summary.client_id then
+								local photo = catalog:findPhotoByUuid(summary.client_id)
+								if photo then
+									foundPhotos[#foundPhotos + 1] = photo
+								else
+									missingCount = missingCount + 1
+								end
+							else
+								missingCount = missingCount + 1
+							end
+						end
+
+						if #foundPhotos == 0 then
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC "$$$/Photometoria/ShowPhotos/NoneFound=None of the task photos were found in this catalog.",
+								'warning'
+							)
+							return
+						end
+
+						catalog:withWriteAccessDo(
+							LOC "$$$/Photometoria/Undo/ShowPhotos=Photometoria: Show Photos",
+							function()
+								local collection = catalog:createCollection(
+									'Photometoria',
+									nil,
+									true
+								)
+								collection:removeAllPhotos()
+								collection:addPhotos(foundPhotos)
+							end
+						)
+
+						local collection = catalog:createCollection(
+							'Photometoria',
+							nil,
+							true
+						)
+						catalog:setActiveSources({ collection })
+						LrApplicationView.switchToModule('library')
+
+						if missingCount > 0 then
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC("$$$/Photometoria/ShowPhotos/SomeMissing=^1 of ^2 photos were not found in this catalog.",
+									tostring(missingCount), tostring(data.count)),
+								'warning'
+							)
+						end
+					end)
 				end,
 			},
 		},

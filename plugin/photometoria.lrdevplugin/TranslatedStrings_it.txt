@@ -156,3 +156,7 @@
 "$$$/Photometoria/ApplyTags/DoneTitle=Tag applicati"
 "$$$/Photometoria/ApplyTags/DoneMsg=Tag applicati con successo a ^1 foto."
 "$$$/Photometoria/Undo/ApplyTags=Photometoria: Applica tag"
+"$$$/Photometoria/Undo/ShowPhotos=Photometoria: Mostra foto"
+"$$$/Photometoria/ShowPhotos/NoPhotos=Questo task non contiene foto."
+"$$$/Photometoria/ShowPhotos/NoneFound=Nessuna foto del task è stata trovata in questo catalogo."
+"$$$/Photometoria/ShowPhotos/SomeMissing=^1 di ^2 foto non sono state trovate in questo catalogo."

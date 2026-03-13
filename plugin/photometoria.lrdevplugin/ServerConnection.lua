@@ -475,6 +475,14 @@ function ServerConnection.updateTask(host, taskId, name, context)
 	}
 end
 
+--- Retrieves the photo list for a task. Must be called from within an async task.
+--- Returns `(true, data)` on success or `(false, error)` on failure.
+--- On success, data contains `photos` (array of { photo_id, client_id, filename,
+--- size_bytes }) and `count`.
+function ServerConnection.listTaskPhotos(host, taskId)
+	return getJson(host, '/api/tasks/' .. taskId .. '/photos')
+end
+
 --- Retrieves the results for a completed job. Must be called from within an async task.
 --- Returns `(true, data)` on success or `(false, error)` on failure.
 --- On success, data contains `job_id`, `results` (array of photo results with
