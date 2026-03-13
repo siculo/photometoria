@@ -51,8 +51,8 @@ fn job_photo_ids(
     let photo_ids = match request_photo_ids {
         Some(photo_ids) => {
             let task_photo_ids = photos.iter().map(|p| &p.photo_id).collect::<HashSet<_>>();
-            for photo_id in photo_ids.clone() {
-                if !task_photo_ids.contains(&photo_id) {
+            for photo_id in &photo_ids {
+                if !task_photo_ids.contains(photo_id) {
                     return Err(AppError::bad_request(
                         "invalid_parameter",
                         format!(
@@ -73,7 +73,7 @@ async fn add_job_to_store(
     job_store: &Arc<dyn JobStore>,
     job: Job,
 ) -> Result<JobResponse, AppError> {
-    match job_store.create(job.clone()).await {
+    match job_store.create(job).await {
         Ok(job) => Ok(job.into()),
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
@@ -214,12 +214,12 @@ pub async fn retry_job(
     // Create new job with retriable photos
     let new_job = Job::new(
         original_job.task_id,
-        original_job.model.clone(),
+        original_job.model,
         retriable_photo_ids,
     );
 
     // Store the new job
-    match state.job_store.create(new_job.clone()).await {
+    match state.job_store.create(new_job).await {
         Ok(created_job) => Ok(Json(RetryJobResponse {
             job_id: created_job.job_id,
             task_id: created_job.task_id,
