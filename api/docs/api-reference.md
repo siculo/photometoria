@@ -229,12 +229,13 @@ Returns detailed information about a specific task.
 
 ### PATCH /api/tasks/{task_id}
 
-Updates the task context.
+Updates the task name and/or context.
 
 **Request:**
 
 ```json
 {
+  "name": "Updated Name",
   "context": "updated context information"
 }
 ```
@@ -244,6 +245,7 @@ Updates the task context.
 ```json
 {
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "Updated Name",
   "context": "updated context information",
   "created_at": "2024-01-15T10:30:00Z"
 }
@@ -252,6 +254,7 @@ Updates the task context.
 **Errors:**
 
 - `404` - Task not found
+- `409` - Task name already taken (`name_taken`)
 
 ### DELETE /api/tasks/{task_id}
 
@@ -333,7 +336,7 @@ The response always includes both `uploaded` (successful) and `failed` arrays.
 
 ### GET /api/tasks/{task_id}/photos
 
-Returns list of photo IDs in the task.
+Returns list of photos in the task with summary information.
 
 **Query Parameters:**
 
@@ -345,14 +348,21 @@ Returns list of photo IDs in the task.
 
 ```json
 {
-  "photo_ids": [
-    "f0e1d2c3-b4a5-6789-0fed-cba987654321",
-    "a9b8c7d6-e5f4-3210-9876-543210fedcba",
-    "11111111-2222-3333-4444-555555555555",
-    "66666666-7777-8888-9999-aaaaaaaaaaaa",
-    "bbbbbbbb-cccc-dddd-eeee-ffffffffffff"
+  "photos": [
+    {
+      "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
+      "client_id": "lr:123456",
+      "filename": "IMG_1234.jpg",
+      "size_bytes": 4200000
+    },
+    {
+      "photo_id": "a9b8c7d6-e5f4-3210-9876-543210fedcba",
+      "client_id": "lr:789012",
+      "filename": "IMG_5678.jpg",
+      "size_bytes": 3100000
+    }
   ],
-  "count": 5
+  "count": 2
 }
 ```
 

@@ -4,7 +4,7 @@
 use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
 use crate::handlers::tasks::{check_no_active_jobs, get_existing_task};
-use crate::models::{Photo, PhotoListResponse, PhotoResponse};
+use crate::models::{Photo, PhotoListResponse, PhotoResponse, PhotoSummary};
 use crate::storage::PhotoStore;
 use axum::Json;
 use axum::extract::{Query, State};
@@ -35,8 +35,11 @@ pub async fn task_photos(
                 .await
                 .map_err(|e| AppError::internal_error(e.to_string()))?;
             let count = photos.len();
-            let photo_ids = photos.into_iter().map(|p| p.photo_id).collect();
-            Ok(Json(PhotoListResponse { photo_ids, count }))
+            let summaries = photos.into_iter().map(PhotoSummary::from).collect();
+            Ok(Json(PhotoListResponse {
+                photos: summaries,
+                count,
+            }))
         }
         None => list_task_photo(&state.photo_store, task_id).await,
     }
@@ -69,11 +72,11 @@ async fn list_task_photo(
     match photo_store.list_by_task(task_id).await {
         Ok(photos) => {
             let count = photos.len();
-            let mut photo_ids: Vec<Uuid> = Vec::new();
-            for photo in photos {
-                photo_ids.push(photo.photo_id);
-            }
-            Ok(Json(PhotoListResponse { photo_ids, count }))
+            let summaries = photos.into_iter().map(PhotoSummary::from).collect();
+            Ok(Json(PhotoListResponse {
+                photos: summaries,
+                count,
+            }))
         }
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
@@ -122,7 +125,7 @@ mod tests {
 
         assert!(result.is_ok());
         let Json(photo_list) = result.unwrap();
-        assert_eq!(photo_list.photo_ids.len(), 0);
+        assert_eq!(photo_list.photos.len(), 0);
         assert_eq!(photo_list.count, 0);
     }
 
@@ -161,10 +164,11 @@ mod tests {
         assert!(result.is_ok());
         let Json(photo_list) = result.unwrap();
         assert_eq!(photo_list.count, 3);
-        assert_eq!(photo_list.photo_ids.len(), 3);
-        assert!(photo_list.photo_ids.contains(&photo1_id));
-        assert!(photo_list.photo_ids.contains(&photo2_id));
-        assert!(photo_list.photo_ids.contains(&photo3_id));
+        assert_eq!(photo_list.photos.len(), 3);
+        let ids: Vec<Uuid> = photo_list.photos.iter().map(|p| p.photo_id).collect();
+        assert!(ids.contains(&photo1_id));
+        assert!(ids.contains(&photo2_id));
+        assert!(ids.contains(&photo3_id));
     }
 
     #[tokio::test]
@@ -417,7 +421,9 @@ mod tests {
         assert!(result.is_ok());
         let Json(photo_list) = result.unwrap();
         assert_eq!(photo_list.count, 1);
-        assert_eq!(photo_list.photo_ids, vec![photo1_id]);
+        assert_eq!(photo_list.photos.len(), 1);
+        assert_eq!(photo_list.photos[0].photo_id, photo1_id);
+        assert_eq!(photo_list.photos[0].client_id, Some("lr:100".to_string()));
     }
 
     #[tokio::test]
@@ -448,6 +454,6 @@ mod tests {
         assert!(result.is_ok());
         let Json(photo_list) = result.unwrap();
         assert_eq!(photo_list.count, 0);
-        assert!(photo_list.photo_ids.is_empty());
+        assert!(photo_list.photos.is_empty());
     }
 }
