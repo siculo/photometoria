@@ -109,7 +109,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 		propertyTable.statusMessage = ''
 		propertyTable.synopsis = connectingStr
 
-		ServerConnection.connect(host, function(success, data)
+		ServerConnection.infoAsync(host, function(success, data)
 			propertyTable.connecting = false
 
 			if success then

@@ -165,6 +165,60 @@ A reusable progress bar is implemented in `TaskDialog.lua` using:
 
 ---
 
+## Lua 5.1 Runtime Constraints
+
+**`pcall` is incompatible with async SDK calls:**
+
+- Lua 5.1 `pcall` is implemented in C and does **not** allow coroutine yields
+  through its stack frame.
+- Any SDK function that performs I/O (`LrHttp.get`, `LrFileUtils.exists`,
+  `LrDialogs.presentModalDialog`, etc.) will crash with:
+  `"Yielding is not allowed within a C or metamethod call"`
+  if called inside `pcall`.
+- This is fixed in Lua 5.2+ (coroutine-friendly pcall), but Lightroom is
+  locked to 5.1.
+- **Workaround**: use explicit cleanup (`running = false` at each return point)
+  instead of try/finally patterns. For reentrancy guards, use a module-level
+  `local running = false` flag with reset at every exit path.
+
+**`addObserver` callbacks cannot call async SDK functions:**
+
+- Observer callbacks (`props:addObserver`) run in a C stack frame — same yield
+  restriction as `pcall`.
+- Calling `LrHttp.get`, `LrHttp.post`, or any I/O SDK function inside an
+  observer crashes with:
+  `"Yielding is not allowed within a C or metamethod call (inside the callback for addObserver for condition <key>)"`
+- **Workaround**: prefetch all needed data **before** opening the dialog
+  (while still in the free async task context) and store it in a Lua table.
+  The observer reads from the table instead of making network calls.
+- This applies to all observer callbacks, not just `selectedTask` — any
+  `props:addObserver(key, fn)` where `fn` calls an async SDK function will fail.
+
+**`push_button` action handlers cannot call async SDK functions directly:**
+
+- Button action callbacks inside `presentModalDialog` run in a context where
+  `LrHttp.get`, `LrHttp.post`, and other I/O SDK functions **silently fail** —
+  no error is raised, the call simply does nothing.
+- Same yield restriction as `pcall` and `addObserver`.
+- **Workaround**: wrap the server call in `LrTasks.startAsyncTask` inside the
+  action handler. The dialog stays open and property bindings remain active, so
+  UI updates from within the async task work normally.
+- Capture property values as locals **before** entering `startAsyncTask` to
+  avoid race conditions if the user edits fields while the request is in flight.
+
+**`LrLibraryMenuItems` cannot be dynamically enabled/disabled:**
+
+- `Info.lua` is a static table evaluated once at plugin load.
+- `enabledWhen` only accepts predefined SDK values (e.g. `"photosAvailable"`),
+  not custom Lua expressions or bound properties.
+- To prevent concurrent execution from menu items, use `Guard.lua` — a shared
+  module loaded via `require` (cached by Lua). Call `Guard.acquire('name')` at
+  the start and `Guard.release('name')` at every exit point.
+- **Do NOT use `local` flags** in menu item scripts — the file is re-executed
+  fresh each time (`dofile`-style), so locals are re-initialized on every click.
+
+---
+
 ## Testing
 
 Tests run **outside Lightroom** using a standalone Lua 5.1 interpreter:
@@ -193,4 +247,5 @@ lua plugin/tests/test_json.lua
 The plugin communicates with the Photometoria API server via `ServerConnection.lua`:
 - Connection endpoint: `GET /api/info` (server capabilities and status)
 - Host format validation: `host:port` (e.g., `localhost:3000`)
-- Async with callback pattern: `ServerConnection.connect(host, callback)`
+- Sync: `ServerConnection.info(host)` — returns `(success, data)`, must be called from async context
+- Async with callback: `ServerConnection.infoAsync(host, callback)`

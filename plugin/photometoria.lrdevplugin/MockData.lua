@@ -91,14 +91,30 @@ MockData.tasks = {
 	},
 }
 
-MockData.selectedPhotos = {
-	count = 47,
-	sizeBytes = 1288490189,
+MockData.providers = {
+	{
+		name = 'Ollama',
+		models = { 'qwen2-vl:8b', 'llava:latest' },
+		estimatedCost = nil,
+	},
+	{
+		name = 'OpenAI',
+		models = { 'gpt-4o', 'gpt-4-vision-preview' },
+		estimatedCost = '\226\130\172 0.86',
+	},
+	{
+		name = 'Anthropic',
+		models = { 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229' },
+		estimatedCost = '\226\130\172 1.20',
+	},
 }
 
-MockData.allPhotos = {
-	count = 312,
-	sizeBytes = 9018753434,
+MockData.targetPhotos = {
+	total = 47,
+	uploadable = 44,
+	missing = 2,
+	videos = 1,
+	photos = {},
 }
 
 return MockData

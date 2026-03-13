@@ -77,15 +77,15 @@ Example (from `ServerConnection.lua`):
 
 ```lua
 -- Sync: callable from any async task
-function ServerConnection.fetch(host)
+function ServerConnection.info(host)
     local body, headers = LrHttp.get(url, nil, timeout)
     return success, data
 end
 
 -- Async wrapper: for callers that need fire-and-forget with callback
-function ServerConnection.connect(host, callback)
+function ServerConnection.infoAsync(host, callback)
     LrTasks.startAsyncTask(function()
-        local success, data = ServerConnection.fetch(host)
+        local success, data = ServerConnection.info(host)
         callback(success, data)
     end)
 end

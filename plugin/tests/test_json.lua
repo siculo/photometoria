@@ -1,7 +1,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 -- SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
---- Unit tests for JSON.lua decoder.
+--- Unit tests for JSON.lua encoder/decoder.
 --- Run with: lua plugin/tests/test_json.lua
 
 -- Resolve module paths relative to this script's location so that tests
@@ -237,7 +237,148 @@ test('decode /api/info response', function()
 end)
 
 -- =============================================================================
--- Error handling
+-- Encoder: primitive types
+-- =============================================================================
+
+T.suite('JSON encoder tests')
+
+test('encode string', function()
+	assertEqual(JSON.encode('hello'), '"hello"')
+end)
+
+test('encode empty string', function()
+	assertEqual(JSON.encode(''), '""')
+end)
+
+test('encode string with quotes', function()
+	assertEqual(JSON.encode('say "hi"'), '"say \\"hi\\""')
+end)
+
+test('encode string with backslash', function()
+	assertEqual(JSON.encode('a\\b'), '"a\\\\b"')
+end)
+
+test('encode string with newline', function()
+	assertEqual(JSON.encode('line1\nline2'), '"line1\\nline2"')
+end)
+
+test('encode string with tab', function()
+	assertEqual(JSON.encode('col1\tcol2'), '"col1\\tcol2"')
+end)
+
+test('encode string with carriage return', function()
+	assertEqual(JSON.encode('a\rb'), '"a\\rb"')
+end)
+
+test('encode integer', function()
+	assertEqual(JSON.encode(42), '42')
+end)
+
+test('encode zero', function()
+	assertEqual(JSON.encode(0), '0')
+end)
+
+test('encode negative number', function()
+	assertEqual(JSON.encode(-7), '-7')
+end)
+
+test('encode float', function()
+	assertEqual(JSON.encode(3.14), '3.14')
+end)
+
+test('encode true', function()
+	assertEqual(JSON.encode(true), 'true')
+end)
+
+test('encode false', function()
+	assertEqual(JSON.encode(false), 'false')
+end)
+
+test('encode nil', function()
+	assertEqual(JSON.encode(nil), 'null')
+end)
+
+-- =============================================================================
+-- Encoder: arrays
+-- =============================================================================
+
+test('encode array of numbers', function()
+	assertEqual(JSON.encode({1, 2, 3}), '[1,2,3]')
+end)
+
+test('encode array of strings', function()
+	assertEqual(JSON.encode({'a', 'b'}), '["a","b"]')
+end)
+
+test('encode array of mixed types', function()
+	assertEqual(JSON.encode({1, 'two', true}), '[1,"two",true]')
+end)
+
+-- =============================================================================
+-- Encoder: objects
+-- =============================================================================
+
+test('encode empty table', function()
+	assertEqual(JSON.encode({}), '{}')
+end)
+
+test('encode simple object', function()
+	local result = JSON.encode({name = 'test'})
+	assertEqual(result, '{"name":"test"}')
+end)
+
+test('encode object with multiple keys', function()
+	local result = JSON.encode({name = 'task', context = 'photos'})
+	assertNotNil(result)
+	local decoded = JSON.decode(result)
+	assertEqual(decoded.name, 'task')
+	assertEqual(decoded.context, 'photos')
+end)
+
+test('encode nested object', function()
+	local result = JSON.encode({outer = {inner = true}})
+	local decoded = JSON.decode(result)
+	assertEqual(decoded.outer.inner, true)
+end)
+
+test('encode object with array value', function()
+	local result = JSON.encode({items = {1, 2, 3}})
+	local decoded = JSON.decode(result)
+	assertEqual(decoded.items[1], 1)
+	assertEqual(decoded.items[2], 2)
+	assertEqual(decoded.items[3], 3)
+end)
+
+-- =============================================================================
+-- Encoder: round-trip (encode then decode)
+-- =============================================================================
+
+test('round-trip: task creation payload', function()
+	local original = {name = 'Summer vacation', context = 'Photos from San Francisco'}
+	local json = JSON.encode(original)
+	local decoded = JSON.decode(json)
+	assertEqual(decoded.name, original.name)
+	assertEqual(decoded.context, original.context)
+end)
+
+test('round-trip: string with special characters', function()
+	local original = 'line1\nline2\ttab "quoted" back\\slash'
+	local json = JSON.encode(original)
+	local decoded = JSON.decode(json)
+	assertEqual(decoded, original)
+end)
+
+-- =============================================================================
+-- Encoder: error handling
+-- =============================================================================
+
+test('encode returns string for valid input', function()
+	local result = JSON.encode({a = 1})
+	assertEqual(type(result), 'string', 'encode should return string')
+end)
+
+-- =============================================================================
+-- Decoder: error handling
 -- =============================================================================
 
 test('decode nil input returns error', function()

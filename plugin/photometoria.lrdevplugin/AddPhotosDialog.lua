@@ -9,47 +9,20 @@ local LrPrefs = import 'LrPrefs'
 local LrProgressScope = import 'LrProgressScope'
 local LrTasks = import 'LrTasks'
 
+local LrApplication = import 'LrApplication'
+
 local ServerConnection = require 'ServerConnection'
-local MockData = require 'MockData'
+local PhotoValidator = require 'PhotoValidator'
+local TaskDialogUI = require 'TaskDialogUI'
+local PhotoUploader = require 'PhotoUploader'
+local Guard = require 'Guard'
+local TaskUtils = require 'TaskUtils'
 
 local bind = LrView.bind
 local LABEL_WIDTH = 80
 
---- Formats a byte count into a human-readable string.
-local function formatBytes(bytes)
-	if bytes < 1024 then
-		return string.format('%d B', bytes)
-	elseif bytes < 1024 * 1024 then
-		return string.format('%.1f KB', bytes / 1024)
-	elseif bytes < 1024 * 1024 * 1024 then
-		return string.format('%.1f MB', bytes / (1024 * 1024))
-	else
-		return string.format('%.1f GB', bytes / (1024 * 1024 * 1024))
-	end
-end
-
---- Returns the mock photo data for the current photo choice.
-local function getPhotoData(choice)
-	if choice == 'all' then
-		return MockData.allPhotos
-	end
-	return MockData.selectedPhotos
-end
-
---- Updates the photo summary text.
-local function updatePhotoSummary(props)
-	local data = getPhotoData(props.photoChoice)
-	props.photoSummary = string.format(
-		'%d %s \194\183 %s %s',
-		data.count,
-		LOC "$$$/Photometoria/AddPhotos/PhotosLabel=photos selected",
-		formatBytes(data.sizeBytes),
-		LOC "$$$/Photometoria/AddPhotos/Estimated=estimated"
-	)
-end
-
 --- Updates the existing task summary text.
-local function updateExistingTaskSummary(props)
+local function updateExistingTaskSummary(props, tasks)
 	if #props.existingTaskItems == 0 then
 		props.existingTaskSummary = LOC "$$$/Photometoria/AddPhotos/NoTasks=No tasks on the server. Create a new task first."
 		props.existingTaskAfterSummary = ''
@@ -57,35 +30,37 @@ local function updateExistingTaskSummary(props)
 	end
 
 	local taskIndex = props.existingTask
-	local task = MockData.tasks[taskIndex]
+	local task = tasks[taskIndex]
 	if not task then
 		props.existingTaskSummary = ''
 		props.existingTaskAfterSummary = ''
 		return
 	end
 
-	local photoData = getPhotoData(props.photoChoice)
-	local afterCount = task.photoCount + photoData.count
-	local afterSize = task.sizeBytes + photoData.sizeBytes
+	local photoCount = task.photo_count or 0
+	local afterCount = photoCount + props.uploadableCount
 
 	props.existingTaskSummary = string.format(
-		'%d %s \194\183 %s',
-		task.photoCount,
-		LOC "$$$/Photometoria/AddPhotos/PhotosPresent=photos already present",
-		formatBytes(task.sizeBytes)
+		'%d %s',
+		photoCount,
+		LOC "$$$/Photometoria/AddPhotos/PhotosPresent=photos already present"
 	)
 
 	props.existingTaskAfterSummary = string.format(
-		'%s ~%d %s \194\183 ~%s',
+		'%s %d %s',
 		LOC "$$$/Photometoria/AddPhotos/AfterAdding=After adding:",
 		afterCount,
-		LOC "$$$/Photometoria/AddPhotos/Photos=photos",
-		formatBytes(afterSize)
+		LOC "$$$/Photometoria/AddPhotos/Photos=photos"
 	)
 end
 
 --- Updates the confirm button enabled state.
 local function updateConfirmEnabled(props)
+	if props.uploadableCount < 1 then
+		props.confirmEnabled = false
+		return
+	end
+
 	if props.destination == 'new' then
 		props.confirmEnabled = (props.taskName ~= nil and props.taskName ~= '')
 	else
@@ -106,52 +81,46 @@ local function buildTaskPopupItems(tasks)
 end
 
 --- Initializes all bindable properties.
-local function initProperties(props)
-	props.photoChoice = 'selected'
-	props.photoSummary = ''
+local function initProperties(props, validation, serverData, tasks, prefs)
+	props.uploadableCount = validation.uploadable
+	props.photoSummary = PhotoValidator.formatSummary(validation)
+	props.storageFree = LOC("$$$/Photometoria/AddPhotos/StorageFree=Available storage: ^1", serverData.storageFree)
 
-	props.destination = 'new'
-	props.newTaskVisible = true
-	props.existingTaskVisible = false
+	local hasTasks = (#tasks > 0)
+	props.destination = hasTasks and 'existing' or 'new'
+	props.newTaskVisible = not hasTasks
+	props.existingTaskVisible = hasTasks
 
 	props.taskName = ''
 	props.taskContext = ''
 
-	props.existingTask = 1
-	props.existingTaskItems = buildTaskPopupItems(MockData.tasks)
+	props.existingTaskItems = buildTaskPopupItems(tasks)
+	props.existingTask = TaskUtils.findTaskIndex(tasks, prefs.lastActiveTaskId) or 1
 	props.existingTaskSummary = ''
 	props.existingTaskAfterSummary = ''
 
 	props.confirmEnabled = false
 
-	updatePhotoSummary(props)
+	if hasTasks then
+		updateExistingTaskSummary(props, tasks)
+		updateConfirmEnabled(props)
+	end
 end
 
---- Builds the photo selection section.
+--- Builds the photo summary section.
 local function buildPhotoSection(f, props)
 	return f:group_box {
 		title = LOC "$$$/Photometoria/AddPhotos/PhotoSectionTitle=Photos to add",
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
 
-		f:row {
-			spacing = f:control_spacing(),
-
-			f:radio_button {
-				title = LOC "$$$/Photometoria/AddPhotos/SelectedOnly=Selected only",
-				value = bind 'photoChoice',
-				checked_value = 'selected',
-			},
-
-			f:radio_button {
-				title = LOC "$$$/Photometoria/AddPhotos/All=All photos in catalog",
-				value = bind 'photoChoice',
-				checked_value = 'all',
-			},
+		f:static_text {
+			title = bind 'photoSummary',
+			fill_horizontal = 1,
 		},
 
 		f:static_text {
-			title = bind 'photoSummary',
+			title = bind 'storageFree',
 			fill_horizontal = 1,
 			font = '<system/small>',
 		},
@@ -164,6 +133,51 @@ local function buildDestinationSection(f, props)
 		title = LOC "$$$/Photometoria/AddPhotos/DestSectionTitle=Destination",
 		spacing = f:control_spacing(),
 		fill_horizontal = 1,
+
+		f:radio_button {
+			title = LOC "$$$/Photometoria/AddPhotos/ExistingTask=Add to existing task",
+			value = bind 'destination',
+			checked_value = 'existing',
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = LABEL_WIDTH },
+
+			f:popup_menu {
+				value = bind 'existingTask',
+				items = bind 'existingTaskItems',
+				enabled = bind 'existingTaskVisible',
+				width = 250,
+			},
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = LABEL_WIDTH },
+
+			f:static_text {
+				title = bind 'existingTaskSummary',
+				fill_horizontal = 1,
+				font = '<system/small>',
+			},
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = LABEL_WIDTH },
+
+			f:static_text {
+				title = bind 'existingTaskAfterSummary',
+				fill_horizontal = 1,
+				font = '<system/small>',
+			},
+		},
+
+		f:spacer { height = 8 },
 
 		f:radio_button {
 			title = LOC "$$$/Photometoria/AddPhotos/NewTask=Add to new task",
@@ -219,51 +233,6 @@ local function buildDestinationSection(f, props)
 				enabled = bind 'newTaskVisible',
 			},
 		},
-
-		f:spacer { height = 8 },
-
-		f:radio_button {
-			title = LOC "$$$/Photometoria/AddPhotos/ExistingTask=Add to existing task",
-			value = bind 'destination',
-			checked_value = 'existing',
-		},
-
-		f:row {
-			spacing = f:label_spacing(),
-
-			f:spacer { width = LABEL_WIDTH },
-
-			f:popup_menu {
-				value = bind 'existingTask',
-				items = bind 'existingTaskItems',
-				enabled = bind 'existingTaskVisible',
-				width = 250,
-			},
-		},
-
-		f:row {
-			spacing = f:label_spacing(),
-
-			f:spacer { width = LABEL_WIDTH },
-
-			f:static_text {
-				title = bind 'existingTaskSummary',
-				fill_horizontal = 1,
-				font = '<system/small>',
-			},
-		},
-
-		f:row {
-			spacing = f:label_spacing(),
-
-			f:spacer { width = LABEL_WIDTH },
-
-			f:static_text {
-				title = bind 'existingTaskAfterSummary',
-				fill_horizontal = 1,
-				font = '<system/small>',
-			},
-		},
 	}
 end
 
@@ -282,6 +251,15 @@ local function buildContents(f, props)
 end
 
 LrTasks.startAsyncTask(function()
+	if not Guard.acquire('AddPhotosDialog') then
+		LrDialogs.message(
+			LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+			LOC "$$$/Photometoria/AddPhotos/AlreadyRunning=Add Photos is already in progress.",
+			'info'
+		)
+		return
+	end
+
 	local prefs = LrPrefs.prefsForPlugin()
 	local host = prefs.serverHost or ''
 
@@ -291,6 +269,7 @@ LrTasks.startAsyncTask(function()
 			LOC "$$$/Photometoria/Error/NoServer=Server not configured. Please set the server address in Plugin Manager.",
 			'critical'
 		)
+		Guard.release('AddPhotosDialog')
 		return
 	end
 
@@ -298,7 +277,7 @@ LrTasks.startAsyncTask(function()
 		title = LOC "$$$/Photometoria/Progress/Connecting=Connecting to server...",
 	}
 
-	local success, data = ServerConnection.fetch(host)
+	local success, data = ServerConnection.info(host)
 	progressScope:done()
 
 	if not success then
@@ -307,27 +286,55 @@ LrTasks.startAsyncTask(function()
 			data.message,
 			'critical'
 		)
+		Guard.release('AddPhotosDialog')
 		return
 	end
+
+	local catalog = LrApplication.activeCatalog()
+
+	local validationScope = LrProgressScope {
+		title = LOC "$$$/Photometoria/Progress/Validating=Checking photos...",
+	}
+
+	local validation = PhotoValidator.validate(catalog, validationScope)
+	validationScope:done()
+
+	if not validation then
+		Guard.release('AddPhotosDialog')
+		return
+	end
+
+	local taskScope = LrProgressScope {
+		title = LOC "$$$/Photometoria/Progress/LoadingTasks=Loading tasks...",
+	}
+
+	local taskSuccess, tasks = ServerConnection.listTasks(host)
+	taskScope:done()
+
+	if not taskSuccess then
+		LrDialogs.message(
+			LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+			tasks.message,
+			'critical'
+		)
+		Guard.release('AddPhotosDialog')
+		return
+	end
+
+	local confirmedTaskId = nil
 
 	LrFunctionContext.callWithContext('AddPhotosDialog', function(context)
 		local f = LrView.osFactory()
 
 		local props = LrBinding.makePropertyTable(context)
-		initProperties(props)
-
-		props:addObserver('photoChoice', function(propTable)
-			updatePhotoSummary(propTable)
-			updateExistingTaskSummary(propTable)
-			updateConfirmEnabled(propTable)
-		end)
+		initProperties(props, validation, data, tasks, prefs)
 
 		props:addObserver('destination', function(propTable, key, value)
 			propTable.newTaskVisible = (value == 'new')
 			propTable.existingTaskVisible = (value == 'existing')
 			updateConfirmEnabled(propTable)
 			if value == 'existing' then
-				updateExistingTaskSummary(propTable)
+				updateExistingTaskSummary(propTable, tasks)
 			else
 				propTable.existingTaskSummary = ''
 				propTable.existingTaskAfterSummary = ''
@@ -339,27 +346,97 @@ LrTasks.startAsyncTask(function()
 		end)
 
 		props:addObserver('existingTask', function(propTable)
-			updateExistingTaskSummary(propTable)
+			updateExistingTaskSummary(propTable, tasks)
 		end)
 
-		local result = LrDialogs.presentModalDialog {
-			title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
-			contents = buildContents(f, props),
-			actionVerb = LOC "$$$/Photometoria/Button/ConfirmAdd=Confirm and Go to Task",
-			actionBinding = {
-				enabled = {
-					bind_to_object = props,
-					key = 'confirmEnabled',
+		local done = false
+		while not done do
+			local result = LrDialogs.presentModalDialog {
+				title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+				contents = buildContents(f, props),
+				actionVerb = LOC "$$$/Photometoria/Button/ConfirmAdd=Confirm",
+				actionBinding = {
+					enabled = {
+						bind_to_object = props,
+						key = 'confirmEnabled',
+					},
 				},
-			},
-		}
+			}
 
-		if result == 'ok' then
-			LrDialogs.message(
-				LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
-				LOC "$$$/Photometoria/Mock/AddPhotosMsg=This would add the photos and open the Task window.",
-				'info'
-			)
+			if result ~= 'ok' then
+				done = true
+			elseif props.destination == 'new' then
+				local createScope = LrProgressScope {
+					title = LOC "$$$/Photometoria/Progress/CreatingTask=Creating task...",
+				}
+
+				local ok, taskData = ServerConnection.createTask(host, props.taskName, props.taskContext)
+				createScope:done()
+
+				if ok then
+					confirmedTaskId = taskData.task_id
+					prefs.lastActiveTaskId = taskData.task_id
+					done = true
+				elseif taskData.duplicate then
+					LrDialogs.message(
+						LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+						LOC "$$$/Photometoria/Error/DuplicateName=A task with this name already exists. Please choose a different name.",
+						'warning'
+					)
+				else
+					LrDialogs.message(
+						LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+						taskData.message,
+						'critical'
+					)
+				end
+			else
+				local selectedTask = tasks[props.existingTask]
+				if selectedTask then
+					confirmedTaskId = selectedTask.task_id
+					prefs.lastActiveTaskId = selectedTask.task_id
+				end
+				done = true
+			end
 		end
 	end)
+
+	Guard.release('AddPhotosDialog')
+
+	if confirmedTaskId then
+		local uploadResult = PhotoUploader.run(host, confirmedTaskId, validation.photos, data.maxPhotosPerRequest)
+
+		local title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos"
+
+		if uploadResult.cancelled then
+			LrDialogs.message(
+				title,
+				LOC("$$$/Photometoria/Upload/Cancelled=Upload cancelled. ^1 of ^2 photos uploaded.",
+					tostring(uploadResult.uploaded), tostring(uploadResult.total)),
+				'info'
+			)
+		else
+			local body
+			if uploadResult.failed == 0 then
+				body = LOC("$$$/Photometoria/Upload/Success=^1 photos uploaded successfully. Open the task window?",
+					tostring(uploadResult.uploaded))
+			else
+				body = LOC("$$$/Photometoria/Upload/Partial=^1 of ^2 photos uploaded (^3 failed). Open the task window?",
+					tostring(uploadResult.uploaded), tostring(uploadResult.total), tostring(uploadResult.failed))
+			end
+
+			local action = LrDialogs.confirm(
+				title,
+				body,
+				LOC "$$$/Photometoria/Button/OpenTask=Open Task Window"
+			)
+
+			if action == 'ok' then
+				local refreshOk, refreshedTasks = ServerConnection.listTasks(host)
+				if refreshOk then
+					TaskDialogUI.showDialog(host, refreshedTasks)
+				end
+			end
+		end
+	end
 end)
