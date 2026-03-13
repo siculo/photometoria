@@ -13,6 +13,7 @@ local LrDate = import 'LrDate'
 local ServerConnection = require 'ServerConnection'
 local TaskUtils = require 'TaskUtils'
 local NewJobDialog = require 'NewJobDialog'
+local ApplyTagsDialog = require 'ApplyTagsDialog'
 
 local TaskDialogUI = {}
 
@@ -769,11 +770,15 @@ local function buildJobDetailPanel(f, props, host, tasks)
 				enabled = bind 'btnApplyEnabled',
 				title = '\226\156\147 ' .. LOC "$$$/Photometoria/Button/ApplyTags=Applica tag",
 				action = function()
-					LrDialogs.message(
-						LOC "$$$/Photometoria/Mock/ApplyTags=Applica tag",
-						LOC "$$$/Photometoria/Mock/ApplyTagsMsg=This would open the apply tags confirmation dialog.",
-						'info'
-					)
+					local jobIndex = props.selectedJobValue and props.selectedJobValue[1]
+					local job = jobIndex and currentJobs[jobIndex]
+					if not job then
+						return
+					end
+
+					LrTasks.startAsyncTask(function()
+						ApplyTagsDialog.run(host, job.job_id)
+					end)
 				end,
 			},
 
