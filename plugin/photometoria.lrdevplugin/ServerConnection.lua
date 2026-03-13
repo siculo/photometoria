@@ -475,6 +475,15 @@ function ServerConnection.updateTask(host, taskId, name, context)
 	}
 end
 
+--- Retrieves the results for a completed job. Must be called from within an async task.
+--- Returns `(true, data)` on success or `(false, error)` on failure.
+--- On success, data contains `job_id`, `results` (array of photo results with
+--- photo_id, client_id, status, tags, error, processed_at) and `summary`
+--- (total, completed, failed).
+function ServerConnection.getJobResults(host, jobId)
+	return getJson(host, '/api/jobs/' .. jobId .. '/results')
+end
+
 --- Retrieves server info asynchronously.
 --- Calls `callback(success, data)` when done.
 function ServerConnection.infoAsync(host, callback)

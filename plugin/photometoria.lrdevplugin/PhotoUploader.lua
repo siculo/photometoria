@@ -97,7 +97,7 @@ function PhotoUploader.run(host, taskId, photos, batchSize)
 
 		if success then
 			batch[#batch + 1] = {
-				clientId = tostring(rendition.photo.localIdentifier),
+				clientId = rendition.photo:getRawMetadata('uuid'),
 				filePath = pathOrMessage,
 				fileName = LrPathUtils.leafName(pathOrMessage),
 			}
