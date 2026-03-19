@@ -209,14 +209,22 @@ pub async fn delete_task(
     AppPath(task_id): AppPath<Uuid>,
 ) -> Result<StatusCode, AppError> {
     check_no_active_jobs(&state.job_store, task_id).await?;
-    match state.task_store.delete(task_id).await {
-        Ok(()) => Ok(StatusCode::NO_CONTENT),
-        Err(TaskStoreError::NotFound(not_found_task_id)) => {
-            Err(AppError::task_not_found(not_found_task_id))
-        }
-        Err(e) => Err(AppError::internal_error(e.to_string())),
-    }
+    state.job_store.delete_by_task(task_id).await.map_err(
+        |e| AppError::internal_error(e.to_string())
+    )?;
+    state.task_store.delete(task_id).await.map_err(
+        |err| {
+            match err {
+                TaskStoreError::NotFound(not_found_task_id) =>
+                    AppError::task_not_found(not_found_task_id),
+                err =>
+                    AppError::internal_error(err.to_string()),
+            }
+        },
+    )?;
+    Ok(StatusCode::NO_CONTENT)
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -804,6 +812,40 @@ mod tests {
             .find(|s| s.task_id == task2.task_id)
             .unwrap();
         assert_eq!(summary2.job_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_delete_task_removes_associated_jobs() {
+        let ts = create_test_state().await;
+
+        let (_, Json(task)) = create_task(
+            State(ts.state.clone()),
+            AppJson(CreateTaskRequest {
+                name: "Task".to_string(),
+                context: "task".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let mut job1 = Job::new(task.task_id, "llava".to_string(), vec![]);
+        job1.start();
+        job1.complete();
+        let mut job2 = Job::new(task.task_id, "llava".to_string(), vec![]);
+        job2.cancel();
+        ts.state.job_store.create(job1).await.unwrap();
+        ts.state.job_store.create(job2).await.unwrap();
+
+        assert_eq!(
+            ts.state.job_store.count_by_task(task.task_id).await.unwrap(),
+            2
+        );
+
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+        assert_eq!(result, Ok(StatusCode::NO_CONTENT));
+
+        let remaining = ts.state.job_store.count_by_task(task.task_id).await.unwrap();
+        assert_eq!(remaining, 0, "Jobs should be removed when their task is deleted");
     }
 
     #[tokio::test]
