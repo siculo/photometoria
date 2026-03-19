@@ -508,6 +508,8 @@ mod tests {
         assert!(result.is_ok());
         let Json(jobs) = result.unwrap();
         assert_eq!(jobs.len(), 2);
+        assert_eq!(jobs[0].task_id, task_id);
+        assert_eq!(jobs[1].task_id, task_id);
         assert_eq!(jobs[0].status, JobStatus::Queued);
         assert_eq!(jobs[1].status, JobStatus::Queued);
     }
