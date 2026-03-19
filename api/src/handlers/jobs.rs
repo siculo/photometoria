@@ -11,6 +11,7 @@ use crate::models::{
 use crate::storage::JobStore;
 use axum::Json;
 use axum::extract::State;
+use axum::http::StatusCode;
 use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -22,7 +23,7 @@ pub async fn create_job(
     State(state): State<AppState>,
     AppPath(task_id): AppPath<Uuid>,
     Json(request): Json<CreateJobRequest>,
-) -> Result<Json<JobResponse>, AppError> {
+) -> Result<(StatusCode, Json<JobResponse>), AppError> {
     get_existing_task(&state.task_store, task_id).await?;
 
     if !state.ai_providers.is_model_configured(&request.model) {
@@ -37,7 +38,7 @@ pub async fn create_job(
             let photo_ids = job_photo_ids(task_id, photos, request.photo_ids)?;
             let job = Job::new(task_id, request.model, photo_ids);
             let job_response = add_job_to_store(&state.job_store, job).await?;
-            Ok(Json(job_response))
+            Ok((StatusCode::CREATED, Json(job_response)))
         }
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
@@ -293,7 +294,8 @@ mod tests {
         let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_ok());
-        let Json(job_response) = result.unwrap();
+        let (status, Json(job_response)) = result.unwrap();
+        assert_eq!(status, StatusCode::CREATED);
         assert_eq!(job_response.task_id, task_id);
         assert_eq!(job_response.model, "qwen3-vl:8b");
         assert_eq!(job_response.photo_count, 2);
@@ -340,7 +342,8 @@ mod tests {
         let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_ok());
-        let Json(job_response) = result.unwrap();
+        let (status, Json(job_response)) = result.unwrap();
+        assert_eq!(status, StatusCode::CREATED);
         assert_eq!(job_response.task_id, task_id);
         assert_eq!(job_response.model, "llava");
         assert_eq!(job_response.photo_count, 2);
@@ -455,7 +458,8 @@ mod tests {
 
         // Should succeed but with 0 photos
         assert!(result.is_ok());
-        let Json(job_response) = result.unwrap();
+        let (status, Json(job_response)) = result.unwrap();
+        assert_eq!(status, StatusCode::CREATED);
         assert_eq!(job_response.task_id, task_id);
         assert_eq!(job_response.photo_count, 0);
 
