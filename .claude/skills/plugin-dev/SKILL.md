@@ -231,6 +231,9 @@ lua plugin/tests/test_json.lua
 - `testkit.lua` provides `assert_equals`, `assert_true`, `assert_error`, `run_tests`
 - Tests must not depend on Lightroom SDK modules (`import` is not available)
 - Test files follow the pattern `test_<module>.lua`
+- When adding a field to a data structure (table, response DTO), always add or
+  update test assertions to verify the field is correctly populated — an untested
+  field could silently contain `nil` or a stale value
 
 ---
 

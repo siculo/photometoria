@@ -64,6 +64,13 @@ it pass. This ensures the change is verifiable and prevents regressions.
 - HTTP routing (Axum's responsibility)
 - Standard serialization
 
+### New Fields Must Be Tested
+
+When adding a field to a struct (model, response, DTO), always add or update
+test assertions to verify the field is correctly populated — both at the unit
+level (e.g., `From` conversion) and at the handler level (e.g., API response).
+An untested field could silently contain a default/zero value.
+
 ### Test Utilities
 
 - Use `handlers::test_utils::fixtures::create_test_state()` for consistent setup
