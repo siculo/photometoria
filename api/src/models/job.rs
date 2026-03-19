@@ -366,6 +366,7 @@ pub struct JobResponse {
 /// ```json
 /// {
 ///   "job_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "task_id": "660e8400-e29b-41d4-a716-446655440000",
 ///   "status": "completed",
 ///   "model": "qwen3-vl:8b",
 ///   "photo_count": 15,
@@ -377,6 +378,9 @@ pub struct JobResponse {
 pub struct JobSummary {
     /// Unique job identifier
     pub job_id: Uuid,
+
+    /// Parent task identifier
+    pub task_id: Uuid,
 
     /// Current status
     pub status: JobStatus,
@@ -651,6 +655,7 @@ impl From<Job> for JobSummary {
             queued_photo_count: job.queued_photo_count(),
             processed_photo_count: job.processed_photo_count(),
             job_id: job.job_id,
+            task_id: job.task_id,
             status: job.status,
             model: job.model.clone(),
             created_at: job.created_at,
@@ -666,6 +671,7 @@ impl From<&Job> for JobSummary {
             queued_photo_count: job.queued_photo_count(),
             processed_photo_count: job.processed_photo_count(),
             job_id: job.job_id,
+            task_id: job.task_id,
             status: job.status,
             model: job.model.clone(),
             created_at: job.created_at,
@@ -928,6 +934,7 @@ mod tests {
         let summary: JobSummary = (&job).into();
 
         assert_eq!(summary.job_id, job.job_id);
+        assert_eq!(summary.task_id, task_id);
         assert_eq!(summary.status, JobStatus::Queued);
         assert_eq!(summary.model, "llava");
         assert_eq!(summary.photo_count, 1);
