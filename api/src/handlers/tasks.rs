@@ -19,6 +19,11 @@ use crate::models::{
 };
 use crate::storage::{JobStore, PhotoStore, TaskStoreError};
 
+/// Temporary placeholder catalog ID used until catalog-scoped routing is implemented.
+///
+/// Will be replaced when endpoints move under `/api/catalogs/{catalog_id}/...`.
+const PLACEHOLDER_CATALOG_ID: Uuid = Uuid::nil();
+
 /// Validates and trims a task name, returning an error if empty.
 fn validate_task_name(name: &str) -> Result<String, AppError> {
     let trimmed = name.trim().to_string();
@@ -53,7 +58,7 @@ pub async fn create_task(
         ));
     }
 
-    let task = Task::new(name, request.context);
+    let task = Task::new(PLACEHOLDER_CATALOG_ID, name, request.context);
 
     match state.task_store.create(task).await {
         Ok(created_task) => {
@@ -98,6 +103,7 @@ async fn get_task_summary(
     let job_count = job_store.count_by_task(task.task_id).await.unwrap_or(0);
     TaskSummary {
         task_id: task.task_id,
+        catalog_id: task.catalog_id,
         name: task.name,
         context: task.context,
         photo_count,
@@ -153,6 +159,7 @@ pub async fn get_task(
     let task = get_existing_task(&state.task_store, task_id).await?;
     let detail = TaskDetail {
         task_id: task.task_id,
+        catalog_id: task.catalog_id,
         name: task.name,
         context: task.context,
         created_at: task.created_at,
@@ -186,6 +193,7 @@ pub async fn update_task(
 
     let updated_task = Task {
         task_id: task.task_id,
+        catalog_id: task.catalog_id,
         name,
         context: request.context,
         created_at: task.created_at,

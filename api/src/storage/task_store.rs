@@ -84,7 +84,7 @@ pub trait TaskStore: Send + Sync {
     ///
     /// # Example
     /// ```ignore
-    /// let task = Task::new("SF Vacation".to_string(), "vacation in SF".to_string());
+    /// let task = Task::new(Uuid::new_v4(), "SF Vacation".to_string(), "vacation in SF".to_string());
     /// let created = store.create(task).await?;
     /// ```
     async fn create(&self, task: Task) -> TaskStoreResult<Task>;

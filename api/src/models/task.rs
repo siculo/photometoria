@@ -34,6 +34,13 @@ pub struct Task {
     /// Unique identifier (UUID)
     pub task_id: Uuid,
 
+    /// Identifier of the Lightroom catalog this task belongs to
+    ///
+    /// Defaults to nil UUID for backward compatibility with existing
+    /// storage that predates this field.
+    #[serde(default)]
+    pub catalog_id: Uuid,
+
     /// Short human-readable name for the task (must be unique)
     ///
     /// Defaults to empty string for backward compatibility with existing
@@ -57,18 +64,22 @@ impl Task {
     /// Creates a new Task with generated UUID and current timestamp.
     ///
     /// # Arguments
+    /// * `catalog_id` - UUID of the Lightroom catalog this task belongs to
     /// * `name` - Short human-readable name for the task
     /// * `context` - User-provided context information for AI analysis
     ///
     /// # Example
     /// ```
     /// use photometoria_rest_api::models::Task;
+    /// use uuid::Uuid;
     ///
-    /// let task = Task::new("SF Vacation".to_string(), "vacation in San Francisco".to_string());
+    /// let catalog_id = Uuid::new_v4();
+    /// let task = Task::new(catalog_id, "SF Vacation".to_string(), "vacation in San Francisco".to_string());
     /// ```
-    pub fn new(name: String, context: String) -> Self {
+    pub fn new(catalog_id: Uuid, name: String, context: String) -> Self {
         Self {
             task_id: Uuid::new_v4(),
+            catalog_id,
             name,
             context,
             created_at: Utc::now(),
@@ -122,6 +133,7 @@ pub struct CreateTaskRequest {
 /// ```json
 /// {
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "catalog_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 ///   "name": "SF Vacation 2024",
 ///   "context": "vacation in San Francisco, summer 2024",
 ///   "created_at": "2024-01-15T10:30:00Z"
@@ -131,6 +143,9 @@ pub struct CreateTaskRequest {
 pub struct TaskResponse {
     /// Unique task identifier
     pub task_id: Uuid,
+
+    /// Identifier of the Lightroom catalog this task belongs to
+    pub catalog_id: Uuid,
 
     /// Short human-readable name for the task
     pub name: String,
@@ -152,6 +167,7 @@ pub struct TaskResponse {
 /// ```json
 /// {
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "catalog_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 ///   "name": "SF Vacation 2024",
 ///   "context": "vacation in SF",
 ///   "photo_count": 15,
@@ -164,6 +180,9 @@ pub struct TaskResponse {
 pub struct TaskSummary {
     /// Unique task identifier
     pub task_id: Uuid,
+
+    /// Identifier of the Lightroom catalog this task belongs to
+    pub catalog_id: Uuid,
 
     /// Short human-readable name for the task
     pub name: String,
@@ -192,6 +211,7 @@ pub struct TaskSummary {
 /// ```json
 /// {
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440000",
+///   "catalog_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
 ///   "name": "SF Vacation 2024",
 ///   "context": "vacation in SF",
 ///   "created_at": "2024-01-15T10:30:00Z",
@@ -204,6 +224,9 @@ pub struct TaskSummary {
 pub struct TaskDetail {
     /// Unique task identifier
     pub task_id: Uuid,
+
+    /// Identifier of the Lightroom catalog this task belongs to
+    pub catalog_id: Uuid,
 
     /// Short human-readable name for the task
     pub name: String,
@@ -255,6 +278,7 @@ impl From<Task> for TaskResponse {
     fn from(task: Task) -> Self {
         Self {
             task_id: task.task_id,
+            catalog_id: task.catalog_id,
             name: task.name,
             context: task.context,
             created_at: task.created_at,
@@ -269,6 +293,7 @@ impl From<&Task> for TaskResponse {
     fn from(task: &Task) -> Self {
         Self {
             task_id: task.task_id,
+            catalog_id: task.catalog_id,
             name: task.name.clone(),
             context: task.context.clone(),
             created_at: task.created_at,
@@ -287,23 +312,32 @@ mod tests {
 
     #[test]
     fn test_task_new_generates_uuid() {
-        let task = Task::new("Test".to_string(), "test context".to_string());
+        let catalog_id = Uuid::new_v4();
+        let task = Task::new(catalog_id, "Test".to_string(), "test context".to_string());
         assert!(!task.task_id.is_nil());
     }
 
     #[test]
     fn test_task_new_sets_fields() {
-        let task = Task::new("SF Vacation".to_string(), "vacation in SF".to_string());
+        let catalog_id = Uuid::new_v4();
+        let task = Task::new(
+            catalog_id,
+            "SF Vacation".to_string(),
+            "vacation in SF".to_string(),
+        );
+        assert_eq!(task.catalog_id, catalog_id);
         assert_eq!(task.name, "SF Vacation");
         assert_eq!(task.context, "vacation in SF");
     }
 
     #[test]
     fn test_task_to_response_conversion() {
-        let task = Task::new("Test".to_string(), "test".to_string());
+        let catalog_id = Uuid::new_v4();
+        let task = Task::new(catalog_id, "Test".to_string(), "test".to_string());
         let response: TaskResponse = (&task).into();
 
         assert_eq!(response.task_id, task.task_id);
+        assert_eq!(response.catalog_id, task.catalog_id);
         assert_eq!(response.name, task.name);
         assert_eq!(response.context, task.context);
         assert_eq!(response.created_at, task.created_at);
@@ -311,10 +345,15 @@ mod tests {
 
     #[test]
     fn test_task_serialization() {
-        let task = Task::new("Test".to_string(), "test context".to_string());
+        let task = Task::new(
+            Uuid::new_v4(),
+            "Test".to_string(),
+            "test context".to_string(),
+        );
         let json = serde_json::to_string(&task).unwrap();
 
         assert!(json.contains("task_id"));
+        assert!(json.contains("catalog_id"));
         assert!(json.contains("name"));
         assert!(json.contains("context"));
         assert!(json.contains("created_at"));
@@ -329,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn test_task_deserialization_without_name() {
+    fn test_task_deserialization_without_name_and_catalog() {
         let json = r#"{
             "task_id": "550e8400-e29b-41d4-a716-446655440000",
             "context": "vacation in SF",
@@ -337,6 +376,7 @@ mod tests {
         }"#;
         let mut task: Task = serde_json::from_str(json).unwrap();
         assert_eq!(task.name, "");
+        assert!(task.catalog_id.is_nil());
 
         task.ensure_name();
         assert_eq!(task.name, "Untitled Task 550e");
@@ -345,7 +385,7 @@ mod tests {
 
     #[test]
     fn test_ensure_name_does_not_overwrite_existing() {
-        let mut task = Task::new("My Task".to_string(), "context".to_string());
+        let mut task = Task::new(Uuid::new_v4(), "My Task".to_string(), "context".to_string());
         task.ensure_name();
         assert_eq!(task.name, "My Task");
     }

@@ -182,6 +182,7 @@ impl JobStore for FileSystemJobStore {
                 use crate::models::Task;
                 let task = Task {
                     task_id: job.task_id,
+                    catalog_id: uuid::Uuid::new_v4(),
                     name: String::new(),
                     context: String::new(),
                     created_at: chrono::Utc::now(),

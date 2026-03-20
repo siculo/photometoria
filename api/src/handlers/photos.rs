@@ -112,7 +112,11 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create a task without photos
-        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task = Task::new(
+            Uuid::new_v4(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -135,6 +139,7 @@ mod tests {
 
         // Create a task
         let task = Task::new(
+            Uuid::new_v4(),
             "Test task with photos".to_string(),
             "test task with photos".to_string(),
         );
@@ -198,7 +203,11 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and photo
-        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task = Task::new(
+            Uuid::new_v4(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -240,7 +249,11 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and photo
-        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task = Task::new(
+            Uuid::new_v4(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -274,7 +287,7 @@ mod tests {
     async fn test_delete_photo_blocked_by_queued_job() {
         let ts = create_test_state().await;
 
-        let task = crate::models::Task::new("Task".to_string(), "task".to_string());
+        let task = crate::models::Task::new(Uuid::new_v4(), "Task".to_string(), "task".to_string());
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -295,7 +308,7 @@ mod tests {
     async fn test_delete_photo_blocked_by_processing_job() {
         let ts = create_test_state().await;
 
-        let task = crate::models::Task::new("Task".to_string(), "task".to_string());
+        let task = crate::models::Task::new(Uuid::new_v4(), "Task".to_string(), "task".to_string());
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -317,7 +330,7 @@ mod tests {
     async fn test_delete_photo_allowed_when_job_completed() {
         let ts = create_test_state().await;
 
-        let task = crate::models::Task::new("Task".to_string(), "task".to_string());
+        let task = crate::models::Task::new(Uuid::new_v4(), "Task".to_string(), "task".to_string());
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -343,7 +356,11 @@ mod tests {
     async fn test_get_photo_returns_client_id() {
         let ts = create_test_state().await;
 
-        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task = Task::new(
+            Uuid::new_v4(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -367,7 +384,11 @@ mod tests {
     async fn test_get_photo_returns_none_client_id() {
         let ts = create_test_state().await;
 
-        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task = Task::new(
+            Uuid::new_v4(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -386,7 +407,11 @@ mod tests {
     async fn test_task_photos_filter_by_client_id() {
         let ts = create_test_state().await;
 
-        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task = Task::new(
+            Uuid::new_v4(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -430,7 +455,11 @@ mod tests {
     async fn test_task_photos_filter_by_client_id_no_match() {
         let ts = create_test_state().await;
 
-        let task = Task::new("Test task".to_string(), "test task".to_string());
+        let task = Task::new(
+            Uuid::new_v4(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 

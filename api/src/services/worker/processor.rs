@@ -412,7 +412,11 @@ mod tests {
     async fn setup_job_and_photo(fixture: &TestFixture) -> (Job, Uuid) {
         let task = fixture
             .task_store
-            .create(Task::new("Test".to_string(), "test context".to_string()))
+            .create(Task::new(
+                Uuid::new_v4(),
+                "Test".to_string(),
+                "test context".to_string(),
+            ))
             .await
             .unwrap();
 
@@ -567,7 +571,11 @@ mod tests {
 
         let task = fixture
             .task_store
-            .create(Task::new("Test".to_string(), "context".to_string()))
+            .create(Task::new(
+                Uuid::new_v4(),
+                "Test".to_string(),
+                "context".to_string(),
+            ))
             .await
             .unwrap();
 
@@ -634,7 +642,7 @@ mod tests {
 
         let task = fixture
             .task_store
-            .create(Task::new("Test".to_string(), String::new()))
+            .create(Task::new(Uuid::new_v4(), "Test".to_string(), String::new()))
             .await
             .unwrap();
 

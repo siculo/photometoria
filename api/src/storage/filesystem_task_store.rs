@@ -304,6 +304,7 @@ mod tests {
     fn create_test_task_with_timestamp(name: &str, timestamp: DateTime<Utc>) -> Task {
         Task {
             task_id: Uuid::new_v4(),
+            catalog_id: Uuid::new_v4(),
             name: name.to_string(),
             context: format!("context for {}", name),
             created_at: timestamp,
@@ -312,7 +313,11 @@ mod tests {
 
     // Helper function to create a test task with current timestamp
     fn create_test_task(name: &str) -> Task {
-        Task::new(name.to_string(), format!("context for {}", name))
+        Task::new(
+            Uuid::new_v4(),
+            name.to_string(),
+            format!("context for {}", name),
+        )
     }
 
     #[tokio::test]
