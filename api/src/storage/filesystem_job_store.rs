@@ -357,11 +357,6 @@ impl JobStore for FileSystemJobStore {
     async fn delete_by_task(&self, task_id: Uuid) -> JobStoreResult<usize> {
         debug!("Deleting all jobs for task: {}", task_id);
 
-        let catalog_id = match self.resolve_catalog_id(task_id).await {
-            Ok(id) => id,
-            Err(_) => return Ok(0),
-        };
-
         // Collect job_ids to delete (can't delete while iterating)
         let job_ids: Vec<Uuid> = self
             .jobs
@@ -371,6 +366,11 @@ impl JobStore for FileSystemJobStore {
             .collect();
 
         let count = job_ids.len();
+        if count == 0 {
+            return Ok(0);
+        }
+
+        let catalog_id = self.resolve_catalog_id(task_id).await?;
 
         // Remove all jobs and their files
         for job_id in job_ids {
@@ -765,6 +765,17 @@ mod tests {
         // Verify task_b job still exists
         let jobs_b = ts.store.list_by_task(task_b).await.unwrap();
         assert_eq!(jobs_b.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_delete_by_task_nonexistent_returns_zero() {
+        let ts = create_store().await;
+
+        // No task created — delete_by_task should find no jobs and return Ok(0)
+        let result = ts.store.delete_by_task(Uuid::new_v4()).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
     }
 
     #[tokio::test]
