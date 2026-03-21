@@ -107,7 +107,7 @@ impl FileSystemJobStore {
             };
 
             // Scan for job files in this task
-            let job_files = match self.layout.scan_job_files_by_id(task_id).await {
+            let job_files = match self.layout.scan_job_files(task_id).await {
                 Ok(files) => files,
                 Err(e) => {
                     warn!("Failed to scan jobs for task {}: {}", task_id, e);
@@ -149,7 +149,7 @@ impl FileSystemJobStore {
 
     /// Saves a job's metadata to the filesystem.
     async fn save_job_to_file(&self, job: &Job) -> JobStoreResult<()> {
-        let path = self.layout.job_file_path_by_id(job.task_id, job.job_id);
+        let path = self.layout.job_file_path(job.task_id, job.job_id);
         let content = serde_json::to_string_pretty(job)
             .map_err(|e| JobStoreError::StorageError(format!("Failed to serialize job: {}", e)))?;
 
@@ -180,7 +180,7 @@ impl JobStore for FileSystemJobStore {
             Entry::Vacant(entry) => {
                 let job_dir = self
                     .layout
-                    .ensure_jobs_dir_by_id(job.task_id)
+                    .ensure_jobs_dir(job.task_id)
                     .await
                     .map_err(|e| {
                         error!("Failed to create jobs directory: {}", e);
@@ -284,7 +284,7 @@ impl JobStore for FileSystemJobStore {
         match self.jobs.remove(&job_id) {
             Some((_, job)) => {
                 // Remove job JSON file
-                let job_path = self.layout.job_file_path_by_id(job.task_id, job.job_id);
+                let job_path = self.layout.job_file_path(job.task_id, job.job_id);
                 if job_path.exists() {
                     if let Err(e) = tokio::fs::remove_file(&job_path).await {
                         error!("Failed to remove job file {:?}: {}", job_path, e);
@@ -320,7 +320,7 @@ impl JobStore for FileSystemJobStore {
         // Remove all jobs and their files
         for job_id in job_ids {
             if let Some((_, job)) = self.jobs.remove(&job_id) {
-                let job_path = self.layout.job_file_path_by_id(job.task_id, job.job_id);
+                let job_path = self.layout.job_file_path(job.task_id, job.job_id);
                 if job_path.exists() {
                     if let Err(e) = tokio::fs::remove_file(&job_path).await {
                         error!("Failed to remove job file {:?}: {}", job_path, e);
@@ -423,13 +423,13 @@ mod tests {
         assert!(exists);
 
         // Verify jobs directory was created
-        assert!(ts.store.layout.jobs_dir_by_id(task_id).exists());
+        assert!(ts.store.layout.jobs_dir(task_id).exists());
 
         // Verify job JSON file was created
         assert!(
             ts.store
                 .layout
-                .job_file_path_by_id(job.task_id, job.job_id)
+                .job_file_path(job.task_id, job.job_id)
                 .exists()
         );
     }
@@ -599,7 +599,7 @@ mod tests {
         let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         ts.store.create(job.clone()).await.unwrap();
-        let job_path = ts.store.layout.job_file_path_by_id(job.task_id, job.job_id);
+        let job_path = ts.store.layout.job_file_path(job.task_id, job.job_id);
         assert!(job_path.exists());
 
         // Delete the job
@@ -647,14 +647,8 @@ mod tests {
         ts.store.create(job2.clone()).await.unwrap();
         ts.store.create(job3).await.unwrap();
 
-        let job1_path = ts
-            .store
-            .layout
-            .job_file_path_by_id(job1.task_id, job1.job_id);
-        let job2_path = ts
-            .store
-            .layout
-            .job_file_path_by_id(job2.task_id, job2.job_id);
+        let job1_path = ts.store.layout.job_file_path(job1.task_id, job1.job_id);
+        let job2_path = ts.store.layout.job_file_path(job2.task_id, job2.job_id);
         assert!(job1_path.exists());
         assert!(job2_path.exists());
 

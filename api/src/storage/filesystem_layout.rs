@@ -60,15 +60,15 @@ impl FileSystemLayout {
     /// Returns the directory path for a task.
     ///
     /// Example: `{storage_path}/tasks/{task_id}/`
-    pub fn task_dir_by_id(&self, task_id: Uuid) -> PathBuf {
+    pub fn task_dir(&self, task_id: Uuid) -> PathBuf {
         self.tasks_root().join(task_id.to_string())
     }
 
     /// Returns the path to a task's metadata file.
     ///
     /// Example: `{storage_path}/tasks/{task_id}/task.json`
-    pub fn task_json_path_by_id(&self, task_id: Uuid) -> PathBuf {
-        self.task_dir_by_id(task_id).join("task.json")
+    pub fn task_json_path(&self, task_id: Uuid) -> PathBuf {
+        self.task_dir(task_id).join("task.json")
     }
 
     // ========================================================================
@@ -78,22 +78,22 @@ impl FileSystemLayout {
     /// Returns the directory where photo binary files are stored for a task.
     ///
     /// Example: `{storage_path}/tasks/{task_id}/imgs/`
-    pub fn photos_dir_by_id(&self, task_id: Uuid) -> PathBuf {
-        self.task_dir_by_id(task_id).join("imgs")
+    pub fn photos_dir(&self, task_id: Uuid) -> PathBuf {
+        self.task_dir(task_id).join("imgs")
     }
 
     /// Returns the path to a task's photos metadata file.
     ///
     /// Example: `{storage_path}/tasks/{task_id}/photos.json`
-    pub fn photos_json_path_by_id(&self, task_id: Uuid) -> PathBuf {
-        self.task_dir_by_id(task_id).join("photos.json")
+    pub fn photos_json_path(&self, task_id: Uuid) -> PathBuf {
+        self.task_dir(task_id).join("photos.json")
     }
 
     /// Returns the path to a photo's binary data file.
     ///
     /// Example: `{storage_path}/tasks/{task_id}/imgs/{photo_id}`
-    pub fn photo_file_path_by_id(&self, task_id: Uuid, photo_id: Uuid) -> PathBuf {
-        self.photos_dir_by_id(task_id).join(photo_id.to_string())
+    pub fn photo_file_path(&self, task_id: Uuid, photo_id: Uuid) -> PathBuf {
+        self.photos_dir(task_id).join(photo_id.to_string())
     }
 
     // ========================================================================
@@ -103,16 +103,15 @@ impl FileSystemLayout {
     /// Returns the directory where job files are stored for a task.
     ///
     /// Example: `{storage_path}/tasks/{task_id}/jobs/`
-    pub fn jobs_dir_by_id(&self, task_id: Uuid) -> PathBuf {
-        self.task_dir_by_id(task_id).join("jobs")
+    pub fn jobs_dir(&self, task_id: Uuid) -> PathBuf {
+        self.task_dir(task_id).join("jobs")
     }
 
     /// Returns the path to a job's metadata file.
     ///
     /// Example: `{storage_path}/tasks/{task_id}/jobs/{job_id}.json`
-    pub fn job_file_path_by_id(&self, task_id: Uuid, job_id: Uuid) -> PathBuf {
-        self.jobs_dir_by_id(task_id)
-            .join(format!("{}.json", job_id))
+    pub fn job_file_path(&self, task_id: Uuid, job_id: Uuid) -> PathBuf {
+        self.jobs_dir(task_id).join(format!("{}.json", job_id))
     }
 
     // ========================================================================
@@ -122,8 +121,8 @@ impl FileSystemLayout {
     /// Ensures the task directory exists, creating it if necessary.
     ///
     /// Returns the path to the created directory.
-    pub async fn ensure_task_dir_by_id(&self, task_id: Uuid) -> io::Result<PathBuf> {
-        let path = self.task_dir_by_id(task_id);
+    pub async fn ensure_task_dir(&self, task_id: Uuid) -> io::Result<PathBuf> {
+        let path = self.task_dir(task_id);
         tokio::fs::create_dir_all(&path).await?;
         Ok(path)
     }
@@ -131,8 +130,8 @@ impl FileSystemLayout {
     /// Ensures the photos (imgs) directory exists for a task.
     ///
     /// Returns the path to the created directory.
-    pub async fn ensure_photos_dir_by_id(&self, task_id: Uuid) -> io::Result<PathBuf> {
-        let path = self.photos_dir_by_id(task_id);
+    pub async fn ensure_photos_dir(&self, task_id: Uuid) -> io::Result<PathBuf> {
+        let path = self.photos_dir(task_id);
         tokio::fs::create_dir_all(&path).await?;
         Ok(path)
     }
@@ -140,8 +139,8 @@ impl FileSystemLayout {
     /// Ensures the jobs directory exists for a task.
     ///
     /// Returns the path to the created directory.
-    pub async fn ensure_jobs_dir_by_id(&self, task_id: Uuid) -> io::Result<PathBuf> {
-        let path = self.jobs_dir_by_id(task_id);
+    pub async fn ensure_jobs_dir(&self, task_id: Uuid) -> io::Result<PathBuf> {
+        let path = self.jobs_dir(task_id);
         tokio::fs::create_dir_all(&path).await?;
         Ok(path)
     }
@@ -182,8 +181,8 @@ impl FileSystemLayout {
     /// Checks if a photos.json file exists for a given task ID.
     ///
     /// Returns Some(path) if the file exists, None otherwise.
-    pub fn photos_json_exists_by_id(&self, task_id: Uuid) -> Option<PathBuf> {
-        let path = self.photos_json_path_by_id(task_id);
+    pub fn photos_json_exists(&self, task_id: Uuid) -> Option<PathBuf> {
+        let path = self.photos_json_path(task_id);
         if path.exists() { Some(path) } else { None }
     }
 
@@ -191,8 +190,8 @@ impl FileSystemLayout {
     ///
     /// Used by JobStore during initialization to load existing jobs for a specific task.
     /// Returns empty vec if the jobs directory doesn't exist.
-    pub async fn scan_job_files_by_id(&self, task_id: Uuid) -> io::Result<Vec<PathBuf>> {
-        let jobs_dir = self.jobs_dir_by_id(task_id);
+    pub async fn scan_job_files(&self, task_id: Uuid) -> io::Result<Vec<PathBuf>> {
+        let jobs_dir = self.jobs_dir(task_id);
 
         if !jobs_dir.exists() {
             return Ok(Vec::new());
@@ -257,13 +256,13 @@ mod tests {
         let layout = FileSystemLayout::new(storage_path.clone());
         let task_id = Uuid::new_v4();
 
-        let task_dir = layout.task_dir_by_id(task_id);
+        let task_dir = layout.task_dir(task_id);
         assert_eq!(
             task_dir,
             storage_path.join("tasks").join(task_id.to_string())
         );
 
-        let task_json = layout.task_json_path_by_id(task_id);
+        let task_json = layout.task_json_path(task_id);
         assert_eq!(task_json, task_dir.join("task.json"));
     }
 
@@ -274,7 +273,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let photo_id = Uuid::new_v4();
 
-        let photos_dir = layout.photos_dir_by_id(task_id);
+        let photos_dir = layout.photos_dir(task_id);
         assert_eq!(
             photos_dir,
             storage_path
@@ -283,7 +282,7 @@ mod tests {
                 .join("imgs")
         );
 
-        let photos_json = layout.photos_json_path_by_id(task_id);
+        let photos_json = layout.photos_json_path(task_id);
         assert_eq!(
             photos_json,
             storage_path
@@ -292,7 +291,7 @@ mod tests {
                 .join("photos.json")
         );
 
-        let photo_file = layout.photo_file_path_by_id(task_id, photo_id);
+        let photo_file = layout.photo_file_path(task_id, photo_id);
         assert_eq!(photo_file, photos_dir.join(photo_id.to_string()));
     }
 
@@ -303,7 +302,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job_id = Uuid::new_v4();
 
-        let jobs_dir = layout.jobs_dir_by_id(task_id);
+        let jobs_dir = layout.jobs_dir(task_id);
         assert_eq!(
             jobs_dir,
             storage_path
@@ -312,7 +311,7 @@ mod tests {
                 .join("jobs")
         );
 
-        let job_file = layout.job_file_path_by_id(task_id, job_id);
+        let job_file = layout.job_file_path(task_id, job_id);
         assert_eq!(job_file, jobs_dir.join(format!("{}.json", job_id)));
     }
 
@@ -322,10 +321,10 @@ mod tests {
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
         let task_id = Uuid::new_v4();
 
-        let path = layout.ensure_task_dir_by_id(task_id).await.unwrap();
+        let path = layout.ensure_task_dir(task_id).await.unwrap();
         assert!(path.exists());
         assert!(path.is_dir());
-        assert_eq!(path, layout.task_dir_by_id(task_id));
+        assert_eq!(path, layout.task_dir(task_id));
     }
 
     #[tokio::test]
@@ -334,10 +333,10 @@ mod tests {
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
         let task_id = Uuid::new_v4();
 
-        let path = layout.ensure_photos_dir_by_id(task_id).await.unwrap();
+        let path = layout.ensure_photos_dir(task_id).await.unwrap();
         assert!(path.exists());
         assert!(path.is_dir());
-        assert_eq!(path, layout.photos_dir_by_id(task_id));
+        assert_eq!(path, layout.photos_dir(task_id));
     }
 
     #[tokio::test]
@@ -346,10 +345,10 @@ mod tests {
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
         let task_id = Uuid::new_v4();
 
-        let path = layout.ensure_jobs_dir_by_id(task_id).await.unwrap();
+        let path = layout.ensure_jobs_dir(task_id).await.unwrap();
         assert!(path.exists());
         assert!(path.is_dir());
-        assert_eq!(path, layout.jobs_dir_by_id(task_id));
+        assert_eq!(path, layout.jobs_dir(task_id));
     }
 
     #[tokio::test]
@@ -370,18 +369,18 @@ mod tests {
         let task2_id = Uuid::new_v4();
         let task3_id = Uuid::new_v4();
 
-        layout.ensure_task_dir_by_id(task1_id).await.unwrap();
-        layout.ensure_task_dir_by_id(task2_id).await.unwrap();
-        layout.ensure_task_dir_by_id(task3_id).await.unwrap();
+        layout.ensure_task_dir(task1_id).await.unwrap();
+        layout.ensure_task_dir(task2_id).await.unwrap();
+        layout.ensure_task_dir(task3_id).await.unwrap();
 
         // Write task.json files
-        tokio::fs::write(layout.task_json_path_by_id(task1_id), b"{}")
+        tokio::fs::write(layout.task_json_path(task1_id), b"{}")
             .await
             .unwrap();
-        tokio::fs::write(layout.task_json_path_by_id(task2_id), b"{}")
+        tokio::fs::write(layout.task_json_path(task2_id), b"{}")
             .await
             .unwrap();
-        tokio::fs::write(layout.task_json_path_by_id(task3_id), b"{}")
+        tokio::fs::write(layout.task_json_path(task3_id), b"{}")
             .await
             .unwrap();
 
@@ -396,24 +395,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_photos_json_exists_by_id() {
+    async fn test_photos_json_exists() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
         let task_id = Uuid::new_v4();
 
         // Initially doesn't exist
-        assert!(layout.photos_json_exists_by_id(task_id).is_none());
+        assert!(layout.photos_json_exists(task_id).is_none());
 
         // Create the directory and file
-        layout.ensure_task_dir_by_id(task_id).await.unwrap();
-        tokio::fs::write(layout.photos_json_path_by_id(task_id), b"[]")
+        layout.ensure_task_dir(task_id).await.unwrap();
+        tokio::fs::write(layout.photos_json_path(task_id), b"[]")
             .await
             .unwrap();
 
         // Now it exists
-        let path = layout.photos_json_exists_by_id(task_id);
+        let path = layout.photos_json_exists(task_id);
         assert!(path.is_some());
-        assert_eq!(path.unwrap(), layout.photos_json_path_by_id(task_id));
+        assert_eq!(path.unwrap(), layout.photos_json_path(task_id));
     }
 
     #[tokio::test]
@@ -423,7 +422,7 @@ mod tests {
         let task_id = Uuid::new_v4();
 
         // Jobs directory doesn't exist yet
-        let files = layout.scan_job_files_by_id(task_id).await.unwrap();
+        let files = layout.scan_job_files(task_id).await.unwrap();
         assert!(files.is_empty());
     }
 
@@ -434,24 +433,24 @@ mod tests {
         let task_id = Uuid::new_v4();
 
         // Create jobs directory
-        layout.ensure_jobs_dir_by_id(task_id).await.unwrap();
+        layout.ensure_jobs_dir(task_id).await.unwrap();
 
         // Create some job files
         let job1_id = Uuid::new_v4();
         let job2_id = Uuid::new_v4();
         let job3_id = Uuid::new_v4();
 
-        tokio::fs::write(layout.job_file_path_by_id(task_id, job1_id), b"{}")
+        tokio::fs::write(layout.job_file_path(task_id, job1_id), b"{}")
             .await
             .unwrap();
-        tokio::fs::write(layout.job_file_path_by_id(task_id, job2_id), b"{}")
+        tokio::fs::write(layout.job_file_path(task_id, job2_id), b"{}")
             .await
             .unwrap();
-        tokio::fs::write(layout.job_file_path_by_id(task_id, job3_id), b"{}")
+        tokio::fs::write(layout.job_file_path(task_id, job3_id), b"{}")
             .await
             .unwrap();
 
-        let files = layout.scan_job_files_by_id(task_id).await.unwrap();
+        let files = layout.scan_job_files(task_id).await.unwrap();
         assert_eq!(files.len(), 3);
 
         // Verify all paths exist and are JSON files
@@ -468,18 +467,18 @@ mod tests {
         let task_id = Uuid::new_v4();
 
         // Create jobs directory
-        layout.ensure_jobs_dir_by_id(task_id).await.unwrap();
+        layout.ensure_jobs_dir(task_id).await.unwrap();
 
         // Create a job file and a non-JSON file
         let job_id = Uuid::new_v4();
-        tokio::fs::write(layout.job_file_path_by_id(task_id, job_id), b"{}")
+        tokio::fs::write(layout.job_file_path(task_id, job_id), b"{}")
             .await
             .unwrap();
-        tokio::fs::write(layout.jobs_dir_by_id(task_id).join("README.txt"), b"test")
+        tokio::fs::write(layout.jobs_dir(task_id).join("README.txt"), b"test")
             .await
             .unwrap();
 
-        let files = layout.scan_job_files_by_id(task_id).await.unwrap();
+        let files = layout.scan_job_files(task_id).await.unwrap();
         assert_eq!(files.len(), 1); // Only the JSON file
     }
 }

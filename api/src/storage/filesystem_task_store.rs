@@ -117,7 +117,7 @@ impl FileSystemTaskStore {
 
     /// Saves a task's metadata to the filesystem.
     async fn save_task_to_file(&self, task: &Task) -> TaskStoreResult<()> {
-        let path = self.layout.task_json_path_by_id(task.task_id);
+        let path = self.layout.task_json_path(task.task_id);
         let content = serde_json::to_string_pretty(task).map_err(|e| {
             TaskStoreError::StorageError(format!("Failed to serialize task: {}", e))
         })?;
@@ -150,7 +150,7 @@ impl TaskStore for FileSystemTaskStore {
                 // Create task directory on filesystem
                 let task_dir = self
                     .layout
-                    .ensure_task_dir_by_id(task.task_id)
+                    .ensure_task_dir(task.task_id)
                     .await
                     .map_err(|e| {
                         error!("Failed to create task directory: {}", e);
@@ -235,7 +235,7 @@ impl TaskStore for FileSystemTaskStore {
         match self.tasks.remove(&task_id) {
             Some((_, task)) => {
                 // Remove task directory and all its contents (includes task.json and photos)
-                let task_dir = self.layout.task_dir_by_id(task.task_id);
+                let task_dir = self.layout.task_dir(task.task_id);
                 if task_dir.exists() {
                     if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
                         error!("Failed to remove task directory {:?}: {}", task_dir, e);
@@ -344,10 +344,10 @@ mod tests {
         assert!(exists);
 
         // Verify directory was created
-        assert!(ts.store.layout.task_dir_by_id(task.task_id).exists());
+        assert!(ts.store.layout.task_dir(task.task_id).exists());
 
         // Verify task.json was created
-        assert!(ts.store.layout.task_json_path_by_id(task.task_id).exists());
+        assert!(ts.store.layout.task_json_path(task.task_id).exists());
     }
 
     #[tokio::test]
@@ -467,7 +467,7 @@ mod tests {
         let task = create_test_task("vacation in SF");
 
         ts.store.create(task.clone()).await.unwrap();
-        let task_dir = ts.store.layout.task_dir_by_id(task.task_id);
+        let task_dir = ts.store.layout.task_dir(task.task_id);
         assert!(task_dir.exists());
 
         // Delete the task
