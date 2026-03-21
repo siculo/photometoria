@@ -171,7 +171,9 @@ impl FileSystemPhotoStore {
         photo: &Photo,
     ) -> Result<(), PhotoStoreError> {
         // Also delete the file from disk
-        let file_path = self.layout.photo_file_path(photo);
+        let file_path = self
+            .layout
+            .photo_file_path_by_id(photo.task_id, photo.photo_id);
         if file_path.exists() {
             if let Err(e) = tokio::fs::remove_file(&file_path).await {
                 error!("Failed to remove photo file {:?}: {}", file_path, e);
@@ -376,24 +378,20 @@ impl PhotoStore for FileSystemPhotoStore {
         let photo_clone = photo.value().clone();
         drop(photo); // Release the lock
 
-        // Get task for layout operations
-        use crate::models::Task;
-        let task = Task {
-            task_id: photo_clone.task_id,
-            catalog_id: uuid::Uuid::new_v4(),
-            name: String::new(),
-            context: String::new(),
-            created_at: chrono::Utc::now(),
-        };
-
         // Ensure imgs directory exists
-        let imgs_dir = self.layout.ensure_photos_dir(&task).await.map_err(|e| {
-            error!("Failed to create imgs directory: {}", e);
-            PhotoStoreError::StorageError(format!("Failed to create imgs directory: {}", e))
-        })?;
+        let imgs_dir = self
+            .layout
+            .ensure_photos_dir_by_id(photo_clone.task_id)
+            .await
+            .map_err(|e| {
+                error!("Failed to create imgs directory: {}", e);
+                PhotoStoreError::StorageError(format!("Failed to create imgs directory: {}", e))
+            })?;
         debug!("Ensured imgs directory exists: {:?}", imgs_dir);
 
-        let file_path = self.layout.photo_file_path(&photo_clone);
+        let file_path = self
+            .layout
+            .photo_file_path_by_id(photo_clone.task_id, photo_clone.photo_id);
         tokio::fs::write(&file_path, data).await.map_err(|e| {
             error!("Failed to write photo file {:?}: {}", file_path, e);
             PhotoStoreError::StorageError(format!("Failed to write file: {}", e))
@@ -419,7 +417,9 @@ impl PhotoStore for FileSystemPhotoStore {
         let photo_clone = photo.value().clone();
         drop(photo); // Release the lock
 
-        let file_path = self.layout.photo_file_path(&photo_clone);
+        let file_path = self
+            .layout
+            .photo_file_path_by_id(photo_clone.task_id, photo_clone.photo_id);
         let data = tokio::fs::read(&file_path).await.map_err(|e| {
             error!("Failed to read photo file {:?}: {}", file_path, e);
             PhotoStoreError::NotFound(photo_id)
@@ -437,7 +437,9 @@ impl PhotoStore for FileSystemPhotoStore {
             let photo_clone = photo.value().clone();
             drop(photo); // Release the lock
 
-            let file_path = self.layout.photo_file_path(&photo_clone);
+            let file_path = self
+                .layout
+                .photo_file_path_by_id(photo_clone.task_id, photo_clone.photo_id);
             if file_path.exists() {
                 if let Err(e) = tokio::fs::remove_file(&file_path).await {
                     error!("Failed to remove photo file {:?}: {}", file_path, e);
@@ -605,7 +607,10 @@ mod tests {
             .save_data(photo.photo_id, &[1, 2, 3])
             .await
             .unwrap();
-        let file_path = ts.store.layout.photo_file_path(&photo);
+        let file_path = ts
+            .store
+            .layout
+            .photo_file_path_by_id(photo.task_id, photo.photo_id);
         assert!(file_path.exists());
 
         // Delete the photo
@@ -772,7 +777,10 @@ mod tests {
             .unwrap();
 
         // Verify file exists on disk
-        let file_path = ts.store.layout.photo_file_path(&photo);
+        let file_path = ts
+            .store
+            .layout
+            .photo_file_path_by_id(photo.task_id, photo.photo_id);
         assert!(file_path.exists());
 
         // Load the data back
