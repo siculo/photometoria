@@ -65,11 +65,13 @@ impl FileSystemTaskStore {
     }
 
     /// Loads all tasks from the filesystem into memory.
+    ///
+    /// Scans the catalog hierarchy: `catalogs/{catalog_id}/tasks/{task_id}/task.json`
     async fn load_all(&self) {
-        let task_files = match self.layout.scan_task_json_files().await {
-            Ok(files) => files,
+        let catalog_dirs = match self.layout.scan_catalog_dirs().await {
+            Ok(dirs) => dirs,
             Err(e) => {
-                warn!("Failed to scan task files: {}", e);
+                warn!("Failed to scan catalog directories: {}", e);
                 return;
             }
         };
@@ -77,24 +79,50 @@ impl FileSystemTaskStore {
         let mut loaded_count = 0;
         let mut error_count = 0;
 
-        for task_json in task_files {
-            match self.load_task_from_file(&task_json).await {
-                Ok(mut task) => {
-                    if task.name.is_empty() {
-                        task.ensure_name();
-                        if let Err(e) = self.save_task_to_file(&task).await {
-                            warn!(
-                                "Failed to persist migrated name for task {}: {}",
-                                task.task_id, e
-                            );
-                        }
-                    }
-                    self.tasks.insert(task.task_id, task);
-                    loaded_count += 1;
+        for catalog_dir in catalog_dirs {
+            let catalog_id = match catalog_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|s| s.parse::<Uuid>().ok())
+            {
+                Some(id) => id,
+                None => {
+                    warn!("Skipping invalid catalog directory: {:?}", catalog_dir);
+                    continue;
                 }
+            };
+
+            let task_files = match self.layout.scan_task_json_files(catalog_id).await {
+                Ok(files) => files,
                 Err(e) => {
-                    warn!("Failed to load task from {:?}: {}", task_json, e);
+                    warn!(
+                        "Failed to scan task files for catalog {}: {}",
+                        catalog_id, e
+                    );
                     error_count += 1;
+                    continue;
+                }
+            };
+
+            for task_json in task_files {
+                match self.load_task_from_file(&task_json).await {
+                    Ok(mut task) => {
+                        if task.name.is_empty() {
+                            task.ensure_name();
+                            if let Err(e) = self.save_task_to_file(&task).await {
+                                warn!(
+                                    "Failed to persist migrated name for task {}: {}",
+                                    task.task_id, e
+                                );
+                            }
+                        }
+                        self.tasks.insert(task.task_id, task);
+                        loaded_count += 1;
+                    }
+                    Err(e) => {
+                        warn!("Failed to load task from {:?}: {}", task_json, e);
+                        error_count += 1;
+                    }
                 }
             }
         }
@@ -117,7 +145,7 @@ impl FileSystemTaskStore {
 
     /// Saves a task's metadata to the filesystem.
     async fn save_task_to_file(&self, task: &Task) -> TaskStoreResult<()> {
-        let path = self.layout.task_json_path(task.task_id);
+        let path = self.layout.task_json_path(task.catalog_id, task.task_id);
         let content = serde_json::to_string_pretty(task).map_err(|e| {
             TaskStoreError::StorageError(format!("Failed to serialize task: {}", e))
         })?;
@@ -150,7 +178,7 @@ impl TaskStore for FileSystemTaskStore {
                 // Create task directory on filesystem
                 let task_dir = self
                     .layout
-                    .ensure_task_dir(task.task_id)
+                    .ensure_task_dir(task.catalog_id, task.task_id)
                     .await
                     .map_err(|e| {
                         error!("Failed to create task directory: {}", e);
@@ -235,7 +263,7 @@ impl TaskStore for FileSystemTaskStore {
         match self.tasks.remove(&task_id) {
             Some((_, task)) => {
                 // Remove task directory and all its contents (includes task.json and photos)
-                let task_dir = self.layout.task_dir(task.task_id);
+                let task_dir = self.layout.task_dir(task.catalog_id, task.task_id);
                 if task_dir.exists() {
                     if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
                         error!("Failed to remove task directory {:?}: {}", task_dir, e);
@@ -344,10 +372,20 @@ mod tests {
         assert!(exists);
 
         // Verify directory was created
-        assert!(ts.store.layout.task_dir(task.task_id).exists());
+        assert!(
+            ts.store
+                .layout
+                .task_dir(task.catalog_id, task.task_id)
+                .exists()
+        );
 
         // Verify task.json was created
-        assert!(ts.store.layout.task_json_path(task.task_id).exists());
+        assert!(
+            ts.store
+                .layout
+                .task_json_path(task.catalog_id, task.task_id)
+                .exists()
+        );
     }
 
     #[tokio::test]
@@ -467,7 +505,7 @@ mod tests {
         let task = create_test_task("vacation in SF");
 
         ts.store.create(task.clone()).await.unwrap();
-        let task_dir = ts.store.layout.task_dir(task.task_id);
+        let task_dir = ts.store.layout.task_dir(task.catalog_id, task.task_id);
         assert!(task_dir.exists());
 
         // Delete the task

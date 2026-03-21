@@ -70,19 +70,30 @@ impl FileSystemJobStore {
         store
     }
 
+    /// Resolves the catalog identity for a given task.
+    async fn resolve_catalog_id(&self, task_id: Uuid) -> JobStoreResult<Uuid> {
+        let task = self
+            .task_store
+            .get(task_id)
+            .await
+            .map_err(|e| JobStoreError::StorageError(format!("Failed to query task store: {}", e)))?
+            .ok_or_else(|| {
+                JobStoreError::StorageError(format!(
+                    "Cannot resolve catalog: task {} not found",
+                    task_id
+                ))
+            })?;
+        Ok(task.catalog_id)
+    }
+
     /// Loads all jobs from the filesystem into memory.
+    ///
+    /// Scans the catalog hierarchy: `catalogs/{catalog_id}/tasks/{task_id}/jobs/*.json`
     async fn load_all(&self) {
-        let tasks_dir = self.layout.tasks_root();
-
-        if !tasks_dir.exists() {
-            debug!("Tasks directory does not exist, starting with empty job store");
-            return;
-        }
-
-        let mut task_entries = match tokio::fs::read_dir(&tasks_dir).await {
-            Ok(entries) => entries,
+        let catalog_dirs = match self.layout.scan_catalog_dirs().await {
+            Ok(dirs) => dirs,
             Err(e) => {
-                warn!("Failed to read tasks directory: {}", e);
+                warn!("Failed to scan catalog directories: {}", e);
                 return;
             }
         };
@@ -90,46 +101,72 @@ impl FileSystemJobStore {
         let mut loaded_count = 0;
         let mut error_count = 0;
 
-        // Iterate through each task directory
-        while let Ok(Some(task_entry)) = task_entries.next_entry().await {
-            let task_path = task_entry.path();
-            if !task_path.is_dir() {
-                continue;
-            }
-
-            // Extract task_id from directory name
-            let task_id = match task_path
+        for catalog_dir in catalog_dirs {
+            let catalog_id = match catalog_dir
                 .file_name()
                 .and_then(|n| n.to_str())
                 .and_then(|s| s.parse::<Uuid>().ok())
             {
                 Some(id) => id,
                 None => {
-                    warn!("Skipping invalid task directory: {:?}", task_path);
+                    warn!("Skipping invalid catalog directory: {:?}", catalog_dir);
                     continue;
                 }
             };
 
-            // Scan for job files in this task
-            let job_files = match self.layout.scan_job_files(task_id).await {
-                Ok(files) => files,
+            let tasks_dir = self.layout.tasks_root(catalog_id);
+            if !tasks_dir.exists() {
+                continue;
+            }
+
+            let mut task_entries = match tokio::fs::read_dir(&tasks_dir).await {
+                Ok(entries) => entries,
                 Err(e) => {
-                    warn!("Failed to scan jobs for task {}: {}", task_id, e);
-                    error_count += 1;
+                    warn!(
+                        "Failed to read tasks directory for catalog {}: {}",
+                        catalog_id, e
+                    );
                     continue;
                 }
             };
 
-            // Load each job file
-            for job_path in job_files {
-                match self.load_job_from_file(&job_path).await {
-                    Ok(job) => {
-                        self.jobs.insert(job.job_id, job);
-                        loaded_count += 1;
+            while let Ok(Some(task_entry)) = task_entries.next_entry().await {
+                let task_path = task_entry.path();
+                if !task_path.is_dir() {
+                    continue;
+                }
+
+                let task_id = match task_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .and_then(|s| s.parse::<Uuid>().ok())
+                {
+                    Some(id) => id,
+                    None => {
+                        warn!("Skipping invalid task directory: {:?}", task_path);
+                        continue;
                     }
+                };
+
+                let job_files = match self.layout.scan_job_files(catalog_id, task_id).await {
+                    Ok(files) => files,
                     Err(e) => {
-                        warn!("Failed to load job from {:?}: {}", job_path, e);
+                        warn!("Failed to scan jobs for task {}: {}", task_id, e);
                         error_count += 1;
+                        continue;
+                    }
+                };
+
+                for job_path in job_files {
+                    match self.load_job_from_file(&job_path).await {
+                        Ok(job) => {
+                            self.jobs.insert(job.job_id, job);
+                            loaded_count += 1;
+                        }
+                        Err(e) => {
+                            warn!("Failed to load job from {:?}: {}", job_path, e);
+                            error_count += 1;
+                        }
                     }
                 }
             }
@@ -152,8 +189,10 @@ impl FileSystemJobStore {
     }
 
     /// Saves a job's metadata to the filesystem.
-    async fn save_job_to_file(&self, job: &Job) -> JobStoreResult<()> {
-        let path = self.layout.job_file_path(job.task_id, job.job_id);
+    async fn save_job_to_file(&self, job: &Job, catalog_id: Uuid) -> JobStoreResult<()> {
+        let path = self
+            .layout
+            .job_file_path(catalog_id, job.task_id, job.job_id);
         let content = serde_json::to_string_pretty(job)
             .map_err(|e| JobStoreError::StorageError(format!("Failed to serialize job: {}", e)))?;
 
@@ -178,13 +217,15 @@ impl JobStore for FileSystemJobStore {
 
         debug!("Attempting to create job: {}", job_id);
 
+        let catalog_id = self.resolve_catalog_id(job.task_id).await?;
+
         // Use entry API to atomically check and insert
         match self.jobs.entry(job_id) {
             Entry::Occupied(_) => Err(JobStoreError::AlreadyExists(job_id)),
             Entry::Vacant(entry) => {
                 let job_dir = self
                     .layout
-                    .ensure_jobs_dir(job.task_id)
+                    .ensure_jobs_dir(catalog_id, job.task_id)
                     .await
                     .map_err(|e| {
                         error!("Failed to create jobs directory: {}", e);
@@ -196,7 +237,7 @@ impl JobStore for FileSystemJobStore {
                 debug!("Ensured jobs directory exists: {:?}", job_dir);
 
                 // Save metadata to filesystem
-                self.save_job_to_file(&job).await?;
+                self.save_job_to_file(&job, catalog_id).await?;
 
                 entry.insert(job.clone());
                 info!(
@@ -257,6 +298,8 @@ impl JobStore for FileSystemJobStore {
 
         debug!("Updating job: {}", job_id);
 
+        let catalog_id = self.resolve_catalog_id(job.task_id).await?;
+
         // Use get_mut to modify in-place
         match self.jobs.get_mut(&job_id) {
             Some(mut entry) => {
@@ -265,7 +308,7 @@ impl JobStore for FileSystemJobStore {
                 *entry = job.clone();
 
                 // Save updated metadata to filesystem
-                if let Err(e) = self.save_job_to_file(&job).await {
+                if let Err(e) = self.save_job_to_file(&job, catalog_id).await {
                     // Rollback in-memory change on filesystem error
                     *entry = old_job;
                     return Err(e);
@@ -287,8 +330,11 @@ impl JobStore for FileSystemJobStore {
         // remove() returns Some((key, value)) if the entry existed
         match self.jobs.remove(&job_id) {
             Some((_, job)) => {
+                let catalog_id = self.resolve_catalog_id(job.task_id).await?;
                 // Remove job JSON file
-                let job_path = self.layout.job_file_path(job.task_id, job.job_id);
+                let job_path = self
+                    .layout
+                    .job_file_path(catalog_id, job.task_id, job.job_id);
                 if job_path.exists() {
                     if let Err(e) = tokio::fs::remove_file(&job_path).await {
                         error!("Failed to remove job file {:?}: {}", job_path, e);
@@ -311,6 +357,11 @@ impl JobStore for FileSystemJobStore {
     async fn delete_by_task(&self, task_id: Uuid) -> JobStoreResult<usize> {
         debug!("Deleting all jobs for task: {}", task_id);
 
+        let catalog_id = match self.resolve_catalog_id(task_id).await {
+            Ok(id) => id,
+            Err(_) => return Ok(0),
+        };
+
         // Collect job_ids to delete (can't delete while iterating)
         let job_ids: Vec<Uuid> = self
             .jobs
@@ -324,7 +375,9 @@ impl JobStore for FileSystemJobStore {
         // Remove all jobs and their files
         for job_id in job_ids {
             if let Some((_, job)) = self.jobs.remove(&job_id) {
-                let job_path = self.layout.job_file_path(job.task_id, job.job_id);
+                let job_path = self
+                    .layout
+                    .job_file_path(catalog_id, job.task_id, job.job_id);
                 if job_path.exists() {
                     if let Err(e) = tokio::fs::remove_file(&job_path).await {
                         error!("Failed to remove job file {:?}: {}", job_path, e);
@@ -366,7 +419,7 @@ impl JobStore for FileSystemJobStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::JobStatus;
+    use crate::models::{JobStatus, Task};
     use crate::storage::FileSystemTaskStore;
     use chrono::{DateTime, Duration, Utc};
     use tempfile::TempDir;
@@ -375,6 +428,7 @@ mod tests {
     // Helper struct to keep temp dir alive during test
     struct TestStore {
         store: FileSystemJobStore,
+        task_store: Arc<dyn TaskStore>,
         _temp_dir: TempDir,
     }
 
@@ -384,11 +438,27 @@ mod tests {
         let storage_path = temp_dir.path().to_path_buf();
         let task_store: Arc<dyn TaskStore> =
             Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store).await;
+        let store = FileSystemJobStore::new(storage_path, task_store.clone()).await;
         TestStore {
             store,
+            task_store,
             _temp_dir: temp_dir,
         }
+    }
+
+    /// Creates a task in the task store so that resolve_catalog_id works.
+    /// Returns the catalog_id assigned to the task.
+    async fn setup_task(ts: &TestStore, task_id: Uuid) -> Uuid {
+        let catalog_id = Uuid::new_v4();
+        let task = Task {
+            task_id,
+            catalog_id,
+            name: "test".to_string(),
+            context: "test context".to_string(),
+            created_at: Utc::now(),
+        };
+        ts.task_store.create(task).await.unwrap();
+        catalog_id
     }
 
     // Helper function to create a test job
@@ -414,6 +484,7 @@ mod tests {
     async fn test_create_job() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
+        let catalog_id = setup_task(&ts, task_id).await;
         let photo_ids = vec![Uuid::new_v4(), Uuid::new_v4()];
         let job = create_test_job(task_id, "qwen3-vl:8b", photo_ids);
 
@@ -431,13 +502,13 @@ mod tests {
         assert!(exists);
 
         // Verify jobs directory was created
-        assert!(ts.store.layout.jobs_dir(task_id).exists());
+        assert!(ts.store.layout.jobs_dir(catalog_id, task_id).exists());
 
         // Verify job JSON file was created
         assert!(
             ts.store
                 .layout
-                .job_file_path(job.task_id, job.job_id)
+                .job_file_path(catalog_id, job.task_id, job.job_id)
                 .exists()
         );
     }
@@ -446,6 +517,7 @@ mod tests {
     async fn test_create_duplicate_fails() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
+        setup_task(&ts, task_id).await;
         let photo_ids = vec![Uuid::new_v4()];
         let job = create_test_job(task_id, "qwen3-vl:8b", photo_ids);
 
@@ -468,6 +540,7 @@ mod tests {
     async fn test_get_existing_job() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
+        setup_task(&ts, task_id).await;
         let photo_ids = vec![Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
         let job = create_test_job(task_id, "llava", photo_ids);
 
@@ -496,6 +569,7 @@ mod tests {
     async fn test_list_jobs_ordered_by_created_at() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
+        setup_task(&ts, task_id).await;
 
         // Create jobs with explicit timestamps to control ordering
         let now = Utc::now();
@@ -536,6 +610,8 @@ mod tests {
         let task_a = Uuid::new_v4();
         let task_b = Uuid::new_v4();
         let task_c = Uuid::new_v4();
+        setup_task(&ts, task_a).await;
+        setup_task(&ts, task_b).await;
         let photo_id = Uuid::new_v4();
         let job1 = create_test_job(task_a, "qwen3-vl:8b", vec![photo_id]);
         let job2 = create_test_job(task_a, "llava", vec![photo_id]);
@@ -564,6 +640,7 @@ mod tests {
     async fn test_update_job() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
+        setup_task(&ts, task_id).await;
         let mut job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         ts.store.create(job.clone()).await.unwrap();
@@ -586,6 +663,7 @@ mod tests {
     async fn test_update_nonexistent_fails() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
+        setup_task(&ts, task_id).await;
         let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         // Try to update without creating first
@@ -604,10 +682,14 @@ mod tests {
     async fn test_delete_job() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
+        let catalog_id = setup_task(&ts, task_id).await;
         let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         ts.store.create(job.clone()).await.unwrap();
-        let job_path = ts.store.layout.job_file_path(job.task_id, job.job_id);
+        let job_path = ts
+            .store
+            .layout
+            .job_file_path(catalog_id, job.task_id, job.job_id);
         assert!(job_path.exists());
 
         // Delete the job
@@ -646,6 +728,8 @@ mod tests {
         // Create jobs for two different tasks
         let task_a = Uuid::new_v4();
         let task_b = Uuid::new_v4();
+        let catalog_id_a = setup_task(&ts, task_a).await;
+        setup_task(&ts, task_b).await;
         let photo_id = Uuid::new_v4();
         let job1 = create_test_job(task_a, "qwen3-vl:8b", vec![photo_id]);
         let job2 = create_test_job(task_a, "llava", vec![photo_id]);
@@ -655,8 +739,14 @@ mod tests {
         ts.store.create(job2.clone()).await.unwrap();
         ts.store.create(job3).await.unwrap();
 
-        let job1_path = ts.store.layout.job_file_path(job1.task_id, job1.job_id);
-        let job2_path = ts.store.layout.job_file_path(job2.task_id, job2.job_id);
+        let job1_path = ts
+            .store
+            .layout
+            .job_file_path(catalog_id_a, job1.task_id, job1.job_id);
+        let job2_path = ts
+            .store
+            .layout
+            .job_file_path(catalog_id_a, job2.task_id, job2.job_id);
         assert!(job1_path.exists());
         assert!(job2_path.exists());
 
@@ -681,6 +771,7 @@ mod tests {
     async fn test_exists() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
+        setup_task(&ts, task_id).await;
         let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
         // Should not exist initially
@@ -705,6 +796,8 @@ mod tests {
 
         let task_a = Uuid::new_v4();
         let task_b = Uuid::new_v4();
+        setup_task(&ts, task_a).await;
+        setup_task(&ts, task_b).await;
 
         // Empty task should have count 0
         let count = ts.store.count_by_task(task_a).await.unwrap();
@@ -733,6 +826,7 @@ mod tests {
     async fn test_job_lifecycle_through_store() {
         let ts = create_store().await;
         let task_id = Uuid::new_v4();
+        setup_task(&ts, task_id).await;
         let mut job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4(), Uuid::new_v4()]);
 
         // Create job (Queued)
@@ -767,6 +861,7 @@ mod tests {
 
         // Create store and add jobs
         let task_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
         let job1 = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         let job2 = create_test_job(task_id, "llava", vec![Uuid::new_v4()]);
         let job1_id = job1.job_id;
@@ -775,6 +870,14 @@ mod tests {
         {
             let task_store: Arc<dyn TaskStore> =
                 Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let task = Task {
+                task_id,
+                catalog_id,
+                name: "test".to_string(),
+                context: "test".to_string(),
+                created_at: Utc::now(),
+            };
+            task_store.create(task).await.unwrap();
             let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
             store.create(job1).await.unwrap();
             store.create(job2).await.unwrap();
@@ -801,12 +904,21 @@ mod tests {
         let storage_path = temp_dir.path().to_path_buf();
 
         let task_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
         let mut job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         let job_id = job.job_id;
 
         {
             let task_store: Arc<dyn TaskStore> =
                 Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let task = Task {
+                task_id,
+                catalog_id,
+                name: "test".to_string(),
+                context: "test".to_string(),
+                created_at: Utc::now(),
+            };
+            task_store.create(task).await.unwrap();
             let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
             store.create(job.clone()).await.unwrap();
 
@@ -830,12 +942,21 @@ mod tests {
         let storage_path = temp_dir.path().to_path_buf();
 
         let task_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
         let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         let job_id = job.job_id;
 
         {
             let task_store: Arc<dyn TaskStore> =
                 Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let task = Task {
+                task_id,
+                catalog_id,
+                name: "test".to_string(),
+                context: "test".to_string(),
+                created_at: Utc::now(),
+            };
+            task_store.create(task).await.unwrap();
             let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
             store.create(job).await.unwrap();
             store.delete(job_id).await.unwrap();
@@ -857,6 +978,7 @@ mod tests {
         // Create multiple tasks with multiple jobs each
         let task_a = Uuid::new_v4();
         let task_b = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
         let job1 = create_test_job(task_a, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         let job2 = create_test_job(task_a, "llava", vec![Uuid::new_v4()]);
         let job3 = create_test_job(task_b, "qwen3-vl:8b", vec![Uuid::new_v4()]);
@@ -865,6 +987,16 @@ mod tests {
         {
             let task_store: Arc<dyn TaskStore> =
                 Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            for &tid in &[task_a, task_b] {
+                let task = Task {
+                    task_id: tid,
+                    catalog_id,
+                    name: "test".to_string(),
+                    context: "test".to_string(),
+                    created_at: Utc::now(),
+                };
+                task_store.create(task).await.unwrap();
+            }
             let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
             store.create(job1).await.unwrap();
             store.create(job2).await.unwrap();
