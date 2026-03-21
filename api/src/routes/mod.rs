@@ -92,8 +92,8 @@ mod tests {
         let task_store: Arc<dyn TaskStore> =
             Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
         let photo_store: Arc<dyn PhotoStore> =
-            Arc::new(FileSystemPhotoStore::new(storage_path.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(storage_path).await);
+            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await);
+        let job_store = Arc::new(FileSystemJobStore::new(storage_path, task_store.clone()).await);
         let ai_providers = Arc::new(ProviderRegistry::new());
         let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(job_store.clone())));
         let state = AppState::new(

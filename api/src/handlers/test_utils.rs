@@ -89,8 +89,9 @@ pub mod fixtures {
         let storage_path = temp_dir.path().to_path_buf();
         let config = Config::default();
         let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(storage_path).await);
+        let photo_store =
+            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await);
+        let job_store = Arc::new(FileSystemJobStore::new(storage_path, task_store.clone()).await);
 
         let mut registry = ProviderRegistry::new();
         registry.register("test", Arc::new(TestProvider));

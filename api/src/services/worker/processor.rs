@@ -390,8 +390,9 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_path_buf();
         let task_store = Arc::new(FileSystemTaskStore::new(path.clone()).await);
-        let photo_store = Arc::new(FileSystemPhotoStore::new(path.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(path.clone()).await);
+        let photo_store =
+            Arc::new(FileSystemPhotoStore::new(path.clone(), task_store.clone()).await);
+        let job_store = Arc::new(FileSystemJobStore::new(path.clone(), task_store.clone()).await);
 
         let processor = PhotoProcessor::new(
             ai_provider,

@@ -54,10 +54,11 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
     tracing::info!("Initialized filesystem task store");
 
     let photo_store: Arc<dyn PhotoStore> =
-        Arc::new(FileSystemPhotoStore::new(storage_path.clone()).await);
+        Arc::new(FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await);
     tracing::info!("Initialized filesystem photo store");
 
-    let job_store: Arc<dyn JobStore> = Arc::new(FileSystemJobStore::new(storage_path).await);
+    let job_store: Arc<dyn JobStore> =
+        Arc::new(FileSystemJobStore::new(storage_path, task_store.clone()).await);
     tracing::info!("Initialized filesystem job store");
 
     // Initialize AI provider registry

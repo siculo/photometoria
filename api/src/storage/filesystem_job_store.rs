@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::models::Job;
 
-use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult};
+use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult, TaskStore};
 
 // ============================================================================
 // FileSystemJobStore Implementation
@@ -47,6 +47,8 @@ use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult};
 pub struct FileSystemJobStore {
     jobs: Arc<DashMap<Uuid, Job>>,
     layout: FileSystemLayout,
+    /// Reference to the task store for resolving catalog identity
+    task_store: Arc<dyn TaskStore>,
 }
 
 impl FileSystemJobStore {
@@ -57,10 +59,12 @@ impl FileSystemJobStore {
     ///
     /// # Arguments
     /// * `storage_path` - Base path for storing task directories
-    pub async fn new(storage_path: PathBuf) -> Self {
+    /// * `task_store` - Reference to the task store for resolving task-to-catalog relationships
+    pub async fn new(storage_path: PathBuf, task_store: Arc<dyn TaskStore>) -> Self {
         let store = Self {
             jobs: Arc::new(DashMap::new()),
             layout: FileSystemLayout::new(storage_path),
+            task_store,
         };
         store.load_all().await;
         store
@@ -363,6 +367,7 @@ impl JobStore for FileSystemJobStore {
 mod tests {
     use super::*;
     use crate::models::JobStatus;
+    use crate::storage::FileSystemTaskStore;
     use chrono::{DateTime, Duration, Utc};
     use tempfile::TempDir;
     use uuid::Uuid;
@@ -376,7 +381,10 @@ mod tests {
     // Helper function to create a fresh store with temp directory
     async fn create_store() -> TestStore {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let store = FileSystemJobStore::new(temp_dir.path().to_path_buf()).await;
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, task_store).await;
         TestStore {
             store,
             _temp_dir: temp_dir,
@@ -765,14 +773,18 @@ mod tests {
         let job2_id = job2.job_id;
 
         {
-            let store = FileSystemJobStore::new(storage_path.clone()).await;
+            let task_store: Arc<dyn TaskStore> =
+                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
             store.create(job1).await.unwrap();
             store.create(job2).await.unwrap();
             assert_eq!(store.count_by_task(task_id).await.unwrap(), 2);
         }
 
         // Create new store instance (simulates server restart)
-        let store = FileSystemJobStore::new(storage_path).await;
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, task_store).await;
 
         // Jobs should be loaded from filesystem
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 2);
@@ -793,7 +805,9 @@ mod tests {
         let job_id = job.job_id;
 
         {
-            let store = FileSystemJobStore::new(storage_path.clone()).await;
+            let task_store: Arc<dyn TaskStore> =
+                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
             store.create(job.clone()).await.unwrap();
 
             // Update the job
@@ -802,7 +816,9 @@ mod tests {
         }
 
         // Reload and verify update persisted
-        let store = FileSystemJobStore::new(storage_path).await;
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, task_store).await;
         let loaded = store.get(job_id).await.unwrap().unwrap();
         assert_eq!(loaded.status, JobStatus::Processing);
         assert!(loaded.started_at.is_some());
@@ -818,13 +834,17 @@ mod tests {
         let job_id = job.job_id;
 
         {
-            let store = FileSystemJobStore::new(storage_path.clone()).await;
+            let task_store: Arc<dyn TaskStore> =
+                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
             store.create(job).await.unwrap();
             store.delete(job_id).await.unwrap();
         }
 
         // Reload and verify job is gone
-        let store = FileSystemJobStore::new(storage_path).await;
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, task_store).await;
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
         assert!(!store.exists(job_id).await.unwrap());
     }
@@ -843,7 +863,9 @@ mod tests {
         let job4 = create_test_job(task_b, "llava", vec![Uuid::new_v4()]);
 
         {
-            let store = FileSystemJobStore::new(storage_path.clone()).await;
+            let task_store: Arc<dyn TaskStore> =
+                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
             store.create(job1).await.unwrap();
             store.create(job2).await.unwrap();
             store.create(job3).await.unwrap();
@@ -851,7 +873,9 @@ mod tests {
         }
 
         // Reload and verify all jobs loaded correctly
-        let store = FileSystemJobStore::new(storage_path).await;
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, task_store).await;
         assert_eq!(store.list().await.unwrap().len(), 4);
         assert_eq!(store.count_by_task(task_a).await.unwrap(), 2);
         assert_eq!(store.count_by_task(task_b).await.unwrap(), 2);

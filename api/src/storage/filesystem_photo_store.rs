@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::models::Photo;
 
-use super::{FileSystemLayout, PhotoStore, PhotoStoreError, PhotoStoreResult};
+use super::{FileSystemLayout, PhotoStore, PhotoStoreError, PhotoStoreResult, TaskStore};
 
 // ============================================================================
 // FileSystemPhotoStore Implementation
@@ -49,6 +49,8 @@ pub struct FileSystemPhotoStore {
     photos: Arc<DashMap<Uuid, Photo>>,
     /// Filesystem layout manager
     layout: FileSystemLayout,
+    /// Reference to the task store for resolving catalog identity
+    task_store: Arc<dyn TaskStore>,
 }
 
 impl FileSystemPhotoStore {
@@ -59,10 +61,12 @@ impl FileSystemPhotoStore {
     ///
     /// # Arguments
     /// * `storage_path` - Base path for storing photo files
-    pub async fn new(storage_path: PathBuf) -> Self {
+    /// * `task_store` - Reference to the task store for resolving task-to-catalog relationships
+    pub async fn new(storage_path: PathBuf, task_store: Arc<dyn TaskStore>) -> Self {
         let store = Self {
             photos: Arc::new(DashMap::new()),
             layout: FileSystemLayout::new(storage_path),
+            task_store,
         };
         store.load_all().await;
         store
@@ -456,6 +460,7 @@ impl PhotoStore for FileSystemPhotoStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::FileSystemTaskStore;
     use tempfile::TempDir;
 
     // Helper struct to keep temp dir alive during test
@@ -467,7 +472,10 @@ mod tests {
     // Helper function to create a fresh store with temp directory
     async fn create_store() -> TestStore {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let store = FileSystemPhotoStore::new(temp_dir.path().to_path_buf()).await;
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemPhotoStore::new(storage_path, task_store).await;
         TestStore {
             store,
             _temp_dir: temp_dir,
@@ -874,14 +882,18 @@ mod tests {
         let photo2_id = photo2.photo_id;
 
         {
-            let store = FileSystemPhotoStore::new(storage_path.clone()).await;
+            let task_store: Arc<dyn TaskStore> =
+                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let store = FileSystemPhotoStore::new(storage_path.clone(), task_store).await;
             store.create(photo1).await.unwrap();
             store.create(photo2).await.unwrap();
             assert_eq!(store.count_by_task(task_id).await.unwrap(), 2);
         }
 
         // Create new store instance (simulates server restart)
-        let store = FileSystemPhotoStore::new(storage_path).await;
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemPhotoStore::new(storage_path, task_store).await;
 
         // Photos should be loaded from filesystem
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 2);
@@ -906,13 +918,17 @@ mod tests {
         let photo_id = photo.photo_id;
 
         {
-            let store = FileSystemPhotoStore::new(storage_path.clone()).await;
+            let task_store: Arc<dyn TaskStore> =
+                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let store = FileSystemPhotoStore::new(storage_path.clone(), task_store).await;
             store.create(photo).await.unwrap();
             store.delete(photo_id).await.unwrap();
         }
 
         // Reload and verify photo is gone
-        let store = FileSystemPhotoStore::new(storage_path).await;
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemPhotoStore::new(storage_path, task_store).await;
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
         assert!(!store.exists(photo_id).await.unwrap());
     }
@@ -930,7 +946,9 @@ mod tests {
         let photo = create_test_photo(task_id, "test.jpg", 1_000);
         let photo_id = photo.photo_id;
 
-        let store = FileSystemPhotoStore::new(storage_path).await;
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemPhotoStore::new(storage_path, task_store).await;
         store.create(photo).await.unwrap();
 
         // Save photo data
