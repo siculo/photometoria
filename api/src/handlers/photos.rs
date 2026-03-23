@@ -22,7 +22,7 @@ pub struct TaskPhotosQuery {
 
 pub async fn task_photos(
     State(state): State<AppState>,
-    AppPath(task_id): AppPath<Uuid>,
+    AppPath((_catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
     Query(query): Query<TaskPhotosQuery>,
 ) -> Result<Json<PhotoListResponse>, AppError> {
     get_existing_task(&state.task_store, task_id).await?;
@@ -47,7 +47,7 @@ pub async fn task_photos(
 
 pub async fn get_photo(
     State(state): State<AppState>,
-    AppPath(photo_id): AppPath<Uuid>,
+    AppPath((_catalog_id, photo_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<Json<PhotoResponse>, AppError> {
     let photo = get_existing_photo(&state.photo_store, photo_id).await?;
     Ok(Json((&photo).into()))
@@ -55,7 +55,7 @@ pub async fn get_photo(
 
 pub async fn delete_photo(
     State(state): State<AppState>,
-    AppPath(photo_id): AppPath<Uuid>,
+    AppPath((_catalog_id, photo_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
     let photo = get_existing_photo(&state.photo_store, photo_id).await?;
     check_no_active_jobs(&state.job_store, photo.task_id).await?;
@@ -99,7 +99,7 @@ async fn get_existing_photo(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handlers::test_utils::fixtures::create_test_state;
+    use crate::handlers::test_utils::fixtures::{create_test_state, test_catalog_id};
     use crate::models::{Photo, Task};
     use uuid::Uuid;
 
@@ -113,7 +113,7 @@ mod tests {
 
         // Create a task without photos
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -122,7 +122,7 @@ mod tests {
 
         let result = task_photos(
             State(ts.state.clone()),
-            AppPath(task_id),
+            AppPath((test_catalog_id(), task_id)),
             Query(TaskPhotosQuery { client_id: None }),
         )
         .await;
@@ -139,7 +139,7 @@ mod tests {
 
         // Create a task
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task with photos".to_string(),
             "test task with photos".to_string(),
         );
@@ -161,7 +161,7 @@ mod tests {
 
         let result = task_photos(
             State(ts.state.clone()),
-            AppPath(task_id),
+            AppPath((test_catalog_id(), task_id)),
             Query(TaskPhotosQuery { client_id: None }),
         )
         .await;
@@ -183,7 +183,7 @@ mod tests {
 
         let result = task_photos(
             State(ts.state.clone()),
-            AppPath(nonexistent_id),
+            AppPath((test_catalog_id(), nonexistent_id)),
             Query(TaskPhotosQuery { client_id: None }),
         )
         .await;
@@ -204,7 +204,7 @@ mod tests {
 
         // Create task and photo
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -216,7 +216,11 @@ mod tests {
         let uploaded_at = photo.uploaded_at;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let result = get_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+        let result = get_photo(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), photo_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(photo_response) = result.unwrap();
@@ -232,7 +236,11 @@ mod tests {
         let ts = create_test_state().await;
         let nonexistent_id = Uuid::new_v4();
 
-        let result = get_photo(State(ts.state.clone()), AppPath(nonexistent_id)).await;
+        let result = get_photo(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), nonexistent_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -250,7 +258,7 @@ mod tests {
 
         // Create task and photo
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -261,7 +269,11 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+        let result = delete_photo(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), photo_id)),
+        )
+        .await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
 
@@ -275,7 +287,11 @@ mod tests {
         let ts = create_test_state().await;
         let nonexistent_id = Uuid::new_v4();
 
-        let result = delete_photo(State(ts.state.clone()), AppPath(nonexistent_id)).await;
+        let result = delete_photo(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), nonexistent_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -287,7 +303,8 @@ mod tests {
     async fn test_delete_photo_blocked_by_queued_job() {
         let ts = create_test_state().await;
 
-        let task = crate::models::Task::new(Uuid::new_v4(), "Task".to_string(), "task".to_string());
+        let task =
+            crate::models::Task::new(test_catalog_id(), "Task".to_string(), "task".to_string());
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -298,7 +315,11 @@ mod tests {
         let job = crate::models::Job::new(task_id, "llava".to_string(), vec![photo_id]);
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+        let result = delete_photo(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), photo_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_active");
@@ -308,7 +329,8 @@ mod tests {
     async fn test_delete_photo_blocked_by_processing_job() {
         let ts = create_test_state().await;
 
-        let task = crate::models::Task::new(Uuid::new_v4(), "Task".to_string(), "task".to_string());
+        let task =
+            crate::models::Task::new(test_catalog_id(), "Task".to_string(), "task".to_string());
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -320,7 +342,11 @@ mod tests {
         job.start();
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+        let result = delete_photo(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), photo_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_active");
@@ -330,7 +356,8 @@ mod tests {
     async fn test_delete_photo_allowed_when_job_completed() {
         let ts = create_test_state().await;
 
-        let task = crate::models::Task::new(Uuid::new_v4(), "Task".to_string(), "task".to_string());
+        let task =
+            crate::models::Task::new(test_catalog_id(), "Task".to_string(), "task".to_string());
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -343,7 +370,11 @@ mod tests {
         job.complete();
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+        let result = delete_photo(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), photo_id)),
+        )
+        .await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
     }
@@ -357,7 +388,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -373,7 +404,11 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let result = get_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+        let result = get_photo(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), photo_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -385,7 +420,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -396,7 +431,11 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let result = get_photo(State(ts.state.clone()), AppPath(photo_id)).await;
+        let result = get_photo(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), photo_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -408,7 +447,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -436,7 +475,7 @@ mod tests {
 
         let result = task_photos(
             State(ts.state.clone()),
-            AppPath(task_id),
+            AppPath((test_catalog_id(), task_id)),
             Query(TaskPhotosQuery {
                 client_id: Some("lr:100".to_string()),
             }),
@@ -456,7 +495,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -473,7 +512,7 @@ mod tests {
 
         let result = task_photos(
             State(ts.state.clone()),
-            AppPath(task_id),
+            AppPath((test_catalog_id(), task_id)),
             Query(TaskPhotosQuery {
                 client_id: Some("lr:999".to_string()),
             }),

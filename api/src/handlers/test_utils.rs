@@ -72,6 +72,11 @@ pub mod fixtures {
         temp_dir: TempDir,
     }
 
+    /// Returns a fixed catalog UUID for use in handler tests.
+    pub fn test_catalog_id() -> uuid::Uuid {
+        uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
+    }
+
     /// Creates a fresh test state with filesystem-backed stores for each test
     ///
     /// # Example

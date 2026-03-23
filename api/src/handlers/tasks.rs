@@ -19,11 +19,6 @@ use crate::models::{
 };
 use crate::storage::{JobStore, PhotoStore, TaskStoreError};
 
-/// Temporary placeholder catalog ID used until catalog-scoped routing is implemented.
-///
-/// Will be replaced when endpoints move under `/api/catalogs/{catalog_id}/...`.
-const PLACEHOLDER_CATALOG_ID: Uuid = Uuid::nil();
-
 /// Validates and trims a task name, returning an error if empty.
 fn validate_task_name(name: &str) -> Result<String, AppError> {
     let trimmed = name.trim().to_string();
@@ -36,18 +31,19 @@ fn validate_task_name(name: &str) -> Result<String, AppError> {
     Ok(trimmed)
 }
 
-/// Handler for POST /api/tasks
+/// Handler for POST /api/catalogs/{catalog_id}/tasks
 ///
 /// Creates a new task with the provided name and context and stores it.
 pub async fn create_task(
     State(state): State<AppState>,
+    AppPath(catalog_id): AppPath<Uuid>,
     AppJson(request): AppJson<CreateTaskRequest>,
 ) -> Result<(StatusCode, Json<TaskResponse>), AppError> {
     let name = validate_task_name(&request.name)?;
 
     if state
         .task_store
-        .find_by_name(&name)
+        .find_by_name(catalog_id, &name)
         .await
         .unwrap_or(None)
         .is_some()
@@ -58,7 +54,7 @@ pub async fn create_task(
         ));
     }
 
-    let task = Task::new(PLACEHOLDER_CATALOG_ID, name, request.context);
+    let task = Task::new(catalog_id, name, request.context);
 
     match state.task_store.create(task).await {
         Ok(created_task) => {
@@ -73,11 +69,14 @@ pub async fn create_task(
     }
 }
 
-/// Handler for GET /api/tasks
+/// Handler for GET /api/catalogs/{catalog_id}/tasks
 ///
-/// Lists all tasks with summary information.
-pub async fn list_tasks(State(state): State<AppState>) -> Result<Json<Vec<TaskSummary>>, AppError> {
-    match state.task_store.list().await {
+/// Lists all tasks in a catalog with summary information.
+pub async fn list_tasks(
+    State(state): State<AppState>,
+    AppPath(catalog_id): AppPath<Uuid>,
+) -> Result<Json<Vec<TaskSummary>>, AppError> {
+    match state.task_store.list_by_catalog(catalog_id).await {
         Ok(tasks) => {
             let mut summaries = Vec::with_capacity(tasks.len());
             for task in tasks {
@@ -149,12 +148,12 @@ pub(crate) async fn check_no_active_jobs(
     }
 }
 
-/// Handler for GET /api/tasks/{task_id}
+/// Handler for GET /api/catalogs/{catalog_id}/tasks/{task_id}
 ///
 /// Retrieves detailed information about a specific task.
 pub async fn get_task(
     State(state): State<AppState>,
-    AppPath(task_id): AppPath<Uuid>,
+    AppPath((_catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<Json<TaskDetail>, AppError> {
     let task = get_existing_task(&state.task_store, task_id).await?;
     let detail = TaskDetail {
@@ -170,19 +169,24 @@ pub async fn get_task(
     Ok(Json(detail))
 }
 
-/// Handler for PATCH /api/tasks/{task_id}
+/// Handler for PATCH /api/catalogs/{catalog_id}/tasks/{task_id}
 ///
 /// Updates an existing task's name and context.
 pub async fn update_task(
     State(state): State<AppState>,
-    AppPath(task_id): AppPath<Uuid>,
+    AppPath((catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
     AppJson(request): AppJson<UpdateTaskRequest>,
 ) -> Result<Json<TaskResponse>, AppError> {
     let task = get_existing_task(&state.task_store, task_id).await?;
 
     let name = validate_task_name(&request.name)?;
 
-    if let Some(existing) = state.task_store.find_by_name(&name).await.unwrap_or(None) {
+    if let Some(existing) = state
+        .task_store
+        .find_by_name(catalog_id, &name)
+        .await
+        .unwrap_or(None)
+    {
         if existing.task_id != task_id {
             return Err(AppError::conflict(
                 "name_taken",
@@ -208,13 +212,13 @@ pub async fn update_task(
     }
 }
 
-/// Handler for DELETE /api/tasks/{task_id}
+/// Handler for DELETE /api/catalogs/{catalog_id}/tasks/{task_id}
 ///
 /// Deletes a task and all associated data.
 /// Returns 409 Conflict if the task has any active (Queued or Processing) jobs.
 pub async fn delete_task(
     State(state): State<AppState>,
-    AppPath(task_id): AppPath<Uuid>,
+    AppPath((_catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
     check_no_active_jobs(&state.job_store, task_id).await?;
     state
@@ -238,7 +242,7 @@ pub async fn delete_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handlers::test_utils::fixtures::create_test_state;
+    use crate::handlers::test_utils::fixtures::{create_test_state, test_catalog_id};
     use crate::models::{Job, Photo};
     use chrono::Utc;
     use uuid::Uuid;
@@ -251,7 +255,12 @@ mod tests {
             context: "vacation in San Francisco".to_string(),
         };
 
-        let result = create_task(State(ts.state.clone()), AppJson(request)).await;
+        let result = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await;
 
         assert!(result.is_ok());
         let (status, Json(response)) = result.unwrap();
@@ -269,7 +278,12 @@ mod tests {
             context: "some context".to_string(),
         };
 
-        let result = create_task(State(ts.state.clone()), AppJson(request)).await;
+        let result = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "invalid_name");
@@ -283,7 +297,12 @@ mod tests {
             context: "some context".to_string(),
         };
 
-        let result = create_task(State(ts.state.clone()), AppJson(request)).await;
+        let result = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "invalid_name");
@@ -297,9 +316,13 @@ mod tests {
             context: "context".to_string(),
         };
 
-        let (_, Json(response)) = create_task(State(ts.state.clone()), AppJson(request))
-            .await
-            .unwrap();
+        let (_, Json(response)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(response.name, "SF Vacation");
     }
@@ -312,15 +335,24 @@ mod tests {
             name: "My Task".to_string(),
             context: "context 1".to_string(),
         };
-        create_task(State(ts.state.clone()), AppJson(request1))
-            .await
-            .unwrap();
+        create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request1),
+        )
+        .await
+        .unwrap();
 
         let request2 = CreateTaskRequest {
             name: "My Task".to_string(),
             context: "context 2".to_string(),
         };
-        let result = create_task(State(ts.state.clone()), AppJson(request2)).await;
+        let result = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request2),
+        )
+        .await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -332,7 +364,7 @@ mod tests {
     async fn test_list_tasks_empty() {
         let ts = create_test_state().await;
 
-        let result = list_tasks(State(ts.state.clone())).await;
+        let result = list_tasks(State(ts.state.clone()), AppPath(test_catalog_id())).await;
 
         assert!(result.is_ok());
         let Json(summaries) = result.unwrap();
@@ -351,10 +383,20 @@ mod tests {
             name: "Task 2".to_string(),
             context: "task 2".to_string(),
         };
-        let _ = create_task(State(ts.state.clone()), AppJson(request1)).await;
-        let _ = create_task(State(ts.state.clone()), AppJson(request2)).await;
+        let _ = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request1),
+        )
+        .await;
+        let _ = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request2),
+        )
+        .await;
 
-        let result = list_tasks(State(ts.state.clone())).await;
+        let result = list_tasks(State(ts.state.clone()), AppPath(test_catalog_id())).await;
 
         assert!(result.is_ok());
         let Json(summaries) = result.unwrap();
@@ -374,11 +416,19 @@ mod tests {
             name: "Test Task".to_string(),
             context: "test task".to_string(),
         };
-        let (_, Json(created)) = create_task(State(ts.state.clone()), AppJson(request))
-            .await
-            .unwrap();
+        let (_, Json(created)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await
+        .unwrap();
 
-        let result = get_task(State(ts.state.clone()), AppPath(created.task_id)).await;
+        let result = get_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), created.task_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(detail) = result.unwrap();
@@ -396,7 +446,11 @@ mod tests {
 
         let task_id = Uuid::new_v4();
 
-        let result = get_task(State(ts.state.clone()), AppPath(task_id)).await;
+        let result = get_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), AppError::task_not_found(task_id));
@@ -410,9 +464,13 @@ mod tests {
             name: "Original Name".to_string(),
             context: "original context".to_string(),
         };
-        let (_, Json(created)) = create_task(State(ts.state.clone()), AppJson(request))
-            .await
-            .unwrap();
+        let (_, Json(created)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await
+        .unwrap();
 
         let update_request = UpdateTaskRequest {
             name: "Updated Name".to_string(),
@@ -420,7 +478,7 @@ mod tests {
         };
         let result = update_task(
             State(ts.state.clone()),
-            AppPath(created.task_id),
+            AppPath((test_catalog_id(), created.task_id)),
             AppJson(update_request),
         )
         .await;
@@ -441,9 +499,13 @@ mod tests {
             name: "My Task".to_string(),
             context: "original".to_string(),
         };
-        let (_, Json(created)) = create_task(State(ts.state.clone()), AppJson(request))
-            .await
-            .unwrap();
+        let (_, Json(created)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await
+        .unwrap();
 
         let update_request = UpdateTaskRequest {
             name: "My Task".to_string(),
@@ -451,7 +513,7 @@ mod tests {
         };
         let result = update_task(
             State(ts.state.clone()),
-            AppPath(created.task_id),
+            AppPath((test_catalog_id(), created.task_id)),
             AppJson(update_request),
         )
         .await;
@@ -465,6 +527,7 @@ mod tests {
 
         create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task A".to_string(),
                 context: "context".to_string(),
@@ -475,6 +538,7 @@ mod tests {
 
         let (_, Json(task_b)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task B".to_string(),
                 context: "context".to_string(),
@@ -485,7 +549,7 @@ mod tests {
 
         let result = update_task(
             State(ts.state.clone()),
-            AppPath(task_b.task_id),
+            AppPath((test_catalog_id(), task_b.task_id)),
             AppJson(UpdateTaskRequest {
                 name: "Task A".to_string(),
                 context: "context".to_string(),
@@ -511,7 +575,7 @@ mod tests {
         };
         let result = update_task(
             State(ts.state.clone()),
-            AppPath(task_id),
+            AppPath((test_catalog_id(), task_id)),
             AppJson(update_request),
         )
         .await;
@@ -528,15 +592,27 @@ mod tests {
             name: "To Delete".to_string(),
             context: "task to delete".to_string(),
         };
-        let (_, Json(created)) = create_task(State(ts.state.clone()), AppJson(request))
-            .await
-            .unwrap();
+        let (_, Json(created)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await
+        .unwrap();
 
-        let result = delete_task(State(ts.state.clone()), AppPath(created.task_id)).await;
+        let result = delete_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), created.task_id)),
+        )
+        .await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
 
-        let get_result = get_task(State(ts.state.clone()), AppPath(created.task_id)).await;
+        let get_result = get_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), created.task_id)),
+        )
+        .await;
         assert!(get_result.is_err());
         assert_eq!(
             get_result.unwrap_err(),
@@ -549,7 +625,11 @@ mod tests {
         let ts = create_test_state().await;
         let task_id = Uuid::new_v4();
 
-        let result = delete_task(State(ts.state.clone()), AppPath(task_id)).await;
+        let result = delete_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task_id)),
+        )
+        .await;
 
         assert_eq!(result, Err(AppError::task_not_found(task_id)));
     }
@@ -560,6 +640,7 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task".to_string(),
                 context: "task".to_string(),
@@ -571,7 +652,11 @@ mod tests {
         let job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+        let result = delete_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task.task_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_active");
@@ -583,6 +668,7 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task".to_string(),
                 context: "task".to_string(),
@@ -595,7 +681,11 @@ mod tests {
         job.start();
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+        let result = delete_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task.task_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_active");
@@ -607,6 +697,7 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task".to_string(),
                 context: "task".to_string(),
@@ -620,7 +711,11 @@ mod tests {
         job.complete();
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+        let result = delete_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task.task_id)),
+        )
+        .await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
     }
@@ -631,6 +726,7 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task".to_string(),
                 context: "task".to_string(),
@@ -643,7 +739,11 @@ mod tests {
         job.cancel();
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+        let result = delete_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task.task_id)),
+        )
+        .await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
     }
@@ -656,7 +756,12 @@ mod tests {
             context: "vacation in San Francisco".to_string(),
         };
 
-        let result = create_task(State(ts.state.clone()), AppJson(request)).await;
+        let result = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await;
 
         assert!(result.is_ok());
 
@@ -687,9 +792,12 @@ mod tests {
             .await
             .unwrap();
 
-        let result = get_task(State(ts.state.clone()), AppPath(task_id))
-            .await
-            .unwrap();
+        let result = get_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task_id)),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(result.photo_count, 2);
         assert_eq!(result.storage_used, 1570000 + 2003800);
@@ -702,6 +810,7 @@ mod tests {
         // Create two tasks
         let (_, Json(task1)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task 1".to_string(),
                 context: "task 1".to_string(),
@@ -711,6 +820,7 @@ mod tests {
         .unwrap();
         let (_, Json(task2)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task 2".to_string(),
                 context: "task 2".to_string(),
@@ -759,7 +869,9 @@ mod tests {
             .await
             .unwrap();
 
-        let Json(summaries) = list_tasks(State(ts.state.clone())).await.unwrap();
+        let Json(summaries) = list_tasks(State(ts.state.clone()), AppPath(test_catalog_id()))
+            .await
+            .unwrap();
 
         assert_eq!(summaries.len(), 2);
 
@@ -784,6 +896,7 @@ mod tests {
 
         let (_, Json(task1)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task 1".to_string(),
                 context: "task 1".to_string(),
@@ -793,6 +906,7 @@ mod tests {
         .unwrap();
         let (_, Json(task2)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task 2".to_string(),
                 context: "task 2".to_string(),
@@ -808,7 +922,9 @@ mod tests {
         ts.state.job_store.create(job2).await.unwrap();
         ts.state.job_store.create(job3).await.unwrap();
 
-        let Json(summaries) = list_tasks(State(ts.state.clone())).await.unwrap();
+        let Json(summaries) = list_tasks(State(ts.state.clone()), AppPath(test_catalog_id()))
+            .await
+            .unwrap();
 
         let summary1 = summaries
             .iter()
@@ -829,6 +945,7 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task".to_string(),
                 context: "task".to_string(),
@@ -854,7 +971,11 @@ mod tests {
             2
         );
 
-        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+        let result = delete_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task.task_id)),
+        )
+        .await;
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
 
         let remaining = ts
@@ -875,6 +996,7 @@ mod tests {
 
         let (_, Json(task)) = create_task(
             State(ts.state.clone()),
+            AppPath(test_catalog_id()),
             AppJson(CreateTaskRequest {
                 name: "Task".to_string(),
                 context: "task".to_string(),
@@ -888,9 +1010,12 @@ mod tests {
         ts.state.job_store.create(job1).await.unwrap();
         ts.state.job_store.create(job2).await.unwrap();
 
-        let Json(detail) = get_task(State(ts.state.clone()), AppPath(task.task_id))
-            .await
-            .unwrap();
+        let Json(detail) = get_task(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task.task_id)),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(detail.job_count, 2);
     }

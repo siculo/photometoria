@@ -297,13 +297,29 @@ impl TaskStore for FileSystemTaskStore {
         Ok(self.tasks.len())
     }
 
-    async fn find_by_name(&self, name: &str) -> TaskStoreResult<Option<Task>> {
-        debug!("Finding task by name: {}", name);
+    async fn list_by_catalog(&self, catalog_id: Uuid) -> TaskStoreResult<Vec<Task>> {
+        debug!("Listing tasks for catalog: {}", catalog_id);
+
+        let mut tasks: Vec<Task> = self
+            .tasks
+            .iter()
+            .filter(|entry| entry.value().catalog_id == catalog_id)
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        tasks.sort_by_key(|task| task.created_at);
+
+        info!("Listed {} tasks for catalog {}", tasks.len(), catalog_id);
+        Ok(tasks)
+    }
+
+    async fn find_by_name(&self, catalog_id: Uuid, name: &str) -> TaskStoreResult<Option<Task>> {
+        debug!("Finding task by name '{}' in catalog {}", name, catalog_id);
 
         Ok(self
             .tasks
             .iter()
-            .find(|entry| entry.value().name == name)
+            .find(|entry| entry.value().catalog_id == catalog_id && entry.value().name == name)
             .map(|entry| entry.value().clone()))
     }
 }
@@ -644,6 +660,89 @@ mod tests {
         let loaded = store.get(task_id).await.unwrap().unwrap();
         assert_eq!(loaded.context, "Updated context");
     }
+
+    // ========================================================================
+    // Catalog-scoped Tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_list_by_catalog_returns_only_matching_tasks() {
+        let ts = create_store().await;
+        let catalog_a = Uuid::new_v4();
+        let catalog_b = Uuid::new_v4();
+
+        let task1 = Task::new(catalog_a, "Task A1".to_string(), "ctx".to_string());
+        let task2 = Task::new(catalog_a, "Task A2".to_string(), "ctx".to_string());
+        let task3 = Task::new(catalog_b, "Task B1".to_string(), "ctx".to_string());
+
+        ts.store.create(task1).await.unwrap();
+        ts.store.create(task2).await.unwrap();
+        ts.store.create(task3).await.unwrap();
+
+        let catalog_a_tasks = ts.store.list_by_catalog(catalog_a).await.unwrap();
+        assert_eq!(catalog_a_tasks.len(), 2);
+        assert!(catalog_a_tasks.iter().all(|t| t.catalog_id == catalog_a));
+
+        let catalog_b_tasks = ts.store.list_by_catalog(catalog_b).await.unwrap();
+        assert_eq!(catalog_b_tasks.len(), 1);
+        assert_eq!(catalog_b_tasks[0].name, "Task B1");
+    }
+
+    #[tokio::test]
+    async fn test_list_by_catalog_empty_for_unknown_catalog() {
+        let ts = create_store().await;
+
+        let tasks = ts.store.list_by_catalog(Uuid::new_v4()).await.unwrap();
+        assert!(tasks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_find_by_name_scoped_to_catalog() {
+        let ts = create_store().await;
+        let catalog_a = Uuid::new_v4();
+        let catalog_b = Uuid::new_v4();
+
+        let task_a = Task::new(catalog_a, "Shared Name".to_string(), "ctx a".to_string());
+        let task_b = Task::new(catalog_b, "Shared Name".to_string(), "ctx b".to_string());
+
+        ts.store.create(task_a.clone()).await.unwrap();
+        ts.store.create(task_b.clone()).await.unwrap();
+
+        let found_a = ts
+            .store
+            .find_by_name(catalog_a, "Shared Name")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found_a.catalog_id, catalog_a);
+        assert_eq!(found_a.context, "ctx a");
+
+        let found_b = ts
+            .store
+            .find_by_name(catalog_b, "Shared Name")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found_b.catalog_id, catalog_b);
+        assert_eq!(found_b.context, "ctx b");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_name_not_found_in_different_catalog() {
+        let ts = create_store().await;
+        let catalog_a = Uuid::new_v4();
+        let catalog_b = Uuid::new_v4();
+
+        let task = Task::new(catalog_a, "Only in A".to_string(), "ctx".to_string());
+        ts.store.create(task).await.unwrap();
+
+        let result = ts.store.find_by_name(catalog_b, "Only in A").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    // ========================================================================
+    // Persistence Tests
+    // ========================================================================
 
     #[tokio::test]
     async fn test_delete_removes_from_filesystem() {

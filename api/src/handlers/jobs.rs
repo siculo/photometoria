@@ -16,12 +16,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use uuid::Uuid;
 
-/// Handler for POST /api/tasks/{task_id}/jobs
+/// Handler for POST /api/catalogs/{catalog_id}/tasks/{task_id}/jobs
 ///
 /// Creates a new job for processing photos with AI analysis.
 pub async fn create_job(
     State(state): State<AppState>,
-    AppPath(task_id): AppPath<Uuid>,
+    AppPath((_catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
     Json(request): Json<CreateJobRequest>,
 ) -> Result<(StatusCode, Json<JobResponse>), AppError> {
     get_existing_task(&state.task_store, task_id).await?;
@@ -91,12 +91,12 @@ async fn get_existing_job(job_store: &Arc<dyn JobStore>, job_id: Uuid) -> Result
     }
 }
 
-/// Handler for GET /api/tasks/{task_id}/jobs
+/// Handler for GET /api/catalogs/{catalog_id}/tasks/{task_id}/jobs
 ///
 /// Lists all jobs belonging to a specific task with summary information.
 pub async fn list_task_jobs(
     State(state): State<AppState>,
-    AppPath(task_id): AppPath<Uuid>,
+    AppPath((_catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<Json<Vec<JobSummary>>, AppError> {
     get_existing_task(&state.task_store, task_id).await?;
 
@@ -122,38 +122,38 @@ pub async fn list_jobs(State(state): State<AppState>) -> Result<Json<Vec<JobSumm
     }
 }
 
-/// Handler for GET /api/jobs/{job_id}
+/// Handler for GET /api/catalogs/{catalog_id}/jobs/{job_id}
 ///
 /// Retrieves detailed information about a specific job, including progress if processing.
 pub async fn get_job(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
+    AppPath((_catalog_id, job_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<Json<JobDetailResponse>, AppError> {
     let job = get_existing_job(&state.job_store, job_id).await?;
     let response: JobDetailResponse = job.into();
     Ok(Json(response))
 }
 
-/// Handler for GET /api/jobs/{job_id}/results
+/// Handler for GET /api/catalogs/{catalog_id}/jobs/{job_id}/results
 ///
 /// Retrieves AI analysis results for all processed photos in a job.
 pub async fn get_job_results(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
+    AppPath((_catalog_id, job_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<Json<JobResultsResponse>, AppError> {
     let job = get_existing_job(&state.job_store, job_id).await?;
     let response: JobResultsResponse = job.into();
     Ok(Json(response))
 }
 
-/// Handler for POST /api/jobs/{job_id}/cancel
+/// Handler for POST /api/catalogs/{catalog_id}/jobs/{job_id}/cancel
 ///
 /// Cancels an active job. Removes any pending photos from the worker buffer
 /// and marks the job as Cancelled. Photos already being processed by a worker
 /// will still complete, but their results won't be saved.
 pub async fn cancel_job(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
+    AppPath((_catalog_id, job_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<Json<JobResponse>, AppError> {
     let mut job = get_existing_job(&state.job_store, job_id).await?;
 
@@ -181,14 +181,14 @@ pub async fn cancel_job(
     }
 }
 
-/// Handler for POST /api/jobs/{job_id}/retry
+/// Handler for POST /api/catalogs/{catalog_id}/jobs/{job_id}/retry
 ///
 /// Creates a new job to retry unprocessed or failed photos from an existing job.
 /// Includes both photos that failed during processing and photos that were never
 /// processed (e.g. because the original job was cancelled).
 pub async fn retry_job(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
+    AppPath((_catalog_id, job_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<Json<RetryJobResponse>, AppError> {
     let original_job = get_existing_job(&state.job_store, job_id).await?;
 
@@ -240,7 +240,7 @@ pub async fn retry_job(
 /// Returns 409 Conflict if the job is still active (Queued or Processing).
 pub async fn delete_job(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
+    AppPath((_catalog_id, job_id)): AppPath<(Uuid, Uuid)>,
 ) -> Result<axum::http::StatusCode, AppError> {
     let job = get_existing_job(&state.job_store, job_id).await?;
 
@@ -260,7 +260,7 @@ pub async fn delete_job(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handlers::test_utils::fixtures::create_test_state;
+    use crate::handlers::test_utils::fixtures::{create_test_state, test_catalog_id};
     use crate::models::{JobStatus, Photo, Task};
     use uuid::Uuid;
 
@@ -274,7 +274,7 @@ mod tests {
 
         // Create task with photos
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -295,7 +295,12 @@ mod tests {
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result = create_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task_id)),
+            Json(request),
+        )
+        .await;
 
         assert!(result.is_ok());
         let (status, Json(job_response)) = result.unwrap();
@@ -324,7 +329,7 @@ mod tests {
 
         // Create task with photos
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -347,7 +352,12 @@ mod tests {
             photo_ids: Some(vec![photo1_id, photo2_id]),
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result = create_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task_id)),
+            Json(request),
+        )
+        .await;
 
         assert!(result.is_ok());
         let (status, Json(job_response)) = result.unwrap();
@@ -375,7 +385,7 @@ mod tests {
 
         // Create task (test state uses an empty ProviderRegistry — no models configured)
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -387,7 +397,12 @@ mod tests {
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result = create_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task_id)),
+            Json(request),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -407,7 +422,7 @@ mod tests {
 
         let result = create_job(
             State(ts.state.clone()),
-            AppPath(nonexistent_task_id),
+            AppPath((test_catalog_id(), nonexistent_task_id)),
             Json(request),
         )
         .await;
@@ -429,7 +444,7 @@ mod tests {
 
         // Create task with one photo
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -446,7 +461,12 @@ mod tests {
             photo_ids: Some(vec![invalid_photo_id]),
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result = create_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task_id)),
+            Json(request),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -461,7 +481,7 @@ mod tests {
 
         // Create task without photos
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Empty task".to_string(),
             "empty task".to_string(),
         );
@@ -474,7 +494,12 @@ mod tests {
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result = create_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task_id)),
+            Json(request),
+        )
+        .await;
 
         // Should succeed but with 0 photos
         assert!(result.is_ok());
@@ -515,7 +540,7 @@ mod tests {
 
         // Create task with photos
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -548,7 +573,7 @@ mod tests {
 
         // Create task
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -586,7 +611,7 @@ mod tests {
 
         // Create task and job
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -601,7 +626,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = get_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = get_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -618,7 +647,7 @@ mod tests {
 
         // Create task and job
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -634,7 +663,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = get_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = get_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -651,7 +684,11 @@ mod tests {
         let ts = create_test_state().await;
         let nonexistent_job_id = Uuid::new_v4();
 
-        let result = get_job(State(ts.state.clone()), AppPath(nonexistent_job_id)).await;
+        let result = get_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), nonexistent_job_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -669,7 +706,7 @@ mod tests {
 
         // Create task and job
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -684,7 +721,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = get_job_results(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = get_job_results(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -701,7 +742,7 @@ mod tests {
 
         // Create task and job with results
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -740,7 +781,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = get_job_results(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = get_job_results(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -756,7 +801,11 @@ mod tests {
         let ts = create_test_state().await;
         let nonexistent_job_id = Uuid::new_v4();
 
-        let result = get_job_results(State(ts.state.clone()), AppPath(nonexistent_job_id)).await;
+        let result = get_job_results(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), nonexistent_job_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -773,7 +822,7 @@ mod tests {
 
         // Create task
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -837,7 +886,11 @@ mod tests {
         let original_job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(original_job_id)).await;
+        let result = retry_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), original_job_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -866,7 +919,11 @@ mod tests {
         let ts = create_test_state().await;
         let nonexistent_job_id = Uuid::new_v4();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(nonexistent_job_id)).await;
+        let result = retry_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), nonexistent_job_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -879,7 +936,7 @@ mod tests {
 
         // Create task and job that's still processing
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -891,7 +948,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = retry_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -905,7 +966,7 @@ mod tests {
 
         // Create task and completed job with no failures
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -936,7 +997,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = retry_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -949,7 +1014,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -987,7 +1052,11 @@ mod tests {
         let original_job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(original_job_id)).await;
+        let result = retry_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), original_job_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -1016,7 +1085,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -1027,7 +1096,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = cancel_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = cancel_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -1044,7 +1117,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -1056,7 +1129,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = cancel_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = cancel_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
@@ -1068,7 +1145,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -1081,7 +1158,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = cancel_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = cancel_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_already_finished");
@@ -1092,7 +1173,11 @@ mod tests {
         let ts = create_test_state().await;
         let nonexistent_id = Uuid::new_v4();
 
-        let result = cancel_job(State(ts.state.clone()), AppPath(nonexistent_id)).await;
+        let result = cancel_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), nonexistent_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "not_found");
@@ -1108,7 +1193,7 @@ mod tests {
 
         // Create task and job
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -1119,7 +1204,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = delete_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_not_finished");
@@ -1130,7 +1219,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -1142,7 +1231,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = delete_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_not_finished");
@@ -1153,7 +1246,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -1166,7 +1259,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = delete_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert_eq!(result, Ok(axum::http::StatusCode::NO_CONTENT));
 
@@ -1179,7 +1276,7 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
@@ -1191,7 +1288,11 @@ mod tests {
         let job_id = job.job_id;
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = delete_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), job_id)),
+        )
+        .await;
 
         assert_eq!(result, Ok(axum::http::StatusCode::NO_CONTENT));
 
@@ -1204,7 +1305,11 @@ mod tests {
         let ts = create_test_state().await;
         let nonexistent_job_id = Uuid::new_v4();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(nonexistent_job_id)).await;
+        let result = delete_job(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), nonexistent_job_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -1221,14 +1326,18 @@ mod tests {
         let ts = create_test_state().await;
 
         let task = Task::new(
-            Uuid::new_v4(),
+            test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let result = list_task_jobs(State(ts.state.clone()), AppPath(task_id)).await;
+        let result = list_task_jobs(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task_id)),
+        )
+        .await;
 
         assert!(result.is_ok());
         let Json(jobs) = result.unwrap();
@@ -1239,8 +1348,16 @@ mod tests {
     async fn test_list_task_jobs_returns_only_task_jobs() {
         let ts = create_test_state().await;
 
-        let task1 = Task::new(Uuid::new_v4(), "Task 1".to_string(), "task 1".to_string());
-        let task2 = Task::new(Uuid::new_v4(), "Task 2".to_string(), "task 2".to_string());
+        let task1 = Task::new(
+            test_catalog_id(),
+            "Task 1".to_string(),
+            "task 1".to_string(),
+        );
+        let task2 = Task::new(
+            test_catalog_id(),
+            "Task 2".to_string(),
+            "task 2".to_string(),
+        );
         let task1_id = task1.task_id;
         let task2_id = task2.task_id;
         ts.state.task_store.create(task1).await.unwrap();
@@ -1255,9 +1372,12 @@ mod tests {
         ts.state.job_store.create(job2).await.unwrap();
         ts.state.job_store.create(job3).await.unwrap();
 
-        let Json(jobs) = list_task_jobs(State(ts.state.clone()), AppPath(task1_id))
-            .await
-            .unwrap();
+        let Json(jobs) = list_task_jobs(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), task1_id)),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(jobs.len(), 2);
         let job_ids: Vec<Uuid> = jobs.iter().map(|j| j.job_id).collect();
@@ -1270,7 +1390,11 @@ mod tests {
         let ts = create_test_state().await;
         let nonexistent_task_id = Uuid::new_v4();
 
-        let result = list_task_jobs(State(ts.state.clone()), AppPath(nonexistent_task_id)).await;
+        let result = list_task_jobs(
+            State(ts.state.clone()),
+            AppPath((test_catalog_id(), nonexistent_task_id)),
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "not_found");
