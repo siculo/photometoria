@@ -242,6 +242,29 @@ cargo test --test '*'
 cargo tarpaulin --out Html
 ```
 
+### Debugging HTTP Requests
+
+The API server includes `tower-http` `TraceLayer` middleware that logs every
+incoming request and outgoing response, including unmatched routes (404). By
+default these messages are emitted at `DEBUG` level, which is below the
+production default (`tower_http=info`).
+
+To enable HTTP request logging, set the `RUST_LOG` environment variable:
+
+```bash
+# Show all HTTP requests/responses (method, URI, status, latency)
+RUST_LOG=tower_http=debug cargo run --release
+
+# Maximum verbosity (includes body sizes, header details)
+RUST_LOG=tower_http=trace cargo run --release
+
+# Combine with application logs
+RUST_LOG=photometoria=debug,tower_http=debug cargo run --release
+```
+
+This is useful for diagnosing client issues (e.g., wrong URL paths) where the
+server returns a 404 without reaching any handler.
+
 ### Test Organization
 
 ```

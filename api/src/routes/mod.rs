@@ -16,6 +16,7 @@ use axum::{
     extract::DefaultBodyLimit,
     routing::{get, post},
 };
+use tower_http::trace::TraceLayer;
 
 pub fn create_router(state: AppState) -> Router {
     // Calculate max body size for uploads: max_photo_size * max_photos + overhead
@@ -56,6 +57,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/jobs/{job_id}/cancel", post(cancel_job))
         .route("/api/jobs/{job_id}/retry", post(retry_job))
         .route("/api/models", get(list_default_provider_models))
+        .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 
