@@ -11,6 +11,11 @@ local ServerConnection = {}
 local TIMEOUT_SECONDS = 10
 local UPLOAD_TIMEOUT_SECONDS = 120
 
+--- Returns the base API path for catalog-scoped endpoints.
+local function catalogBasePath(catalogId)
+	return '/api/catalogs/' .. catalogId
+end
+
 --- Validates that a string matches the host:port format.
 --- Accepts IPv4 addresses and hostnames with a numeric port (1-65535).
 function ServerConnection.isValidHostPort(value)
@@ -115,8 +120,8 @@ end
 --- Returns `(true, data)` on success or `(false, data)` on failure.
 --- On success, data contains the task details (task_id, name, context, created_at).
 --- On failure, data contains `message` and optionally `duplicate = true` for 409.
-function ServerConnection.createTask(host, name, context)
-	local url = 'http://' .. host .. '/api/tasks'
+function ServerConnection.createTask(host, catalogId, name, context)
+	local url = 'http://' .. host .. catalogBasePath(catalogId) .. '/tasks'
 	local body = JSON.encode({ name = name, context = context })
 
 	local headers = {
@@ -177,12 +182,12 @@ local function getJson(host, path)
 	return true, data
 end
 
---- Retrieves the list of tasks from the server. Must be called from within an async task.
+--- Retrieves the list of tasks for a catalog. Must be called from within an async task.
 --- Returns `(true, tasks)` on success or `(false, error)` on failure.
 --- On success, tasks is an array of TaskSummary objects with fields:
 --- task_id, name, context, photo_count, storage_used, created_at, job_count.
-function ServerConnection.listTasks(host)
-	return getJson(host, '/api/tasks')
+function ServerConnection.listTasks(host, catalogId)
+	return getJson(host, catalogBasePath(catalogId) .. '/tasks')
 end
 
 --- Retrieves the list of jobs for a task. Must be called from within an async task.
