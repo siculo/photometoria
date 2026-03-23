@@ -78,7 +78,7 @@ Returns general server information: version, storage usage, available AI provide
 ```json
 {
   "general": {
-    "version": "0.1.0"
+    "version": "0.3.0"
   },
   "server": {
     "allocated_space_bytes": 107374182400,

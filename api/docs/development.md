@@ -518,7 +518,9 @@ fn calculate_task_size(photos: &[Photo]) -> Option<u64> {
 
 ## Version History
 
-- **v0.1.0** (Planned) - Initial REST API server implementation with core functionality
+- **v0.1.0** - Initial REST API server implementation with core functionality
+- **v0.2.0** - Plugin support (endpoint adjustments, response structure updates)
+- **v0.3.0** - Catalog identity support (catalog-scoped tasks, storage per catalog)
 
 ## See Also
 
