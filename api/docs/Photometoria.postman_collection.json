@@ -12,6 +12,12 @@
 			"type": "string"
 		},
 		{
+			"key": "catalog_id",
+			"value": "",
+			"type": "string",
+			"description": "UUID identifying the Lightroom catalog"
+		},
+		{
 			"key": "task_id",
 			"value": "",
 			"type": "string"
@@ -284,12 +290,14 @@
 							"raw": "{\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/tasks",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks"
 							]
 						},
@@ -311,7 +319,7 @@
 									"raw": "{\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
 								},
 								"url": {
-									"raw": "{{base_url}}/api/tasks",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
 									"host": [
 										"{{base_url}}"
 									],
@@ -340,12 +348,14 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/tasks",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks"
 							]
 						},
@@ -358,7 +368,7 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/tasks",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
 									"host": [
 										"{{base_url}}"
 									],
@@ -393,6 +403,8 @@
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks",
 								"{{task_id}}"
 							]
@@ -412,6 +424,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"{{task_id}}"
 									]
@@ -434,12 +448,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks/nonexistent",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"nonexistent"
 									]
@@ -474,6 +490,8 @@
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks",
 								"{{task_id}}"
 							]
@@ -502,6 +520,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"{{task_id}}"
 									]
@@ -533,12 +553,14 @@
 									"raw": "{\n    \"context\": \"updated context\"\n}"
 								},
 								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks/nonexistent",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"nonexistent"
 									]
@@ -564,6 +586,8 @@
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks",
 								"{{task_id}}"
 							]
@@ -583,6 +607,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"{{task_id}}"
 									]
@@ -600,12 +626,14 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks/nonexistent",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"nonexistent"
 									]
@@ -629,6 +657,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"{{task_id}}"
 									]
@@ -659,6 +689,8 @@
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks",
 								"{{task_id}}",
 								"photos"
@@ -687,6 +719,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"{{task_id}}",
 										"photos"
@@ -716,6 +750,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"nonexistent",
 										"photos"
@@ -764,6 +800,8 @@
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks",
 								"{{task_id}}",
 								"photos"
@@ -794,6 +832,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"{{task_id}}",
 										"photos"
@@ -833,6 +873,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"nonexistent",
 										"photos"
@@ -888,6 +930,8 @@
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks",
 								"{{task_id}}",
 								"jobs"
@@ -917,6 +961,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"{{task_id}}",
 										"jobs"
@@ -955,6 +1001,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"nonexistent",
 										"jobs"
@@ -993,6 +1041,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"{{task_id}}",
 										"jobs"
@@ -1024,6 +1074,8 @@
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks",
 								"{{task_id}}",
 								"jobs"
@@ -1044,6 +1096,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"{{task_id}}",
 										"jobs"
@@ -1073,6 +1127,8 @@
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks",
 										"nonexistent",
 										"jobs"
@@ -1145,12 +1201,14 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"jobs",
 								"{{job_id}}"
 							]
@@ -1164,12 +1222,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}"
 									]
@@ -1192,12 +1252,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}"
 									]
@@ -1220,12 +1282,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}"
 									]
@@ -1248,12 +1312,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}"
 									]
@@ -1276,12 +1342,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/nonexistent",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"nonexistent"
 									]
@@ -1306,12 +1374,14 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}/results",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}/results",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"jobs",
 								"{{job_id}}",
 								"results"
@@ -1326,12 +1396,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/results",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}/results",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}",
 										"results"
@@ -1355,12 +1427,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent/results",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/nonexistent/results",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"nonexistent",
 										"results"
@@ -1386,12 +1460,14 @@
 						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}/cancel",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"jobs",
 								"{{job_id}}",
 								"cancel"
@@ -1406,12 +1482,14 @@
 								"method": "POST",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}/cancel",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}",
 										"cancel"
@@ -1435,12 +1513,14 @@
 								"method": "POST",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}/cancel",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}",
 										"cancel"
@@ -1464,12 +1544,14 @@
 								"method": "POST",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent/cancel",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/nonexistent/cancel",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"nonexistent",
 										"cancel"
@@ -1510,12 +1592,14 @@
 						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}/retry",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"jobs",
 								"{{job_id}}",
 								"retry"
@@ -1530,12 +1614,14 @@
 								"method": "POST",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}/retry",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}",
 										"retry"
@@ -1559,12 +1645,14 @@
 								"method": "POST",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}/retry",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}",
 										"retry"
@@ -1588,12 +1676,14 @@
 								"method": "POST",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}/retry",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}",
 										"retry"
@@ -1617,12 +1707,14 @@
 								"method": "POST",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent/retry",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/nonexistent/retry",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"nonexistent",
 										"retry"
@@ -1648,12 +1740,14 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"jobs",
 								"{{job_id}}"
 							]
@@ -1667,12 +1761,14 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}"
 									]
@@ -1690,12 +1786,14 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/nonexistent",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"nonexistent"
 									]
@@ -1718,12 +1816,14 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/jobs/{{job_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"jobs",
 										"{{job_id}}"
 									]
@@ -1753,12 +1853,14 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/photos/{{photo_id}}",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/photos/{{photo_id}}",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"photos",
 								"{{photo_id}}"
 							]
@@ -1772,12 +1874,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/photos/{{photo_id}}",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/photos/{{photo_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"photos",
 										"{{photo_id}}"
 									]
@@ -1800,12 +1904,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/photos/nonexistent",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/photos/nonexistent",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"photos",
 										"nonexistent"
 									]
@@ -1830,12 +1936,14 @@
 						"method": "DELETE",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/photos/{{photo_id}}",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/photos/{{photo_id}}",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"photos",
 								"{{photo_id}}"
 							]
@@ -1849,12 +1957,14 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/photos/{{photo_id}}",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/photos/{{photo_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"photos",
 										"{{photo_id}}"
 									]
@@ -1872,12 +1982,14 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/photos/nonexistent",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/photos/nonexistent",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"photos",
 										"nonexistent"
 									]
@@ -1900,12 +2012,14 @@
 								"method": "DELETE",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/photos/{{photo_id}}",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/photos/{{photo_id}}",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"photos",
 										"{{photo_id}}"
 									]
