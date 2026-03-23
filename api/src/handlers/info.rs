@@ -64,6 +64,7 @@ mod tests {
     use super::*;
     use crate::handlers::test_utils::fixtures::create_test_state;
     use crate::models::{Job, Photo, Task};
+    use uuid::Uuid;
 
     #[tokio::test]
     async fn test_info_empty_state() {
@@ -105,11 +106,11 @@ mod tests {
     async fn test_info_with_tasks_and_jobs() {
         let ts = create_test_state().await;
 
-        let task1 = Task::new("Task 1".to_string(), "task 1".to_string());
+        let task1 = Task::new(Uuid::new_v4(), "Task 1".to_string(), "task 1".to_string());
         let task1_id = task1.task_id;
         ts.state.task_store.create(task1).await.unwrap();
 
-        let task2 = Task::new("Task 2".to_string(), "task 2".to_string());
+        let task2 = Task::new(Uuid::new_v4(), "Task 2".to_string(), "task 2".to_string());
         ts.state.task_store.create(task2).await.unwrap();
 
         let photo = Photo::new(task1_id, None, "photo1.jpg".to_string(), 5000);

@@ -65,11 +65,13 @@ impl FileSystemTaskStore {
     }
 
     /// Loads all tasks from the filesystem into memory.
+    ///
+    /// Scans the catalog hierarchy: `catalogs/{catalog_id}/tasks/{task_id}/task.json`
     async fn load_all(&self) {
-        let task_files = match self.layout.scan_task_json_files().await {
-            Ok(files) => files,
+        let catalog_dirs = match self.layout.scan_catalog_dirs().await {
+            Ok(dirs) => dirs,
             Err(e) => {
-                warn!("Failed to scan task files: {}", e);
+                warn!("Failed to scan catalog directories: {}", e);
                 return;
             }
         };
@@ -77,24 +79,50 @@ impl FileSystemTaskStore {
         let mut loaded_count = 0;
         let mut error_count = 0;
 
-        for task_json in task_files {
-            match self.load_task_from_file(&task_json).await {
-                Ok(mut task) => {
-                    if task.name.is_empty() {
-                        task.ensure_name();
-                        if let Err(e) = self.save_task_to_file(&task).await {
-                            warn!(
-                                "Failed to persist migrated name for task {}: {}",
-                                task.task_id, e
-                            );
-                        }
-                    }
-                    self.tasks.insert(task.task_id, task);
-                    loaded_count += 1;
+        for catalog_dir in catalog_dirs {
+            let catalog_id = match catalog_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .and_then(|s| s.parse::<Uuid>().ok())
+            {
+                Some(id) => id,
+                None => {
+                    warn!("Skipping invalid catalog directory: {:?}", catalog_dir);
+                    continue;
                 }
+            };
+
+            let task_files = match self.layout.scan_task_json_files(catalog_id).await {
+                Ok(files) => files,
                 Err(e) => {
-                    warn!("Failed to load task from {:?}: {}", task_json, e);
+                    warn!(
+                        "Failed to scan task files for catalog {}: {}",
+                        catalog_id, e
+                    );
                     error_count += 1;
+                    continue;
+                }
+            };
+
+            for task_json in task_files {
+                match self.load_task_from_file(&task_json).await {
+                    Ok(mut task) => {
+                        if task.name.is_empty() {
+                            task.ensure_name();
+                            if let Err(e) = self.save_task_to_file(&task).await {
+                                warn!(
+                                    "Failed to persist migrated name for task {}: {}",
+                                    task.task_id, e
+                                );
+                            }
+                        }
+                        self.tasks.insert(task.task_id, task);
+                        loaded_count += 1;
+                    }
+                    Err(e) => {
+                        warn!("Failed to load task from {:?}: {}", task_json, e);
+                        error_count += 1;
+                    }
                 }
             }
         }
@@ -117,7 +145,7 @@ impl FileSystemTaskStore {
 
     /// Saves a task's metadata to the filesystem.
     async fn save_task_to_file(&self, task: &Task) -> TaskStoreResult<()> {
-        let path = self.layout.task_json_path(task);
+        let path = self.layout.task_json_path(task.catalog_id, task.task_id);
         let content = serde_json::to_string_pretty(task).map_err(|e| {
             TaskStoreError::StorageError(format!("Failed to serialize task: {}", e))
         })?;
@@ -148,10 +176,17 @@ impl TaskStore for FileSystemTaskStore {
             Entry::Occupied(_) => Err(TaskStoreError::AlreadyExists(task_id)),
             Entry::Vacant(entry) => {
                 // Create task directory on filesystem
-                let task_dir = self.layout.ensure_task_dir(&task).await.map_err(|e| {
-                    error!("Failed to create task directory: {}", e);
-                    TaskStoreError::StorageError(format!("Failed to create task directory: {}", e))
-                })?;
+                let task_dir = self
+                    .layout
+                    .ensure_task_dir(task.catalog_id, task.task_id)
+                    .await
+                    .map_err(|e| {
+                        error!("Failed to create task directory: {}", e);
+                        TaskStoreError::StorageError(format!(
+                            "Failed to create task directory: {}",
+                            e
+                        ))
+                    })?;
                 debug!("Created task directory: {:?}", task_dir);
 
                 // Save metadata to filesystem
@@ -228,7 +263,7 @@ impl TaskStore for FileSystemTaskStore {
         match self.tasks.remove(&task_id) {
             Some((_, task)) => {
                 // Remove task directory and all its contents (includes task.json and photos)
-                let task_dir = self.layout.task_dir(&task);
+                let task_dir = self.layout.task_dir(task.catalog_id, task.task_id);
                 if task_dir.exists() {
                     if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
                         error!("Failed to remove task directory {:?}: {}", task_dir, e);
@@ -262,13 +297,29 @@ impl TaskStore for FileSystemTaskStore {
         Ok(self.tasks.len())
     }
 
-    async fn find_by_name(&self, name: &str) -> TaskStoreResult<Option<Task>> {
-        debug!("Finding task by name: {}", name);
+    async fn list_by_catalog(&self, catalog_id: Uuid) -> TaskStoreResult<Vec<Task>> {
+        debug!("Listing tasks for catalog: {}", catalog_id);
+
+        let mut tasks: Vec<Task> = self
+            .tasks
+            .iter()
+            .filter(|entry| entry.value().catalog_id == catalog_id)
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        tasks.sort_by_key(|task| task.created_at);
+
+        info!("Listed {} tasks for catalog {}", tasks.len(), catalog_id);
+        Ok(tasks)
+    }
+
+    async fn find_by_name(&self, catalog_id: Uuid, name: &str) -> TaskStoreResult<Option<Task>> {
+        debug!("Finding task by name '{}' in catalog {}", name, catalog_id);
 
         Ok(self
             .tasks
             .iter()
-            .find(|entry| entry.value().name == name)
+            .find(|entry| entry.value().catalog_id == catalog_id && entry.value().name == name)
             .map(|entry| entry.value().clone()))
     }
 }
@@ -304,6 +355,7 @@ mod tests {
     fn create_test_task_with_timestamp(name: &str, timestamp: DateTime<Utc>) -> Task {
         Task {
             task_id: Uuid::new_v4(),
+            catalog_id: Uuid::new_v4(),
             name: name.to_string(),
             context: format!("context for {}", name),
             created_at: timestamp,
@@ -312,7 +364,11 @@ mod tests {
 
     // Helper function to create a test task with current timestamp
     fn create_test_task(name: &str) -> Task {
-        Task::new(name.to_string(), format!("context for {}", name))
+        Task::new(
+            Uuid::new_v4(),
+            name.to_string(),
+            format!("context for {}", name),
+        )
     }
 
     #[tokio::test]
@@ -332,10 +388,20 @@ mod tests {
         assert!(exists);
 
         // Verify directory was created
-        assert!(ts.store.layout.task_dir(&task).exists());
+        assert!(
+            ts.store
+                .layout
+                .task_dir(task.catalog_id, task.task_id)
+                .exists()
+        );
 
         // Verify task.json was created
-        assert!(ts.store.layout.task_json_path(&task).exists());
+        assert!(
+            ts.store
+                .layout
+                .task_json_path(task.catalog_id, task.task_id)
+                .exists()
+        );
     }
 
     #[tokio::test]
@@ -455,7 +521,7 @@ mod tests {
         let task = create_test_task("vacation in SF");
 
         ts.store.create(task.clone()).await.unwrap();
-        let task_dir = ts.store.layout.task_dir(&task);
+        let task_dir = ts.store.layout.task_dir(task.catalog_id, task.task_id);
         assert!(task_dir.exists());
 
         // Delete the task
@@ -594,6 +660,89 @@ mod tests {
         let loaded = store.get(task_id).await.unwrap().unwrap();
         assert_eq!(loaded.context, "Updated context");
     }
+
+    // ========================================================================
+    // Catalog-scoped Tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_list_by_catalog_returns_only_matching_tasks() {
+        let ts = create_store().await;
+        let catalog_a = Uuid::new_v4();
+        let catalog_b = Uuid::new_v4();
+
+        let task1 = Task::new(catalog_a, "Task A1".to_string(), "ctx".to_string());
+        let task2 = Task::new(catalog_a, "Task A2".to_string(), "ctx".to_string());
+        let task3 = Task::new(catalog_b, "Task B1".to_string(), "ctx".to_string());
+
+        ts.store.create(task1).await.unwrap();
+        ts.store.create(task2).await.unwrap();
+        ts.store.create(task3).await.unwrap();
+
+        let catalog_a_tasks = ts.store.list_by_catalog(catalog_a).await.unwrap();
+        assert_eq!(catalog_a_tasks.len(), 2);
+        assert!(catalog_a_tasks.iter().all(|t| t.catalog_id == catalog_a));
+
+        let catalog_b_tasks = ts.store.list_by_catalog(catalog_b).await.unwrap();
+        assert_eq!(catalog_b_tasks.len(), 1);
+        assert_eq!(catalog_b_tasks[0].name, "Task B1");
+    }
+
+    #[tokio::test]
+    async fn test_list_by_catalog_empty_for_unknown_catalog() {
+        let ts = create_store().await;
+
+        let tasks = ts.store.list_by_catalog(Uuid::new_v4()).await.unwrap();
+        assert!(tasks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_find_by_name_scoped_to_catalog() {
+        let ts = create_store().await;
+        let catalog_a = Uuid::new_v4();
+        let catalog_b = Uuid::new_v4();
+
+        let task_a = Task::new(catalog_a, "Shared Name".to_string(), "ctx a".to_string());
+        let task_b = Task::new(catalog_b, "Shared Name".to_string(), "ctx b".to_string());
+
+        ts.store.create(task_a.clone()).await.unwrap();
+        ts.store.create(task_b.clone()).await.unwrap();
+
+        let found_a = ts
+            .store
+            .find_by_name(catalog_a, "Shared Name")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found_a.catalog_id, catalog_a);
+        assert_eq!(found_a.context, "ctx a");
+
+        let found_b = ts
+            .store
+            .find_by_name(catalog_b, "Shared Name")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found_b.catalog_id, catalog_b);
+        assert_eq!(found_b.context, "ctx b");
+    }
+
+    #[tokio::test]
+    async fn test_find_by_name_not_found_in_different_catalog() {
+        let ts = create_store().await;
+        let catalog_a = Uuid::new_v4();
+        let catalog_b = Uuid::new_v4();
+
+        let task = Task::new(catalog_a, "Only in A".to_string(), "ctx".to_string());
+        ts.store.create(task).await.unwrap();
+
+        let result = ts.store.find_by_name(catalog_b, "Only in A").await.unwrap();
+        assert!(result.is_none());
+    }
+
+    // ========================================================================
+    // Persistence Tests
+    // ========================================================================
 
     #[tokio::test]
     async fn test_delete_removes_from_filesystem() {

@@ -72,6 +72,11 @@ pub mod fixtures {
         temp_dir: TempDir,
     }
 
+    /// Returns a fixed catalog UUID for use in handler tests.
+    pub fn test_catalog_id() -> uuid::Uuid {
+        uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
+    }
+
     /// Creates a fresh test state with filesystem-backed stores for each test
     ///
     /// # Example
@@ -89,8 +94,9 @@ pub mod fixtures {
         let storage_path = temp_dir.path().to_path_buf();
         let config = Config::default();
         let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(storage_path).await);
+        let photo_store =
+            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await);
+        let job_store = Arc::new(FileSystemJobStore::new(storage_path, task_store.clone()).await);
 
         let mut registry = ProviderRegistry::new();
         registry.register("test", Arc::new(TestProvider));

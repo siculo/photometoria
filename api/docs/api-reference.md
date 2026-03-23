@@ -19,10 +19,10 @@ http://localhost:8080/api
 This example demonstrates a typical workflow from task creation to cleanup:
 
 ```
-1. Client creates a task
-   POST /api/tasks
-   {context: "vacation in San Francisco"}
-   ← {task_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"}
+1. Client creates a task (scoped to a Lightroom catalog)
+   POST /api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks
+   {name: "SF Vacation", context: "vacation in San Francisco"}
+   ← {task_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", catalog_id: "c0ffee00-cafe-4000-b000-000000000001", name: "SF Vacation"}
 
 2. Client uploads photos (single or batch)
    POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/photos
@@ -78,7 +78,7 @@ Returns general server information: version, storage usage, available AI provide
 ```json
 {
   "general": {
-    "version": "0.1.0"
+    "version": "0.3.0"
   },
   "server": {
     "allocated_space_bytes": 107374182400,
@@ -163,9 +163,15 @@ Returns models for the default provider. The response format matches `GET /api/p
 
 ## Task Endpoints
 
-### POST /api/tasks
+### POST /api/catalogs/{catalog_id}/tasks
 
-Creates a new task. Multiple tasks can be active simultaneously.
+Creates a new task scoped to a specific Lightroom catalog. Multiple tasks can be active simultaneously within the same catalog.
+
+**Path Parameters:**
+
+| Parameter    | Type | Description |
+|--------------|------|-------------|
+| `catalog_id` | UUID | Identifier of the Lightroom catalog |
 
 **Note:** The current implementation does not enforce task count limits. Future versions may introduce configurable quotas.
 
@@ -173,23 +179,35 @@ Creates a new task. Multiple tasks can be active simultaneously.
 
 ```json
 {
+  "name": "SF Vacation",
   "context": "vacation in San Francisco, summer 2024"
 }
 ```
+
+- `name` — display name for the task (must be unique within the catalog)
+- `context` — descriptive context passed to the AI model during analysis
 
 **Response:**
 
 ```json
 {
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "catalog_id": "c0ffee00-cafe-4000-b000-000000000001",
+  "name": "SF Vacation",
   "context": "vacation in San Francisco, summer 2024",
   "created_at": "2024-01-15T10:30:00Z"
 }
 ```
 
-### GET /api/tasks
+### GET /api/catalogs/{catalog_id}/tasks
 
-Returns list of all tasks.
+Returns list of tasks belonging to a specific catalog.
+
+**Path Parameters:**
+
+| Parameter    | Type | Description |
+|--------------|------|-------------|
+| `catalog_id` | UUID | Identifier of the Lightroom catalog |
 
 **Response:** `200 OK` — JSON array
 
@@ -197,6 +215,8 @@ Returns list of all tasks.
 [
   {
     "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "catalog_id": "c0ffee00-cafe-4000-b000-000000000001",
+    "name": "SF Vacation",
     "context": "...",
     "photo_count": 15,
     "storage_used": 47395430,
@@ -215,6 +235,8 @@ Returns detailed information about a specific task.
 ```json
 {
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "catalog_id": "c0ffee00-cafe-4000-b000-000000000001",
+  "name": "SF Vacation",
   "context": "vacation in SF",
   "created_at": "2024-01-15T10:30:00Z",
   "photo_count": 15,
@@ -245,6 +267,7 @@ Updates the task name and/or context.
 ```json
 {
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "catalog_id": "c0ffee00-cafe-4000-b000-000000000001",
   "name": "Updated Name",
   "context": "updated context information",
   "created_at": "2024-01-15T10:30:00Z"
@@ -631,6 +654,8 @@ Deletes a job. The job must be in a terminal state (`completed`, `failed`, or `c
 ```json
 {
   "task_id": "string (UUID)",
+  "catalog_id": "string (UUID)",
+  "name": "string",
   "context": "string",
   "created_at": "ISO 8601 timestamp"
 }

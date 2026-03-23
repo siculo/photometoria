@@ -235,8 +235,9 @@ mod tests {
         let path = temp.path().to_path_buf();
 
         let task_store = Arc::new(FileSystemTaskStore::new(path.clone()).await);
-        let photo_store = Arc::new(FileSystemPhotoStore::new(path.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(path).await);
+        let photo_store =
+            Arc::new(FileSystemPhotoStore::new(path.clone(), task_store.clone()).await);
+        let job_store = Arc::new(FileSystemJobStore::new(path, task_store.clone()).await);
         let ai_provider: Arc<dyn AIProvider> = Arc::new(NoopProvider);
 
         let processor = PhotoProcessor::new(ai_provider, job_store, photo_store, task_store);

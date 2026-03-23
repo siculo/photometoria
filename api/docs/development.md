@@ -242,6 +242,29 @@ cargo test --test '*'
 cargo tarpaulin --out Html
 ```
 
+### Debugging HTTP Requests
+
+The API server includes `tower-http` `TraceLayer` middleware that logs every
+incoming request and outgoing response, including unmatched routes (404). By
+default these messages are emitted at `DEBUG` level, which is below the
+production default (`tower_http=info`).
+
+To enable HTTP request logging, set the `RUST_LOG` environment variable:
+
+```bash
+# Show all HTTP requests/responses (method, URI, status, latency)
+RUST_LOG=tower_http=debug cargo run --release
+
+# Maximum verbosity (includes body sizes, header details)
+RUST_LOG=tower_http=trace cargo run --release
+
+# Combine with application logs
+RUST_LOG=photometoria=debug,tower_http=debug cargo run --release
+```
+
+This is useful for diagnosing client issues (e.g., wrong URL paths) where the
+server returns a 404 without reaching any handler.
+
 ### Test Organization
 
 ```
@@ -289,15 +312,17 @@ All endpoints can be tested using curl. Below are examples for common workflows.
 **1. Create a task:**
 
 ```bash
-curl -X POST http://localhost:3000/api/tasks \
+curl -X POST http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks \
   -H "Content-Type: application/json" \
-  -d '{"context":"vacation in San Francisco, summer 2024"}'
+  -d '{"name":"SF Vacation","context":"vacation in San Francisco, summer 2024"}'
 ```
 
 Response:
 ```json
 {
   "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "catalog_id": "c0ffee00-cafe-4000-b000-000000000001",
+  "name": "SF Vacation",
   "context": "vacation in San Francisco, summer 2024",
   "created_at": "2024-01-15T10:30:00Z"
 }
@@ -306,7 +331,7 @@ Response:
 **2. List all tasks:**
 
 ```bash
-curl http://localhost:3000/api/tasks
+curl http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks
 ```
 
 **3. Get task details:**
@@ -320,7 +345,7 @@ curl http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000
 ```bash
 curl -X PATCH http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000 \
   -H "Content-Type: application/json" \
-  -d '{"context":"updated context information"}'
+  -d '{"name":"SF Vacation","context":"updated context information"}'
 ```
 
 **5. Delete a task:**
@@ -339,17 +364,17 @@ curl http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/jobs
 
 ```bash
 # Create first task
-curl -X POST http://localhost:3000/api/tasks \
+curl -X POST http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks \
   -H "Content-Type: application/json" \
-  -d '{"context":"San Francisco trip"}'
+  -d '{"name":"SF Trip","context":"San Francisco trip"}'
 
 # Create second task (should succeed, not return 409)
-curl -X POST http://localhost:3000/api/tasks \
+curl -X POST http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks \
   -H "Content-Type: application/json" \
-  -d '{"context":"New York vacation"}'
+  -d '{"name":"NY Vacation","context":"New York vacation"}'
 
 # List both tasks
-curl http://localhost:3000/api/tasks
+curl http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks
 ```
 
 **Expected behavior:**
@@ -493,7 +518,9 @@ fn calculate_task_size(photos: &[Photo]) -> Option<u64> {
 
 ## Version History
 
-- **v0.1.0** (Planned) - Initial REST API server implementation with core functionality
+- **v0.1.0** - Initial REST API server implementation with core functionality
+- **v0.2.0** - Plugin support (endpoint adjustments, response structure updates)
+- **v0.3.0** - Catalog identity support (catalog-scoped tasks, storage per catalog)
 
 ## See Also
 

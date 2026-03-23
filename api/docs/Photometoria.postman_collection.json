@@ -12,6 +12,12 @@
 			"type": "string"
 		},
 		{
+			"key": "catalog_id",
+			"value": "",
+			"type": "string",
+			"description": "UUID identifying the Lightroom catalog"
+		},
+		{
 			"key": "task_id",
 			"value": "",
 			"type": "string"
@@ -281,15 +287,17 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
+							"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
 						},
 						"url": {
-							"raw": "{{base_url}}/api/tasks",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks"
 							]
 						},
@@ -308,15 +316,17 @@
 								],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
+									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
 								},
 								"url": {
-									"raw": "{{base_url}}/api/tasks",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks"
 									]
 								}
@@ -330,7 +340,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"context\": \"vacation in San Francisco, summer 2024\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
+							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
 						}
 					]
 				},
@@ -340,12 +350,14 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{base_url}}/api/tasks",
+							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
 							"host": [
 								"{{base_url}}"
 							],
 							"path": [
 								"api",
+								"catalogs",
+								"{{catalog_id}}",
 								"tasks"
 							]
 						},
@@ -358,12 +370,14 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{base_url}}/api/tasks",
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"api",
+										"catalogs",
+										"{{catalog_id}}",
 										"tasks"
 									]
 								}
@@ -377,7 +391,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "[\n    {\n        \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n        \"context\": \"vacation in San Francisco\",\n        \"photo_count\": 0,\n        \"storage_used\": 0,\n        \"created_at\": \"2024-01-15T10:30:00Z\",\n        \"job_count\": 0\n    }\n]"
+							"body": "[\n    {\n        \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n        \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"name\": \"SF Vacation\",\n        \"context\": \"vacation in San Francisco\",\n        \"photo_count\": 0,\n        \"storage_used\": 0,\n        \"created_at\": \"2024-01-15T10:30:00Z\",\n        \"job_count\": 0\n    }\n]"
 						}
 					]
 				},
@@ -426,7 +440,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"context\": \"vacation in San Francisco\",\n    \"created_at\": \"2024-01-15T10:30:00Z\",\n    \"photo_count\": 0,\n    \"storage_used\": 0\n}"
+							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco\",\n    \"created_at\": \"2024-01-15T10:30:00Z\",\n    \"photo_count\": 0,\n    \"storage_used\": 0,\n    \"job_count\": 0\n}"
 						},
 						{
 							"name": "Not Found",
@@ -465,7 +479,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
+							"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/tasks/{{task_id}}",
@@ -493,7 +507,7 @@
 								],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
+									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}",
@@ -516,7 +530,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
+							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
 						},
 						{
 							"name": "Not Found",
@@ -530,7 +544,7 @@
 								],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n    \"context\": \"updated context\"\n}"
+									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context\"\n}"
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/nonexistent",

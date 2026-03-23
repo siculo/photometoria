@@ -72,23 +72,60 @@ cd photometoria/plugin
 
 ```
 plugin/
-├── Info.lua              # Plugin metadata and version
-├── PluginInit.lua        # Plugin initialization
-├── PluginManager.lua     # Plugin manager dialog
-├── PhotometoriaAPI.lua   # API client module
-├── ExportServiceProvider.lua  # Export service integration
-└── docs/
-    └── development.md    # This file
+├── photometoria.lrdevplugin/     # Lightroom plugin bundle
+│   ├── Info.lua                  # Plugin metadata (SDK version, identifier)
+│   ├── CatalogIdentity.lua      # Persistent catalog UUID (lazy-init via SDK prefs)
+│   ├── UUID.lua                  # Pure-Lua UUID v4 generator (no SDK deps)
+│   ├── JSON.lua                  # JSON encoder/decoder (pure Lua)
+│   ├── Guard.lua                 # Reentrancy guard for menu items
+│   ├── MockData.lua              # Mock data for UI development
+│   ├── ServerConnection.lua      # HTTP client for Photometoria API
+│   ├── PhotoValidator.lua        # Photo selection validation
+│   ├── PhotoUploader.lua         # Batch photo upload with progress
+│   ├── TaskUtils.lua             # Task-related utility functions
+│   ├── PluginInfoProvider.lua    # Plugin Manager UI (connection settings)
+│   ├── AddPhotosDialog.lua       # Add photos dialog (Library > Plugin Extras)
+│   ├── ApplyTagsDialog.lua       # Apply tags dialog (Library > Plugin Extras)
+│   ├── NewJobDialog.lua          # New job creation dialog
+│   ├── TaskDialog.lua            # Task management dialog (Library > Plugin Extras)
+│   ├── TaskDialogUI.lua          # Task dialog UI builder
+│   └── TranslatedStrings_it.txt  # Italian localization
+├── tests/                        # Unit tests (run outside Lightroom)
+│   ├── testkit.lua               # Minimal test framework
+│   ├── test_json.lua             # JSON module tests
+│   ├── test_photo_validator.lua  # PhotoValidator tests
+│   └── test_catalog_identity.lua # UUID generation tests
+├── prototype/                    # UI/workflow prototypes
+└── docs/                         # Plugin documentation
+    └── development.md            # This file
 ```
 
 ## Testing
+
+### Unit Tests
+
+Tests run outside Lightroom using a standalone Lua 5.1 interpreter:
+
+```bash
+# Run all plugin tests
+lua plugin/tests/test_json.lua
+lua plugin/tests/test_photo_validator.lua
+lua plugin/tests/test_catalog_identity.lua
+```
+
+- `testkit.lua` provides `assertEqual`, `assertNil`, `assertNotNil`, `assertTableLength`
+- Tests must not depend on Lightroom SDK modules (`import` is not available)
+- Test files follow the pattern `test_<module>.lua`
+- Modules with no SDK dependencies (`UUID.lua`, `JSON.lua`, `PhotoValidator.lua`)
+  can be tested directly; SDK-dependent modules need mock stubs
 
 ### Manual Testing
 
 - Test plugin loading in Lightroom Plug-in Manager
 - Verify connection to API server
-- Test photo export and metadata workflows
+- Test photo upload and task management workflows
 - Validate error handling for network issues
+- Test on both Mac and Windows
 
 ### Debugging
 

@@ -45,7 +45,7 @@ impl AppState {
     /// let config = Config::default();
     /// let storage_path = PathBuf::from(&config.storage.path);
     /// let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-    /// let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path).await);
+    /// let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path, task_store.clone()).await);
     /// let ai_providers = Arc::new(ProviderRegistry::from_config(&config.ai)?);
     /// let state = AppState::new(config, task_store, photo_store, ai_providers);
     /// ```

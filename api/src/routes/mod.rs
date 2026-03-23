@@ -16,6 +16,7 @@ use axum::{
     extract::DefaultBodyLimit,
     routing::{get, post},
 };
+use tower_http::trace::TraceLayer;
 
 pub fn create_router(state: AppState) -> Router {
     // Calculate max body size for uploads: max_photo_size * max_photos + overhead
@@ -28,7 +29,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/info", get(info))
         .route("/api/providers", get(list_providers))
         .route("/api/providers/{provider_name}", get(provider_details))
-        .route("/api/tasks", post(create_task).get(list_tasks))
+        .route(
+            "/api/catalogs/{catalog_id}/tasks",
+            post(create_task).get(list_tasks),
+        )
         .route(
             "/api/tasks/{task_id}",
             get(get_task).patch(update_task).delete(delete_task),
@@ -53,6 +57,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/jobs/{job_id}/cancel", post(cancel_job))
         .route("/api/jobs/{job_id}/retry", post(retry_job))
         .route("/api/models", get(list_default_provider_models))
+        .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 
@@ -92,8 +97,8 @@ mod tests {
         let task_store: Arc<dyn TaskStore> =
             Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
         let photo_store: Arc<dyn PhotoStore> =
-            Arc::new(FileSystemPhotoStore::new(storage_path.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(storage_path).await);
+            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await);
+        let job_store = Arc::new(FileSystemJobStore::new(storage_path, task_store.clone()).await);
         let ai_providers = Arc::new(ProviderRegistry::new());
         let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(job_store.clone())));
         let state = AppState::new(

@@ -84,7 +84,7 @@ pub trait TaskStore: Send + Sync {
     ///
     /// # Example
     /// ```ignore
-    /// let task = Task::new("SF Vacation".to_string(), "vacation in SF".to_string());
+    /// let task = Task::new(Uuid::new_v4(), "SF Vacation".to_string(), "vacation in SF".to_string());
     /// let created = store.create(task).await?;
     /// ```
     async fn create(&self, task: Task) -> TaskStoreResult<Task>;
@@ -200,14 +200,29 @@ pub trait TaskStore: Send + Sync {
     #[allow(dead_code)]
     async fn count(&self) -> TaskStoreResult<usize>;
 
-    /// Finds a task by its name.
+    /// Lists all tasks belonging to a specific catalog.
     ///
     /// # Arguments
+    /// * `catalog_id` - The catalog identifier to filter by
+    ///
+    /// # Returns
+    /// * `Ok(Vec<Task>)` - Vector of tasks in the catalog (may be empty)
+    /// * `Err(StorageError)` - If a storage-level error occurs
+    ///
+    /// # Note
+    /// The order of tasks in the returned vector is implementation-defined.
+    /// For consistent ordering, implementations should sort by `created_at`.
+    async fn list_by_catalog(&self, catalog_id: Uuid) -> TaskStoreResult<Vec<Task>>;
+
+    /// Finds a task by its name within a specific catalog.
+    ///
+    /// # Arguments
+    /// * `catalog_id` - The catalog to search within
     /// * `name` - The name to search for (case-sensitive)
     ///
     /// # Returns
     /// * `Ok(Some(Task))` - The task if found
-    /// * `Ok(None)` - If no task with the given name exists
+    /// * `Ok(None)` - If no task with the given name exists in the catalog
     /// * `Err(StorageError)` - If a storage-level error occurs
-    async fn find_by_name(&self, name: &str) -> TaskStoreResult<Option<Task>>;
+    async fn find_by_name(&self, catalog_id: Uuid, name: &str) -> TaskStoreResult<Option<Task>>;
 }
