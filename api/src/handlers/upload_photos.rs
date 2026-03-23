@@ -22,10 +22,10 @@ enum ProcessedField {
     Failed(FailedUpload),
 }
 
-/// Handler for POST /api/catalogs/{catalog_id}/tasks/{task_id}/photos
+/// Handler for POST /api/tasks/{task_id}/photos
 pub async fn upload_photos(
     State(state): State<AppState>,
-    AppPath((_catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
+    AppPath(task_id): AppPath<Uuid>,
     mut multipart: Multipart,
 ) -> Result<(StatusCode, Json<UploadPhotosResponse>), AppError> {
     debug!("Upload photos request for task_id={}", task_id);

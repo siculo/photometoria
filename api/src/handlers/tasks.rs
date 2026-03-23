@@ -148,12 +148,12 @@ pub(crate) async fn check_no_active_jobs(
     }
 }
 
-/// Handler for GET /api/catalogs/{catalog_id}/tasks/{task_id}
+/// Handler for GET /api/tasks/{task_id}
 ///
 /// Retrieves detailed information about a specific task.
 pub async fn get_task(
     State(state): State<AppState>,
-    AppPath((_catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
+    AppPath(task_id): AppPath<Uuid>,
 ) -> Result<Json<TaskDetail>, AppError> {
     let task = get_existing_task(&state.task_store, task_id).await?;
     let detail = TaskDetail {
@@ -169,12 +169,12 @@ pub async fn get_task(
     Ok(Json(detail))
 }
 
-/// Handler for PATCH /api/catalogs/{catalog_id}/tasks/{task_id}
+/// Handler for PATCH /api/tasks/{task_id}
 ///
 /// Updates an existing task's name and context.
 pub async fn update_task(
     State(state): State<AppState>,
-    AppPath((catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
+    AppPath(task_id): AppPath<Uuid>,
     AppJson(request): AppJson<UpdateTaskRequest>,
 ) -> Result<Json<TaskResponse>, AppError> {
     let task = get_existing_task(&state.task_store, task_id).await?;
@@ -183,7 +183,7 @@ pub async fn update_task(
 
     if let Some(existing) = state
         .task_store
-        .find_by_name(catalog_id, &name)
+        .find_by_name(task.catalog_id, &name)
         .await
         .unwrap_or(None)
     {
@@ -212,13 +212,13 @@ pub async fn update_task(
     }
 }
 
-/// Handler for DELETE /api/catalogs/{catalog_id}/tasks/{task_id}
+/// Handler for DELETE /api/tasks/{task_id}
 ///
 /// Deletes a task and all associated data.
 /// Returns 409 Conflict if the task has any active (Queued or Processing) jobs.
 pub async fn delete_task(
     State(state): State<AppState>,
-    AppPath((_catalog_id, task_id)): AppPath<(Uuid, Uuid)>,
+    AppPath(task_id): AppPath<Uuid>,
 ) -> Result<StatusCode, AppError> {
     check_no_active_jobs(&state.job_store, task_id).await?;
     state
@@ -424,11 +424,7 @@ mod tests {
         .await
         .unwrap();
 
-        let result = get_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), created.task_id)),
-        )
-        .await;
+        let result = get_task(State(ts.state.clone()), AppPath(created.task_id)).await;
 
         assert!(result.is_ok());
         let Json(detail) = result.unwrap();
@@ -446,11 +442,7 @@ mod tests {
 
         let task_id = Uuid::new_v4();
 
-        let result = get_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), task_id)),
-        )
-        .await;
+        let result = get_task(State(ts.state.clone()), AppPath(task_id)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), AppError::task_not_found(task_id));
@@ -478,7 +470,7 @@ mod tests {
         };
         let result = update_task(
             State(ts.state.clone()),
-            AppPath((test_catalog_id(), created.task_id)),
+            AppPath(created.task_id),
             AppJson(update_request),
         )
         .await;
@@ -513,7 +505,7 @@ mod tests {
         };
         let result = update_task(
             State(ts.state.clone()),
-            AppPath((test_catalog_id(), created.task_id)),
+            AppPath(created.task_id),
             AppJson(update_request),
         )
         .await;
@@ -549,7 +541,7 @@ mod tests {
 
         let result = update_task(
             State(ts.state.clone()),
-            AppPath((test_catalog_id(), task_b.task_id)),
+            AppPath(task_b.task_id),
             AppJson(UpdateTaskRequest {
                 name: "Task A".to_string(),
                 context: "context".to_string(),
@@ -575,7 +567,7 @@ mod tests {
         };
         let result = update_task(
             State(ts.state.clone()),
-            AppPath((test_catalog_id(), task_id)),
+            AppPath(task_id),
             AppJson(update_request),
         )
         .await;
@@ -600,19 +592,11 @@ mod tests {
         .await
         .unwrap();
 
-        let result = delete_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), created.task_id)),
-        )
-        .await;
+        let result = delete_task(State(ts.state.clone()), AppPath(created.task_id)).await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
 
-        let get_result = get_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), created.task_id)),
-        )
-        .await;
+        let get_result = get_task(State(ts.state.clone()), AppPath(created.task_id)).await;
         assert!(get_result.is_err());
         assert_eq!(
             get_result.unwrap_err(),
@@ -625,11 +609,7 @@ mod tests {
         let ts = create_test_state().await;
         let task_id = Uuid::new_v4();
 
-        let result = delete_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), task_id)),
-        )
-        .await;
+        let result = delete_task(State(ts.state.clone()), AppPath(task_id)).await;
 
         assert_eq!(result, Err(AppError::task_not_found(task_id)));
     }
@@ -652,11 +632,7 @@ mod tests {
         let job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), task.task_id)),
-        )
-        .await;
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_active");
@@ -681,11 +657,7 @@ mod tests {
         job.start();
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), task.task_id)),
-        )
-        .await;
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_active");
@@ -711,11 +683,7 @@ mod tests {
         job.complete();
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), task.task_id)),
-        )
-        .await;
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
     }
@@ -739,11 +707,7 @@ mod tests {
         job.cancel();
         ts.state.job_store.create(job).await.unwrap();
 
-        let result = delete_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), task.task_id)),
-        )
-        .await;
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
 
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
     }
@@ -792,12 +756,9 @@ mod tests {
             .await
             .unwrap();
 
-        let result = get_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), task_id)),
-        )
-        .await
-        .unwrap();
+        let result = get_task(State(ts.state.clone()), AppPath(task_id))
+            .await
+            .unwrap();
 
         assert_eq!(result.photo_count, 2);
         assert_eq!(result.storage_used, 1570000 + 2003800);
@@ -971,11 +932,7 @@ mod tests {
             2
         );
 
-        let result = delete_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), task.task_id)),
-        )
-        .await;
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
         assert_eq!(result, Ok(StatusCode::NO_CONTENT));
 
         let remaining = ts
@@ -1010,12 +967,9 @@ mod tests {
         ts.state.job_store.create(job1).await.unwrap();
         ts.state.job_store.create(job2).await.unwrap();
 
-        let Json(detail) = get_task(
-            State(ts.state.clone()),
-            AppPath((test_catalog_id(), task.task_id)),
-        )
-        .await
-        .unwrap();
+        let Json(detail) = get_task(State(ts.state.clone()), AppPath(task.task_id))
+            .await
+            .unwrap();
 
         assert_eq!(detail.job_count, 2);
     }

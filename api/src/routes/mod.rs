@@ -33,40 +33,28 @@ pub fn create_router(state: AppState) -> Router {
             post(create_task).get(list_tasks),
         )
         .route(
-            "/api/catalogs/{catalog_id}/tasks/{task_id}",
+            "/api/tasks/{task_id}",
             get(get_task).patch(update_task).delete(delete_task),
         )
         .route(
-            "/api/catalogs/{catalog_id}/tasks/{task_id}/photos",
+            "/api/tasks/{task_id}/photos",
             get(task_photos)
                 .post(upload_photos)
                 .layer(DefaultBodyLimit::max(max_upload_size)),
         )
         .route(
-            "/api/catalogs/{catalog_id}/photos/{photo_id}",
+            "/api/photos/{photo_id}",
             get(get_photo).delete(delete_photo),
         )
         .route(
-            "/api/catalogs/{catalog_id}/tasks/{task_id}/jobs",
+            "/api/tasks/{task_id}/jobs",
             get(list_task_jobs).post(create_job),
         )
         .route("/api/jobs", get(list_jobs))
-        .route(
-            "/api/catalogs/{catalog_id}/jobs/{job_id}",
-            get(get_job).delete(delete_job),
-        )
-        .route(
-            "/api/catalogs/{catalog_id}/jobs/{job_id}/results",
-            get(get_job_results),
-        )
-        .route(
-            "/api/catalogs/{catalog_id}/jobs/{job_id}/cancel",
-            post(cancel_job),
-        )
-        .route(
-            "/api/catalogs/{catalog_id}/jobs/{job_id}/retry",
-            post(retry_job),
-        )
+        .route("/api/jobs/{job_id}", get(get_job).delete(delete_job))
+        .route("/api/jobs/{job_id}/results", get(get_job_results))
+        .route("/api/jobs/{job_id}/cancel", post(cancel_job))
+        .route("/api/jobs/{job_id}/retry", post(retry_job))
         .route("/api/models", get(list_default_provider_models))
         .with_state(state)
 }

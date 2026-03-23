@@ -7,7 +7,8 @@
 2. GET  /api/providers                     → List configured AI providers
 3. GET  /api/providers/{provider_name}     → Provider details and models
 4. GET  /api/models                        → List default provider models
-5. POST /api/tasks                         → Create task (working session)
+5. POST /api/catalogs/{catalog_id}/tasks   → Create task (working session)
+   GET  /api/catalogs/{catalog_id}/tasks   → List tasks by catalog
 6. POST /api/tasks/{id}/photos             → Upload photos (multipart)
 7. POST /api/tasks/{id}/jobs               → Start job (choose AI model)
 8. GET  /api/tasks/{id}/jobs               → List jobs for a task
