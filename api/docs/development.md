@@ -289,15 +289,17 @@ All endpoints can be tested using curl. Below are examples for common workflows.
 **1. Create a task:**
 
 ```bash
-curl -X POST http://localhost:3000/api/tasks \
+curl -X POST http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks \
   -H "Content-Type: application/json" \
-  -d '{"context":"vacation in San Francisco, summer 2024"}'
+  -d '{"name":"SF Vacation","context":"vacation in San Francisco, summer 2024"}'
 ```
 
 Response:
 ```json
 {
   "task_id": "550e8400-e29b-41d4-a716-446655440000",
+  "catalog_id": "c0ffee00-cafe-4000-b000-000000000001",
+  "name": "SF Vacation",
   "context": "vacation in San Francisco, summer 2024",
   "created_at": "2024-01-15T10:30:00Z"
 }
@@ -306,7 +308,7 @@ Response:
 **2. List all tasks:**
 
 ```bash
-curl http://localhost:3000/api/tasks
+curl http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks
 ```
 
 **3. Get task details:**
@@ -320,7 +322,7 @@ curl http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000
 ```bash
 curl -X PATCH http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000 \
   -H "Content-Type: application/json" \
-  -d '{"context":"updated context information"}'
+  -d '{"name":"SF Vacation","context":"updated context information"}'
 ```
 
 **5. Delete a task:**
@@ -339,17 +341,17 @@ curl http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/jobs
 
 ```bash
 # Create first task
-curl -X POST http://localhost:3000/api/tasks \
+curl -X POST http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks \
   -H "Content-Type: application/json" \
-  -d '{"context":"San Francisco trip"}'
+  -d '{"name":"SF Trip","context":"San Francisco trip"}'
 
 # Create second task (should succeed, not return 409)
-curl -X POST http://localhost:3000/api/tasks \
+curl -X POST http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks \
   -H "Content-Type: application/json" \
-  -d '{"context":"New York vacation"}'
+  -d '{"name":"NY Vacation","context":"New York vacation"}'
 
 # List both tasks
-curl http://localhost:3000/api/tasks
+curl http://localhost:3000/api/catalogs/c0ffee00-cafe-4000-b000-000000000001/tasks
 ```
 
 **Expected behavior:**
