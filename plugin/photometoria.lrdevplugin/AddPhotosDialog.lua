@@ -11,6 +11,7 @@ local LrTasks = import 'LrTasks'
 
 local LrApplication = import 'LrApplication'
 
+local CatalogIdentity = require 'CatalogIdentity'
 local ServerConnection = require 'ServerConnection'
 local PhotoValidator = require 'PhotoValidator'
 local TaskDialogUI = require 'TaskDialogUI'
@@ -304,11 +305,13 @@ LrTasks.startAsyncTask(function()
 		return
 	end
 
+	local catalogId = CatalogIdentity.catalogId()
+
 	local taskScope = LrProgressScope {
 		title = LOC "$$$/Photometoria/Progress/LoadingTasks=Loading tasks...",
 	}
 
-	local taskSuccess, tasks = ServerConnection.listTasks(host)
+	local taskSuccess, tasks = ServerConnection.listTasks(host, catalogId)
 	taskScope:done()
 
 	if not taskSuccess then
@@ -370,7 +373,7 @@ LrTasks.startAsyncTask(function()
 					title = LOC "$$$/Photometoria/Progress/CreatingTask=Creating task...",
 				}
 
-				local ok, taskData = ServerConnection.createTask(host, props.taskName, props.taskContext)
+				local ok, taskData = ServerConnection.createTask(host, catalogId, props.taskName, props.taskContext)
 				createScope:done()
 
 				if ok then
@@ -432,7 +435,7 @@ LrTasks.startAsyncTask(function()
 			)
 
 			if action == 'ok' then
-				local refreshOk, refreshedTasks = ServerConnection.listTasks(host)
+				local refreshOk, refreshedTasks = ServerConnection.listTasks(host, catalogId)
 				if refreshOk then
 					TaskDialogUI.showDialog(host, refreshedTasks)
 				end

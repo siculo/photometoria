@@ -6,6 +6,7 @@ local LrPrefs = import 'LrPrefs'
 local LrProgressScope = import 'LrProgressScope'
 local LrTasks = import 'LrTasks'
 
+local CatalogIdentity = require 'CatalogIdentity'
 local ServerConnection = require 'ServerConnection'
 local TaskDialogUI = require 'TaskDialogUI'
 
@@ -38,11 +39,13 @@ LrTasks.startAsyncTask(function()
 		return
 	end
 
+	local catalogId = CatalogIdentity.catalogId()
+
 	local taskScope = LrProgressScope {
 		title = LOC "$$$/Photometoria/Progress/LoadingTasks=Loading tasks...",
 	}
 
-	local taskSuccess, tasks = ServerConnection.listTasks(host)
+	local taskSuccess, tasks = ServerConnection.listTasks(host, catalogId)
 	taskScope:done()
 
 	if not taskSuccess then
