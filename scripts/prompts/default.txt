@@ -1,0 +1,6 @@
+{context}Analyze this image and return descriptive tags as keywords in {language}.
+
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}

@@ -5,7 +5,8 @@ use std::sync::Arc;
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::Utc;
-use tracing::{debug, error, info};
+use serde::Deserialize;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::models::job::{JobStatus, PhotoResult, PhotoResultStatus};
@@ -14,11 +15,77 @@ use crate::storage::{JobStore, PhotoStore, TaskStore};
 
 use super::queue::QueuedPhoto;
 
-const BASE_PROMPT: &str = "You must respond ONLY with a comma-separated list of tags. \
-    Do not write sentences. Do not explain. Only output tags separated by commas. \
-    Tags to include: subjects, objects, colors, composition, mood, location type. \
-    Output format example: tag1, tag2, tag3, tag4 \
-    Now analyze this image and output ONLY the tags:";
+const BASE_PROMPT: &str = "Analyze this image and return descriptive tags as keywords.\n\n\
+    Respond ONLY with valid JSON, no other text.\n\
+    The JSON object must have a single key \"tags\" containing an array of objects.\n\
+    Each object must have ONLY one key \"tag\" with a keyword string value.\n\
+    Example: {\"tags\": [{\"tag\": \"sunset\"}, {\"tag\": \"mountain\"}, {\"tag\": \"landscape\"}]}";
+
+// ============================================================================
+// Tag response model
+// ============================================================================
+
+/// A single tag entry from the AI model's structured JSON response.
+#[derive(Debug, Clone, Deserialize)]
+struct TagEntry {
+    tag: String,
+}
+
+/// Structured tag response expected from the AI model.
+#[derive(Debug, Clone, Deserialize)]
+struct TagResponse {
+    tags: Vec<TagEntry>,
+}
+
+/// Parses and validates the AI model's raw response as structured JSON tags.
+///
+/// Handles markdown code fences (e.g., `` ```json ... ``` ``) that some models
+/// produce. Returns a comma-separated tag string on success, or a descriptive
+/// error message on validation failure.
+fn parse_tag_response(raw: &str) -> Result<String, String> {
+    let text = strip_code_fences(raw.trim());
+
+    let response: TagResponse = serde_json::from_str(&text).map_err(|e| {
+        format!("Invalid JSON in model response: {e}")
+    })?;
+
+    if response.tags.is_empty() {
+        return Err("Model returned an empty tags array".to_string());
+    }
+
+    for (i, entry) in response.tags.iter().enumerate() {
+        if entry.tag.trim().is_empty() {
+            return Err(format!("Tag at index {i} is empty"));
+        }
+    }
+
+    let tags_csv = response
+        .tags
+        .iter()
+        .map(|e| e.tag.trim().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    Ok(tags_csv)
+}
+
+/// Strips markdown code fences from model output.
+fn strip_code_fences(text: &str) -> &str {
+    let trimmed = text.trim();
+    if !trimmed.starts_with("```") {
+        return trimmed;
+    }
+
+    let after_open = match trimmed.find('\n') {
+        Some(pos) => &trimmed[pos + 1..],
+        None => return trimmed,
+    };
+
+    match after_open.rfind("```") {
+        Some(pos) => after_open[..pos].trim(),
+        None => after_open.trim(),
+    }
+}
 
 // ============================================================================
 // ProcessingResult
@@ -163,7 +230,14 @@ impl PhotoProcessor {
                     model = %response.model,
                     "Photo analysis completed"
                 );
-                Ok(response.text)
+                parse_tag_response(&response.text).map_err(|e| {
+                    warn!(
+                        photo_id = %photo.photo_id,
+                        raw_response = %response.text,
+                        "Tag validation failed"
+                    );
+                    format!("Tag validation failed: {e}")
+                })
             }
             Err(e) => {
                 error!(photo_id = %photo.photo_id, error = %e, "Photo analysis failed");
@@ -441,13 +515,109 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Tests
+    // parse_tag_response unit tests
     // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_parse_tag_response_valid_json() {
+        let raw = r#"{"tags": [{"tag": "sunset"}, {"tag": "mountain"}]}"#;
+        assert_eq!(parse_tag_response(raw).unwrap(), "sunset, mountain");
+    }
+
+    #[test]
+    fn test_parse_tag_response_with_code_fences() {
+        let raw = "```json\n{\"tags\": [{\"tag\": \"bridge\"}, {\"tag\": \"river\"}]}\n```";
+        assert_eq!(parse_tag_response(raw).unwrap(), "bridge, river");
+    }
+
+    #[test]
+    fn test_parse_tag_response_pretty_printed() {
+        let raw = r#"{
+  "tags": [
+    {"tag": "Eiffel Tower"},
+    {"tag": "Paris"}
+  ]
+}"#;
+        assert_eq!(parse_tag_response(raw).unwrap(), "Eiffel Tower, Paris");
+    }
+
+    #[test]
+    fn test_parse_tag_response_trims_whitespace_in_tags() {
+        let raw = r#"{"tags": [{"tag": " sunset "}, {"tag": "  mountain"}]}"#;
+        assert_eq!(parse_tag_response(raw).unwrap(), "sunset, mountain");
+    }
+
+    #[test]
+    fn test_parse_tag_response_invalid_json() {
+        let raw = "this is not json at all";
+        let err = parse_tag_response(raw).unwrap_err();
+        assert!(err.contains("Invalid JSON"));
+    }
+
+    #[test]
+    fn test_parse_tag_response_missing_tags_key() {
+        let raw = r#"{"keywords": [{"tag": "sunset"}]}"#;
+        let err = parse_tag_response(raw).unwrap_err();
+        assert!(err.contains("Invalid JSON"));
+    }
+
+    #[test]
+    fn test_parse_tag_response_empty_tags_array() {
+        let raw = r#"{"tags": []}"#;
+        let err = parse_tag_response(raw).unwrap_err();
+        assert!(err.contains("empty"));
+    }
+
+    #[test]
+    fn test_parse_tag_response_empty_tag_value() {
+        let raw = r#"{"tags": [{"tag": "sunset"}, {"tag": "  "}]}"#;
+        let err = parse_tag_response(raw).unwrap_err();
+        assert!(err.contains("empty"));
+    }
+
+    #[test]
+    fn test_parse_tag_response_extra_fields_ignored() {
+        let raw = r#"{"tags": [{"tag": "sunset", "score": 0.9}]}"#;
+        assert_eq!(parse_tag_response(raw).unwrap(), "sunset");
+    }
+
+    #[test]
+    fn test_parse_tag_response_bare_array_rejected() {
+        let raw = r#"[{"tag": "sunset"}, {"tag": "mountain"}]"#;
+        let err = parse_tag_response(raw).unwrap_err();
+        assert!(err.contains("Invalid JSON"));
+    }
+
+    #[test]
+    fn test_strip_code_fences_no_fences() {
+        assert_eq!(strip_code_fences(r#"{"tags": []}"#), r#"{"tags": []}"#);
+    }
+
+    #[test]
+    fn test_strip_code_fences_json_label() {
+        let input = "```json\n{\"tags\": []}\n```";
+        assert_eq!(strip_code_fences(input), "{\"tags\": []}");
+    }
+
+    #[test]
+    fn test_strip_code_fences_no_label() {
+        let input = "```\n{\"tags\": []}\n```";
+        assert_eq!(strip_code_fences(input), "{\"tags\": []}");
+    }
+
+    // -----------------------------------------------------------------------
+    // Integration tests (PhotoProcessor)
+    // -----------------------------------------------------------------------
+
+    fn json_tags(tags: &[&str]) -> String {
+        let entries: Vec<String> = tags.iter().map(|t| format!(r#"{{"tag": "{t}"}}"#)).collect();
+        format!(r#"{{"tags": [{}]}}"#, entries.join(", "))
+    }
 
     #[tokio::test]
     async fn test_process_success_updates_job_to_completed() {
         let provider = Arc::new(SuccessProvider {
-            response_text: "landscape, mountain, sunset".to_string(),
+            response_text: json_tags(&["landscape", "mountain", "sunset"]),
         });
         let fixture = make_fixture(provider).await;
         let (job, photo_id) = setup_job_and_photo(&fixture).await;
@@ -510,7 +680,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_success_with_persistence_error() {
         let provider = Arc::new(SuccessProvider {
-            response_text: "ocean, wave, blue".to_string(),
+            response_text: json_tags(&["ocean", "wave", "blue"]),
         });
         let fixture = make_fixture(provider).await;
         let (job, photo_id) = setup_job_and_photo(&fixture).await;
@@ -540,7 +710,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_transitions_queued_to_completed_on_single_photo() {
         let provider = Arc::new(SuccessProvider {
-            response_text: "street, city".to_string(),
+            response_text: json_tags(&["street", "city"]),
         });
         let fixture = make_fixture(provider).await;
         let (job, photo_id) = setup_job_and_photo(&fixture).await;
@@ -566,7 +736,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_multi_photo_job_not_completed_until_last_photo() {
         let provider = Arc::new(SuccessProvider {
-            response_text: "test".to_string(),
+            response_text: json_tags(&["test"]),
         });
         let fixture = make_fixture(provider).await;
 
@@ -635,9 +805,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_process_invalid_json_response_marks_photo_as_failed() {
+        let provider = Arc::new(SuccessProvider {
+            response_text: "This is a description, not JSON tags".to_string(),
+        });
+        let fixture = make_fixture(provider).await;
+        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+
+        let result = fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+            })
+            .await;
+
+        assert!(matches!(result.outcome, Outcome::AnalysisFailed { .. }));
+        if let Outcome::AnalysisFailed { error } = &result.outcome {
+            assert!(error.contains("Tag validation failed"));
+        }
+
+        let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
+        let photo_result = updated_job.results.get(&photo_id).unwrap();
+        assert_eq!(photo_result.status, PhotoResultStatus::Failed);
+        assert!(photo_result.error.as_ref().unwrap().contains("Tag validation failed"));
+    }
+
+    #[tokio::test]
     async fn test_process_missing_photo_data_returns_analysis_failed() {
         let provider = Arc::new(SuccessProvider {
-            response_text: "should not reach".to_string(),
+            response_text: json_tags(&["should", "not", "reach"]),
         });
         let fixture = make_fixture(provider).await;
 
@@ -674,13 +873,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_marks_job_processing_before_analysis() {
-        // Use a provider that checks job status DURING the analyze call.
-        // We simulate this by verifying the job is Processing immediately
-        // after process() returns (the transition happens before analyze).
-        // The fixture approach: after process(), job must have started_at set
-        // and have been in Processing before completing.
         let provider = Arc::new(SuccessProvider {
-            response_text: "portrait, indoor".to_string(),
+            response_text: json_tags(&["portrait", "indoor"]),
         });
         let fixture = make_fixture(provider).await;
         let (job, photo_id) = setup_job_and_photo(&fixture).await;
@@ -708,7 +902,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_cancelled_job_skips_update() {
         let provider = Arc::new(SuccessProvider {
-            response_text: "landscape, mountain".to_string(),
+            response_text: json_tags(&["landscape", "mountain"]),
         });
         let fixture = make_fixture(provider).await;
         let (job, photo_id) = setup_job_and_photo(&fixture).await;
@@ -744,7 +938,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_missing_task_returns_analysis_failed() {
         let provider = Arc::new(SuccessProvider {
-            response_text: "should not reach".to_string(),
+            response_text: json_tags(&["should", "not", "reach"]),
         });
         let fixture = make_fixture(provider).await;
 

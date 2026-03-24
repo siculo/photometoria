@@ -68,26 +68,64 @@ devices = []
 # Define the models available for this provider.
 # The key (e.g., "qwen2-vl") is used as the model ID in API requests.
 
-[ai.providers.ollama.models.qwen2-vl]
-ollama_model = "qwen2-vl:8b"
+[ai.providers.ollama.models.qwen3_5]
+ollama_model = "qwen3.5:latest"
 prompt_template = """
-You must respond ONLY with a comma-separated list of tags. Do not write sentences. Do not explain. Only output tags separated by commas.
+Analyze this image and return descriptive tags as keywords.
 
-Tags to include: subjects, objects, colors, composition, mood, location type.
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
+description = "Qwen 3.5 model: recommended for production"
+supports_vision = true
 
-Output format example: tag1, tag2, tag3, tag4
+[ai.providers.ollama.models.qwen3-vl]
+ollama_model = "qwen3-vl:8b"
+prompt_template = """
+Analyze this image and return descriptive tags as keywords.
 
-Now analyze this image and output ONLY the tags:"""
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
 description = "Best quality vision model, slower processing"
+supports_vision = true
+
+[ai.providers.ollama.models.ministral-3]
+ollama_model = "ministral-3:latest"
+prompt_template = """
+Analyze this image and return descriptive tags as keywords.
+
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
+description = "Mistral vision model"
 supports_vision = true
 
 [ai.providers.ollama.models.llava]
 ollama_model = "llava:latest"
 prompt_template = """
-List relevant tags for this image as a comma-separated list.
-Include: subjects, objects, colors, composition, mood, location.
-Format: tag1, tag2, tag3"""
+Analyze this image and return descriptive tags as keywords.
+
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
 description = "Fast vision model, good for development"
+supports_vision = true
+
+[ai.providers.ollama.models.gemma3n]
+ollama_model = "gemma3n:e4b"
+prompt_template = """
+Analyze this image and return descriptive tags as keywords.
+
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
+description = "Google Gemma 3n vision model"
 supports_vision = true
 
 # Worker Pool Configuration

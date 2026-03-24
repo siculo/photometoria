@@ -117,8 +117,11 @@ AppState         →  holds Arc<ProviderRegistry>
 
 ## AI Models (Ollama)
 
-- **qwen3-vl:8b** — PRODUCTION (best quality, slower)
-- **llava** — DEVELOPMENT (faster, good for testing)
+- **qwen3.5:latest** — PRODUCTION (recommended, high quality)
+- **qwen3-vl:8b** — PRODUCTION (best vision quality, slower)
+- **ministral-3:latest** — Mistral vision model
+- **llava:latest** — DEVELOPMENT (faster, good for testing)
+- **gemma3n:e4b** — Google Gemma 3n vision model
 
 ---
 

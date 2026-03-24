@@ -47,7 +47,7 @@ The initial version simplifies this to a single-level tagging system that produc
 **Technical Approach:**
 
 - Use Ollama's HTTP API directly (more reliable than subprocess calls)
-- Different models require optimized prompts for clean comma-separated tag output
+- Models return structured JSON (`{"tags": [{"tag": "..."}]}`); the processor validates and converts to comma-separated text
 - Always test on real photo collections before production use
 
 ## Architecture Components

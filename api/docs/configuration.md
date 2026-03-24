@@ -32,15 +32,27 @@ base_url = "http://localhost:11434"
 timeout_seconds = 120
 devices = []
 
-[ai.providers.ollama.models.qwen3-vl]
-ollama_model = "qwen3-vl:8b"
-prompt_template = "Analyze this photo and provide comma-separated tags. Context: {context}"
-description = "Best quality, slower processing"
+[ai.providers.ollama.models.qwen3_5]
+ollama_model = "qwen3.5:latest"
+prompt_template = """
+Analyze this image and return descriptive tags as keywords.
+
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}]}"""
+description = "Recommended for production"
 supports_vision = true
 
 [ai.providers.ollama.models.llava]
 ollama_model = "llava:latest"
-prompt_template = "List tags for this image, comma-separated. Context: {context}"
+prompt_template = """
+Analyze this image and return descriptive tags as keywords.
+
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}]}"""
 description = "Faster, good for testing"
 supports_vision = true
 
@@ -244,7 +256,7 @@ Model configuration within a provider. Each model is identified by a unique ID.
 
 - **ollama_model** (string, required)
   - Actual Ollama model name
-  - Examples: `"qwen3-vl:8b"`, `"llava:latest"`
+  - Examples: `"qwen3.5:latest"`, `"qwen3-vl:8b"`, `"llava:latest"`
 
 - **prompt_template** (string, optional)
   - Template for generating prompts
@@ -260,15 +272,27 @@ Model configuration within a provider. Each model is identified by a unique ID.
 **Example:**
 
 ```toml
-[ai.providers.ollama.models.qwen3-vl]
-ollama_model = "qwen3-vl:8b"
-prompt_template = "Analyze this photo and provide comma-separated tags."
-description = "Best quality, slower processing"
+[ai.providers.ollama.models.qwen3_5]
+ollama_model = "qwen3.5:latest"
+prompt_template = """
+Analyze this image and return descriptive tags as keywords.
+
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}]}"""
+description = "Recommended for production"
 supports_vision = true
 
 [ai.providers.ollama.models.llava]
 ollama_model = "llava:latest"
-prompt_template = "List tags for this image, comma-separated."
+prompt_template = """
+Analyze this image and return descriptive tags as keywords.
+
+Respond ONLY with valid JSON, no other text.
+The JSON object must have a single key "tags" containing an array of objects.
+Each object must have ONLY one key "tag" with a keyword string value.
+Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}]}"""
 description = "Faster, good for testing"
 supports_vision = true
 ```
