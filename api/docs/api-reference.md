@@ -602,7 +602,7 @@ Returns the AI analysis results for all processed photos in a job. Available for
       "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
       "client_id": "/Users/photos/IMG_001.jpg",
       "status": "completed",
-      "tags": "golden gate bridge, sunset, long exposure, red suspension cables",
+      "tags": "Eiffel Tower, Paris, landmark, architecture, blue sky, outdoor",
       "processed_at": "2024-01-15T10:36:00Z"
     },
     {
@@ -702,7 +702,7 @@ Deletes a job. The job must be in a terminal state (`completed`, `failed`, or `c
   "photo_id": "string (UUID)",
   "client_id": "string | null",
   "status": "completed|failed",
-  "tags": "string (comma-separated) | null",
+  "tags": "string (comma-separated, parsed from structured JSON) | null",
   "error": "string | null",
   "processed_at": "ISO 8601 timestamp | null"
 }
