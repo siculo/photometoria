@@ -11,6 +11,15 @@ pub struct StorageConfig {
     pub max_size: ByteSize,
 }
 
+impl StorageConfig {
+    /// Appends this section's summary to the output buffer.
+    pub fn format_summary(&self, out: &mut String) {
+        out.push_str(&format!("  [storage]\n"));
+        out.push_str(&format!("    path: {}\n", self.path));
+        out.push_str(&format!("    max_size: {}\n", self.max_size));
+    }
+}
+
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {

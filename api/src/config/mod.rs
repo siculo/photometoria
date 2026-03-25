@@ -43,6 +43,18 @@ impl Config {
     pub fn storage_max_size(&self) -> u64 {
         self.storage.max_size.0
     }
+
+    /// Logs the effective configuration at `info` level in a human-readable,
+    /// section-based format as a single log entry.
+    pub fn log_summary(&self) {
+        let mut out = String::from("Configuration:\n");
+        self.server.format_summary(&mut out);
+        self.storage.format_summary(&mut out);
+        self.upload.format_summary(&mut out);
+        self.ai.format_summary(&mut out);
+        self.worker_pool.format_summary(&mut out);
+        tracing::info!("{}", out.trim_end());
+    }
 }
 
 /// Loads configuration from file.
@@ -60,7 +72,7 @@ pub fn load_config(config_path: &Path) -> Result<Config, ConfigError> {
                 "Configuration file '{}' not found, using default values",
                 path_str
             );
-            tracing::debug!(config = ?config, "Effective configuration (defaults)");
+            config.log_summary();
             return Ok(config);
         }
 
@@ -85,7 +97,7 @@ pub fn load_config(config_path: &Path) -> Result<Config, ConfigError> {
         .map_err(ConfigError::ValidationError)?;
 
     tracing::info!("Loaded configuration from '{}'", path_str);
-    tracing::debug!(config = ?config, "Effective configuration");
+    config.log_summary();
 
     Ok(config)
 }
@@ -113,4 +125,15 @@ pub enum ConfigError {
 
     #[error("Invalid configuration: {0}")]
     ValidationError(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_log_summary_does_not_panic() {
+        let config = Config::default();
+        config.log_summary();
+    }
 }
