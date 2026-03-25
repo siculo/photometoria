@@ -12,6 +12,15 @@ pub struct ServerConfig {
     pub port: u16,
 }
 
+impl ServerConfig {
+    /// Appends this section's summary to the output buffer.
+    pub fn format_summary(&self, out: &mut String) {
+        out.push_str(&format!("  [server]\n"));
+        out.push_str(&format!("    host: {}\n", self.host));
+        out.push_str(&format!("    port: {}\n", self.port));
+    }
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {

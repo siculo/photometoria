@@ -72,6 +72,29 @@ impl WorkerPoolConfig {
     }
 }
 
+impl WorkerPoolConfig {
+    /// Appends this section's summary to the output buffer.
+    pub fn format_summary(&self, out: &mut String) {
+        out.push_str(&format!("  [worker_pool]\n"));
+        out.push_str(&format!(
+            "    min_photos_before_swap: {}\n",
+            self.min_photos_before_swap
+        ));
+        out.push_str(&format!(
+            "    max_time_before_swap: {}\n",
+            self.max_time_before_swap
+        ));
+        out.push_str(&format!(
+            "    worker_idle_sleep: {}\n",
+            self.worker_idle_sleep
+        ));
+        out.push_str(&format!(
+            "    discovery_poll_interval: {}\n",
+            self.discovery_poll_interval
+        ));
+    }
+}
+
 impl Default for WorkerPoolConfig {
     fn default() -> Self {
         Self {

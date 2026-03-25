@@ -93,6 +93,41 @@ fn parse_byte_size(s: &str) -> Result<ByteSize, String> {
         .ok_or_else(|| "Byte size overflow".to_string())
 }
 
+impl fmt::Display for ByteSize {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.0;
+
+        const EXACT_CANDIDATES: &[(u64, &str)] = &[
+            (1024 * 1024 * 1024 * 1024, "TiB"),
+            (1000 * 1000 * 1000 * 1000, "TB"),
+            (1024 * 1024 * 1024, "GiB"),
+            (1000 * 1000 * 1000, "GB"),
+            (1024 * 1024, "MiB"),
+            (1000 * 1000, "MB"),
+            (1024, "KiB"),
+            (1000, "KB"),
+        ];
+
+        for &(divisor, unit) in EXACT_CANDIDATES {
+            if bytes >= divisor && bytes % divisor == 0 {
+                return write!(f, "{} {}", bytes / divisor, unit);
+            }
+        }
+
+        if bytes >= 1024 * 1024 * 1024 * 1024 {
+            write!(f, "{:.1} TiB", self.as_tib())
+        } else if bytes >= 1024 * 1024 * 1024 {
+            write!(f, "{:.1} GiB", self.as_gib())
+        } else if bytes >= 1024 * 1024 {
+            write!(f, "{:.1} MiB", self.as_mib())
+        } else if bytes >= 1024 {
+            write!(f, "{:.1} KiB", self.as_kib())
+        } else {
+            write!(f, "{} B", bytes)
+        }
+    }
+}
+
 impl ByteSize {
     pub fn as_bytes(&self) -> u64 {
         self.0
@@ -172,5 +207,34 @@ mod tests {
         // ~7.4% di differenza
         let diff_percent = ((binary_gib - decimal_gb) as f64 / decimal_gb as f64) * 100.0;
         assert!((diff_percent - 7.37).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_display_bytes() {
+        assert_eq!(ByteSize(0).to_string(), "0 B");
+        assert_eq!(ByteSize(512).to_string(), "512 B");
+        assert_eq!(ByteSize(1023).to_string(), "1023 B");
+    }
+
+    #[test]
+    fn test_display_exact_binary() {
+        assert_eq!(ByteSize(1024).to_string(), "1 KiB");
+        assert_eq!(ByteSize(1_048_576).to_string(), "1 MiB");
+        assert_eq!(ByteSize(1_073_741_824).to_string(), "1 GiB");
+        assert_eq!(ByteSize(10_737_418_240).to_string(), "10 GiB");
+        assert_eq!(ByteSize(1_099_511_627_776).to_string(), "1 TiB");
+    }
+
+    #[test]
+    fn test_display_exact_decimal() {
+        assert_eq!(ByteSize(20_000_000).to_string(), "20 MB");
+        assert_eq!(ByteSize(1_000_000_000).to_string(), "1 GB");
+        assert_eq!(ByteSize(5_000).to_string(), "5 KB");
+    }
+
+    #[test]
+    fn test_display_non_exact_fallback() {
+        assert_eq!(ByteSize(1536).to_string(), "1.5 KiB");
+        assert_eq!(ByteSize(1_500_001).to_string(), "1.4 MiB");
     }
 }
