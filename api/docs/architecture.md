@@ -35,13 +35,15 @@ The initial version simplifies this to a single-level tagging system that produc
 
 - Individual photo content
 - User-provided context hints
-- Other photos in the same processing batch
 
 ### Model Selection & Testing
 
 **Key Findings:**
 
+- **qwen3.5**: Recommended model for production use — high quality, good balance of speed and accuracy
 - **qwen3-vl**: Superior quality for landmark identification and detailed tagging, but slower
+- **gemma3n:e4b**: Google Gemma 3n vision model, tested as alternative
+- **ministral-3:latest**: Mistral vision model, tested as alternative
 - **llava**: Faster iteration for development work, acceptable quality
 
 **Technical Approach:**
@@ -56,7 +58,7 @@ The initial version simplifies this to a single-level tagging system that produc
 
 - **Axum** - Modern async web framework built on top of hyper and tower
 - **Tokio** - Async runtime for handling concurrent requests
-- **SSE (Server-Sent Events)** - Real-time updates to clients without WebSocket complexity
+- **Polling-based monitoring** - Clients poll job results endpoint for progress updates
 
 ### Storage Strategy
 
@@ -66,9 +68,15 @@ The initial version simplifies this to a single-level tagging system that produc
 - **FileSystemLayout** for centralized directory structure management
 - **Abstraction layer** designed for future evolution (database, object storage)
 
+### Catalog-Based Organization
+
+- A **Catalog** corresponds to a Lightroom Classic catalog and serves as the top-level organizational unit
+- Tasks and their photos are scoped to a specific catalog
+- Catalog isolation ensures complete separation of data between different Lightroom catalogs
+
 ### Multi-Task Support
 
-- Multiple tasks can coexist simultaneously in the system
+- Multiple tasks can coexist simultaneously within a catalog
 - Each task maintains independent photo collections and job queues
 - Task isolation ensures no cross-task interference through separate filesystem directories
 - Current limitation: Filesystem storage is bound by available disk space
@@ -81,6 +89,22 @@ The initial version simplifies this to a single-level tagging system that produc
 - **Queue-based execution** for job scheduling via shared `PhotoBuffer`
 
 ## Core Concepts
+
+### Catalog
+
+A **Catalog** represents a Lightroom Classic catalog. It is the top-level container in the system.
+
+**Characteristics:**
+
+- Maps 1:1 to a Lightroom Classic catalog
+- Identified by a unique catalog_id (UUID)
+- Contains all tasks (and their photos/jobs) for that catalog
+- Created implicitly when the first task is created for a catalog_id
+
+**Purpose:**
+
+- Ensures data isolation between different Lightroom catalogs
+- Allows the same Photometoria server to serve multiple catalogs
 
 ### Task
 
@@ -181,297 +205,44 @@ One worker is spawned per GPU listed in `devices`. If `devices` is empty, a sing
 
 ---
 
-### Photo Selection Strategy (Planned)
-
-When implementing the worker pool, a key architectural decision is how workers select the next photo to process. This is especially important when multiple jobs use different AI models.
-
-#### The Challenge: Efficiency vs. Fairness
-
-With multiple jobs using different models and limited GPUs, there's a fundamental trade-off:
-
-**Sequential job execution:**
-- ✅ Minimal model swaps (one load per job)
-- ✅ Maximum efficiency (~6% overhead)
-- ❌ Poor fairness (jobs wait in queue until others complete)
-
-**Round-robin photo selection:**
-- ✅ Perfect fairness (all jobs progress simultaneously)
-- ❌ Excessive model swaps (one per photo if models differ)
-- ❌ Severe overhead (~77% in worst case)
-
-#### Proposed: Smart Priority-Based Selection with Hybrid Threshold
-
-A hybrid strategy that balances efficiency and fairness using both count and time constraints:
-
-**Algorithm:**
-
-1. Worker tracks current loaded model, photo counter, and elapsed time since model load
-2. When selecting next photo:
-   - If `counter < min_photos` OR `elapsed_time < max_time`: Prioritize photos requiring the current model
-   - If `counter >= min_photos` AND `elapsed_time >= max_time`: Accept any photo (allow model swap)
-3. Reset counter and timer when model changes
-
-**Why Hybrid (Count + Time)?**
-
-- **Count threshold alone**: Unfair when photos have different complexities (large vs small photos)
-- **Time threshold alone**: Might swap too early with very fast photos (insufficient amortization of model load overhead)
-- **Hybrid**: Guarantees both minimum amortization (count) and temporal fairness (time)
-
-**Pseudo-code:**
-
-```rust
-fn select_next_photo(&mut self, min_photos: usize, max_time: Duration) -> Option<Photo> {
-    let current_model = self.loaded_model;
-    let counter = self.photos_processed;
-    let elapsed = self.model_load_time.elapsed();
-
-    // Below thresholds: prefer same model (avoid swap)
-    if counter < min_photos || elapsed < max_time {
-        if let Some(photo) = find_photo_with_model(current_model) {
-            return Some(photo);
-        }
-    }
-
-    // Above both thresholds: accept any photo (allow model swap for fairness)
-    find_any_available_photo()
-}
-```
-
-#### Performance Analysis
-
-**Scenario:** 1 GPU, 2 jobs (50 photos each), different models (qwen3-vl, llava)
-
-| Strategy | Time | Overhead | First Result Job B | Fairness |
-|----------|------|----------|-------------------|----------|
-| Sequential (threshold=∞) | 320s | 20s (6%) | t=170s | Poor |
-| Smart (threshold=25) | 340s | 40s (12%) | t=95s | Good |
-| Smart (threshold=10) | 420s | 100s (24%) | t=50s | Excellent |
-| Round-robin (threshold=1) | 1300s | 1000s (77%) | t=23s | Perfect |
-
-**Key Insights:**
-
-- **Threshold=20-25 photos**: Best balance for production use (~6-12% overhead, good fairness)
-- **Threshold=50+ photos**: Equivalent to sequential job execution (maximum efficiency, poor fairness)
-- **Threshold=1-5 photos**: Near round-robin behavior (poor efficiency, maximum fairness)
-
-*Note: The analysis above uses count-based thresholds for simplicity. The hybrid approach (count + time) provides superior fairness as explained below.*
-
-#### Time-based vs Count-based vs Hybrid Threshold
-
-**The Problem with Count-only Threshold:**
-
-When photos have different processing complexities, count-based thresholds lead to temporal unfairness:
-
-```
-Scenario: 1 GPU, 2 jobs, count threshold = 20 photos
-
-Job A: 50 high-res photos (5s each)
-Job B: 50 low-res photos (1s each)
-
-Cycle 1:
-  Job A: 20 photos × 5s = 100s GPU time
-  Job B: 20 photos × 1s = 20s GPU time
-
-Cycle 2:
-  Job A: 20 photos × 5s = 100s GPU time
-  Job B: 20 photos × 1s = 20s GPU time
-
-Result:
-  ❌ Job A gets 5× more GPU time
-  ❌ Temporal unfairness
-```
-
-**Time-only Threshold:**
-
-Provides temporal fairness but might swap too early:
-
-```
-Time threshold = 60s
-
-Job with very fast photos (0.5s each):
-  - Processes 120 photos in 60s
-  - Model load overhead (10s) well amortized ✓
-
-Job with ultra-fast photos (0.1s each):
-  - Processes 600 photos in 60s
-  - But could process 100 photos (10s) then swap
-  - Model load overhead not fully amortized ⚠️
-```
-
-**Hybrid Threshold (Recommended):**
-
-Combines both constraints for optimal behavior:
-
-```
-min_photos = 10, max_time = 120s
-
-Job A (high-res, 5s/photo):
-  - Processes 10 photos (50s) → min_photos ✓, time < 120s → continues
-  - Processes 14 more photos (70s) → 24 total, 120s reached → swaps
-  - Result: 24 photos, 120s GPU time
-
-Job B (low-res, 1s/photo):
-  - Processes 10 photos (10s) → min_photos ✓, time < 120s → continues
-  - Processes 110 more photos (110s) → 120 total, 120s reached → swaps
-  - Result: 120 photos, 120s GPU time
-
-✅ Temporal fairness (both get 120s)
-✅ Model load overhead well amortized (min 10 photos)
-✅ Adapts automatically to photo complexity
-```
-
-**Comparison:**
-
-| Threshold Type | Temporal Fairness | Overhead Protection | Complexity |
-|----------------|-------------------|---------------------|------------|
-| Count-only | ❌ Poor (varies with photo complexity) | ✅ Good | Low |
-| Time-only | ✅ Excellent | ⚠️ Moderate (might swap early) | Medium |
-| **Hybrid** | **✅ Excellent** | **✅ Excellent** | **Medium** |
-
-#### Advantages of Hybrid Approach
-
-**1. Temporal Fairness:**
-- Each job receives approximately equal GPU time, regardless of photo complexity
-- Prevents jobs with complex photos from dominating GPU resources
-- Predictable: "Every job progresses every 2 minutes" (instead of "every N photos")
-- Better for multi-user scenarios and QoS/SLA guarantees
-
-**2. Overhead Protection:**
-- `min_photos` ensures model load overhead is well amortized
-- Won't swap after just 1-2 photos even if time threshold is low
-- Protects against pathological cases (ultra-fast tiny photos)
-
-**3. Configurable Trade-off:**
-- Tune both dimensions based on workload characteristics
-- High thresholds for efficiency-critical workloads
-- Low thresholds for user-facing interactive scenarios
-- Example: `min_photos=10, max_time=60s` for responsive UI, `min_photos=50, max_time=300s` for batch processing
-
-**4. Adaptive Behavior:**
-- If all jobs use same model: zero overhead (never swaps)
-- If one job finishes early: continues with remaining job without unnecessary swaps
-- Automatically optimal for homogeneous workloads
-- Adapts to photo complexity without manual tuning
-
-**5. Better User Experience:**
-
-```
-Sequential execution:
-  Job A: ████████████████ (completes, then Job B starts)
-  Job B: ................ ████████████████
-
-Smart hybrid priority (min=10, max=120s):
-  Job A: ███...███...███...███...███
-  Job B: ...███...███...███...███...███
-
-Both jobs show progress simultaneously via SSE updates!
-Temporal fairness: each gets ~120s per cycle
-```
-
-**6. Model Locality:**
-- Exploits Ollama's keep-alive feature (models stay in VRAM for 5 minutes by default)
-- Processes multiple photos with same model before swapping
-- Minimizes expensive model load operations (10-20s per load)
-
-#### Implementation Considerations
-
-**Queue Structure:**
-
-```rust
-struct PhotoQueue {
-    // Photos organized by required model
-    photos_by_model: HashMap<ModelId, VecDeque<PhotoId>>,
-
-    // All pending photos (for threshold overflow)
-    all_photos: VecDeque<PhotoId>,
-}
-
-struct Worker {
-    // Current model state
-    current_model: ModelId,
-    photos_processed: usize,
-    model_load_time: Instant,
-
-    // Configuration
-    min_photos_before_swap: usize,
-    max_time_before_swap: Duration,
-}
-
-impl Worker {
-    fn should_allow_model_swap(&self) -> bool {
-        self.photos_processed >= self.min_photos_before_swap
-            && self.model_load_time.elapsed() >= self.max_time_before_swap
-    }
-}
-```
-
-**Configuration:**
-
-```toml
-[worker_pool]
-# Minimum photos to process before allowing model swap (overhead protection)
-min_photos_before_swap = 10
-
-# Maximum time with same model before forcing swap (temporal fairness)
-# Format: duration string (e.g., "60s", "2m", "120s")
-max_time_before_swap = "120s"
-```
-
-**Recommended Values:**
-
-| Use Case | min_photos | max_time | Rationale |
-|----------|------------|----------|-----------|
-| **Interactive UI** (default) | 10 | 60-120s | Fast feedback, good fairness |
-| **Batch processing** | 50 | 300s (5m) | Higher efficiency, less fairness needed |
-| **Multi-tenant/SLA** | 5 | 30-60s | Strict fairness guarantees |
-
-**Metrics to Track:**
-- Model swaps per job
-- Time spent on model loading vs. processing
-- Fairness metric: Standard deviation of GPU time per job
-- Photos processed per model swap (amortization efficiency)
-- Time to first result per job (responsiveness)
-
-#### Recommendation
-
-For initial implementation, use the **Interactive UI profile**:
-```toml
-min_photos_before_swap = 10
-max_time_before_swap = "120s"
-```
-
-**Why these values:**
-- ✅ Model load overhead (10s) amortized over 10+ photos (10% or less overhead)
-- ✅ Temporal fairness: All jobs see progress every ~2 minutes
-- ✅ Good user experience: Responsive SSE updates
-- ✅ Works well for typical photography workloads (20-200 photos per job)
-- ✅ Adapts automatically to photo complexity without tuning
-
-Both thresholds should be exposed as configuration options for users to tune based on their specific needs and hardware.
-
 ## Module Organization
 
 The codebase follows a clean modular structure:
 
 ```
 src/
-├── main.rs              # Application entry point, server initialization
+├── main.rs              # Application entry point
 ├── lib.rs               # Library exports for integration tests
+├── cli.rs               # CLI argument definitions (clap)
+├── startup.rs           # Server initialization and startup logic
+├── app_state.rs         # Shared application state (AppState)
 ├── config/              # Configuration loading and types
-│   ├── mod.rs
-│   └── byte_size.rs     # ByteSize parsing
+│   ├── mod.rs           # Config struct, load_config()
+│   ├── ai.rs            # AIConfig, ProviderConfig, OllamaProviderConfig
+│   ├── server.rs        # ServerConfig (host, port)
+│   ├── storage.rs       # StorageConfig (paths, max_size)
+│   ├── upload.rs        # UploadConfig (max photo size, max per request)
+│   ├── worker_pool.rs   # WorkerPoolConfig
+│   └── byte_size.rs     # ByteSize helper type
 ├── routes/              # REST endpoint definitions (routing)
-│   ├── mod.rs
-│   ├── tasks.rs         # Task-related routes
-│   ├── photos.rs        # Photo upload/management routes
-│   ├── jobs.rs          # Job execution routes
-│   └── system.rs        # System info routes (/config, /models)
+│   └── mod.rs           # create_router() — all route mappings
 ├── handlers/            # Business logic for each endpoint
 │   ├── mod.rs
-│   ├── tasks.rs
-│   ├── photos.rs
-│   ├── jobs.rs
-│   └── system.rs
+│   ├── tasks.rs         # CRUD tasks
+│   ├── photos.rs        # Get/delete/list photos
+│   ├── upload_photos.rs # Multipart upload handling
+│   ├── jobs.rs          # CRUD jobs + cancel/retry/results
+│   ├── providers.rs     # Provider listing, model discovery
+│   ├── info.rs          # Server info endpoint
+│   ├── app_error.rs     # AppError → HTTP response mapping
+│   └── test_utils.rs    # Test fixtures and helpers
+├── models/              # Data structures
+│   ├── mod.rs
+│   ├── catalog.rs       # Catalog entity
+│   ├── task.rs          # Task entity and DTOs
+│   ├── photo.rs         # Photo entity and DTOs
+│   ├── job.rs           # Job entity and DTOs
+│   └── info.rs          # ServerInfo response struct
 ├── services/            # External integrations
 │   ├── mod.rs
 │   ├── ai/              # AI provider abstraction layer
@@ -487,22 +258,17 @@ src/
 │       ├── mod.rs
 │       ├── pool.rs      # WorkerPool: discovery loop, startup recovery
 │       ├── worker.rs    # Worker: hybrid threshold scheduling
-│       ├── processor.rs # PhotoProcessor: job start (Queued→Processing), AI call, job state update
-│       └── queue.rs     # PhotoBuffer: shared photo queue (with remove_job for cancellation)
-├── storage/             # Abstraction layer for persistence
-│   ├── mod.rs
-│   ├── task_store.rs    # Task storage abstraction
-│   ├── photo_store.rs   # Photo storage abstraction
-│   └── job_store.rs     # Job storage abstraction
-├── models/              # Data structures
-│   ├── mod.rs
-│   ├── task.rs          # Task entity and DTOs
-│   ├── photo.rs         # Photo entity and DTOs
-│   ├── job.rs           # Job entity and DTOs
-│   └── error.rs         # Error types
-└── sse/                 # Server-Sent Events implementation
-    ├── mod.rs
-    └── manager.rs       # SSE connection management
+│       ├── processor.rs # PhotoProcessor: AI call, job state update
+│       └── queue.rs     # PhotoBuffer: shared photo queue
+└── storage/             # Abstraction layer for persistence
+    ├── mod.rs           # Store traits + re-exports
+    ├── task_store.rs    # TaskStore trait
+    ├── photo_store.rs   # PhotoStore trait
+    ├── job_store.rs     # JobStore trait
+    ├── filesystem_task_store.rs
+    ├── filesystem_photo_store.rs
+    ├── filesystem_job_store.rs
+    └── filesystem_layout.rs
 ```
 
 ### Main Dependencies
@@ -573,7 +339,7 @@ The implementation uses abstraction to allow future evolution without major refa
 
 - Centralized directory structure management
 - Consistent path generation across all storage implementations
-- Directory structure: `{storage_path}/tasks/{task_id}/` with subdirectories for photos (`imgs/`) and jobs
+- Directory structure: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/` with subdirectories for photos (`imgs/`) and jobs
 
 **TaskQueue**
 
@@ -611,16 +377,19 @@ The storage layer uses trait-based abstraction patterns to enable future evoluti
 
 ```text
 {storage_path}/
-└── tasks/
-    └── {task_id}/
-        ├── task.json          # Task metadata
-        ├── photos.json        # Photos metadata
-        ├── imgs/              # Photo binary data
-        │   ├── {photo_id_1}
-        │   └── {photo_id_2}
-        └── jobs/              # Job metadata
-            ├── {job_id_1}.json
-            └── {job_id_2}.json
+└── catalogs/
+    └── {catalog_id}/
+        ├── catalog.json           # Catalog metadata
+        └── tasks/
+            └── {task_id}/
+                ├── task.json          # Task metadata
+                ├── photos.json        # Photos metadata
+                ├── imgs/              # Photo binary data
+                │   ├── {photo_id_1}
+                │   └── {photo_id_2}
+                └── jobs/              # Job metadata
+                    ├── {job_id_1}.json
+                    └── {job_id_2}.json
 ```
 
 **Future Implementations:**
@@ -640,82 +409,44 @@ All storage implementations must be `Send + Sync` and support concurrent access 
 **Design:**
 
 - Tokio task per worker (one per GPU)
-- Shared `PhotoBuffer` with priority-based selection (see "Photo Selection Strategy" section)
+- Shared `PhotoBuffer` with priority-based photo selection
+- Polling-based job discovery: the pool periodically polls the JobStore for new queued jobs
 - Model-aware scheduling to minimize VRAM swaps
 - Stale job recovery on startup (jobs in `processing` state are reset to `queued`)
 
-**Two Implementation Approaches:**
+**Worker Loop (Photo-Level with Hybrid Threshold):**
 
-**Approach 1: Job-Level (Simple)**
-
-Workers pull complete jobs from queue:
+Workers pull individual photos from the shared `PhotoBuffer` using a smart hybrid selection strategy that balances efficiency (minimizing model swaps) with fairness (ensuring all jobs progress):
 
 ```
 Worker loop:
-  1. Pop job from queue
-  2. For each photo in job:
-     - Call AI provider API (via AIProvider trait)
-     - Save result incrementally
-     - Send SSE update
-  4. Mark job as completed
-  5. Release permit
+  1. Load AI model if needed
+  2. Initialize: photos_processed = 0, model_load_time = now()
+  3. Loop:
+     a. Select next photo from buffer:
+        - Below thresholds (count OR time): prioritize photos with current model
+        - Above both thresholds: accept any photo (allow model swap for fairness)
+     b. If photo requires different model: load new model, reset counters
+     c. Call AI provider API (via AIProvider trait)
+     d. Save result incrementally
+     e. Increment photos_processed
+     f. If no more photos: break
 ```
 
-*Pros:* Simple, minimal model swaps
-*Cons:* Poor fairness with multiple jobs
-
-**Approach 2: Photo-Level with Smart Hybrid Selection (Recommended)**
-
-Workers pull individual photos using priority-based selection with hybrid threshold (count + time):
-
-```
-Worker loop:
-  1. Load AI model if needed (check current_model)
-  3. Initialize: photos_processed = 0, model_load_time = now()
-  4. Loop:
-     a. Check swap criteria:
-        - Can swap if: photos_processed >= min_photos AND elapsed >= max_time
-        - Must continue if: photos_processed < min_photos OR elapsed < max_time
-     b. Select next photo:
-        - If cannot swap: prioritize photos with current_model
-        - If can swap: accept any photo (fair scheduling)
-     c. If photo requires different model:
-        - Unload old model, load new model
-        - Reset: photos_processed = 0, model_load_time = now()
-     d. Call AI provider API (via AIProvider trait)
-     e. Save result incrementally
-     f. Send SSE update (photo completion, job progress)
-     g. Increment photos_processed
-     h. If no more photos: break
-  5. Release permit
-```
-
-*Pros:* Excellent temporal fairness, configurable efficiency, adapts to photo complexity
-*Cons:* More complex, some model swap overhead (well-controlled via hybrid threshold)
-
-See the **Photo Selection Strategy** section in Worker Pool for detailed analysis and threshold recommendations.
-
-**Current implementation** uses Approach 2 (photo-level with smart hybrid selection). See the **Photo Selection Strategy** section for the detailed rationale behind the threshold algorithm.
+For the detailed analysis of the hybrid threshold algorithm and its trade-offs, see [Photo Selection Strategy](photo-selection-strategy.md).
 
 ### Photo Deduplication (Future)
 
 **Design for future implementation:**
 
-- Calculate SHA256 hash on upload
-- Store photos by content hash (content-addressable storage)
-- Task maintains references to photo hashes, not file copies
-- Reference counting: delete photo file when no task references it
-
-**API Impact:**
-
-- Transparent to client (no API changes needed)
-- Upload response still returns photo_id
-- Internally: photo_id maps to content hash
+- Use the photo's UUID to detect and prevent duplicate uploads within the same task
+- On upload, check if the same photo (by original filename and size) already exists in the task
+- If a duplicate is detected, return the existing photo_id instead of creating a new entry
 
 **Benefits:**
 
-- Significant storage savings for repeated uploads
-- Faster uploads (skip if already stored)
+- Prevents accidental duplicate uploads within a task
+- Saves storage space without adding complexity
 
 **Implementation Note:**
 
@@ -726,3 +457,4 @@ Not implemented initially to keep first version simple.
 - [API Reference](api-reference.md) - Complete endpoint documentation
 - [Configuration](configuration.md) - Server configuration reference
 - [Development Guide](development.md) - Development workflow and testing
+- [Photo Selection Strategy](photo-selection-strategy.md) - Hybrid threshold algorithm for worker photo scheduling
