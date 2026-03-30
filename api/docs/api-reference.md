@@ -33,9 +33,10 @@ This example demonstrates a typical workflow from task creation to cleanup:
    POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/jobs
    {
      model: "qwen3-vl",
-     photo_ids: null  // null = all photos in task
+     photo_ids: null,  // null = all photos in task
+     language: "Italian"  // optional, falls back to config default_language, then English
    }
-   ← {job_id: "12345678-abcd-ef01-2345-6789abcdef01", status: "queued"}
+   ← {job_id: "12345678-abcd-ef01-2345-6789abcdef01", status: "queued", language: "Italian"}
 
 4. Client monitors via SSE (not yet implemented — see Issue #11)
    GET /api/jobs/12345678-abcd-ef01-2345-6789abcdef01/stream
@@ -54,11 +55,12 @@ This example demonstrates a typical workflow from task creation to cleanup:
    ← {job_id: "fedcba98-7654-3210-fedc-ba9876543210", ...}
    Note: retry includes both failed photos AND photos that were never processed
 
-8. Or re-analyze with different model
+8. Or re-analyze with different model/language
    POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/jobs
    {
      model: "llava:latest",
-     photo_ids: null
+     photo_ids: null,
+     language: "English"
    }
    ← {job_id: "abcdef01-2345-6789-abcd-ef0123456789"}
 
@@ -136,11 +138,13 @@ Returns details for a specific provider, including its configured models and the
 ```json
 {
   "name": "ollama",
+  "default_language": "English",
   "models": [
     {
       "name": "qwen3-vl",
       "description": "Best quality, slower processing",
-      "available": true
+      "available": true,
+      "supported_languages": ["English", "Italian", "French"]
     },
     {
       "name": "llava",
@@ -150,6 +154,9 @@ Returns details for a specific provider, including its configured models and the
   ]
 }
 ```
+
+- `default_language` — the configured default language for tag generation (omitted if not set)
+- `supported_languages` — languages the model is known to support (omitted if empty or not configured)
 
 **Errors:**
 
@@ -435,6 +442,7 @@ Returns a summary list of all jobs belonging to a specific task.
     "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
     "status": "completed",
     "model": "qwen3-vl",
+    "language": "English",
     "photo_count": 15,
     "queued_photo_count": 0,
     "processed_photo_count": 15,
@@ -459,12 +467,14 @@ Creates a new analysis job in `queued` status.
 ```json
 {
   "model": "qwen3-vl",
-  "photo_ids": null
+  "photo_ids": null,
+  "language": "Italian"
 }
 ```
 
 - `model`: AI model to use (e.g. `qwen3-vl`, `llava`)
 - `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task
+- `language`: language for generated tags (optional). If omitted, falls back to the server-side `default_language` config, then to `"English"`
 
 **Response:** `201 Created`
 
@@ -474,6 +484,7 @@ Creates a new analysis job in `queued` status.
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
   "model": "qwen3-vl",
+  "language": "Italian",
   "photo_count": 15,
   "created_at": "2024-01-15T10:35:00Z"
 }
@@ -498,6 +509,7 @@ Cancels an active job. Any photos still waiting in the worker buffer are discard
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "cancelled",
   "model": "qwen3-vl",
+  "language": "English",
   "photo_count": 15,
   "created_at": "2024-01-15T10:35:00Z"
 }
@@ -526,6 +538,7 @@ Creates a new job to retry failed and unprocessed photos from a finished job, us
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
   "model": "qwen3-vl",
+  "language": "English",
   "photo_count": 2,
   "created_at": "2024-01-15T10:50:00Z",
   "parent_job_id": "12345678-abcd-ef01-2345-6789abcdef01"
@@ -544,6 +557,7 @@ Returns a summary list of all jobs across all tasks.
     "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
     "status": "completed",
     "model": "qwen3-vl",
+    "language": "English",
     "photo_count": 15,
     "queued_photo_count": 0,
     "processed_photo_count": 15,
@@ -567,6 +581,7 @@ Returns the current state of a specific job.
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "processing",
   "model": "qwen3-vl",
+  "language": "English",
   "photo_count": 15,
   "created_at": "2024-01-15T10:35:00Z",
   "started_at": "2024-01-15T10:35:10Z",
@@ -684,6 +699,7 @@ Deletes a job. The job must be in a terminal state (`completed`, `failed`, or `c
   "task_id": "string (UUID)",
   "status": "queued|processing|completed|failed|cancelled",
   "model": "string",
+  "language": "string",
   "photo_ids": [
     "string (UUID)"
   ]

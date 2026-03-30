@@ -118,6 +118,11 @@ pub struct Job {
     /// AI model to use for analysis (e.g., "qwen3-vl:8b", "llava")
     pub model: String,
 
+    /// Language for AI-generated tags (e.g., "English", "Italian").
+    /// None means use the server-side default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+
     /// Current status of the job
     pub status: JobStatus,
 
@@ -150,6 +155,7 @@ impl Job {
     /// # Arguments
     /// * `task_id` - The UUID of the parent Task
     /// * `model` - The AI model to use for analysis
+    /// * `language` - Optional language for generated tags (None = server default)
     /// * `photo_ids` - UUIDs of photos to process
     ///
     /// # Example
@@ -160,16 +166,23 @@ impl Job {
     /// let job = Job::new(
     ///     Uuid::new_v4(),
     ///     "qwen3-vl:8b".to_string(),
+    ///     None,
     ///     vec![Uuid::new_v4(), Uuid::new_v4()],
     /// );
     /// assert_eq!(job.status.to_string(), "queued");
     /// ```
-    pub fn new(task_id: Uuid, model: String, photo_ids: Vec<Uuid>) -> Self {
+    pub fn new(
+        task_id: Uuid,
+        model: String,
+        language: Option<String>,
+        photo_ids: Vec<Uuid>,
+    ) -> Self {
         let not_processed_photo_ids = photo_ids.clone();
         Self {
             job_id: Uuid::new_v4(),
             task_id,
             model,
+            language,
             status: JobStatus::Queued,
             photo_ids,
             queued_photo_ids: not_processed_photo_ids,
@@ -294,6 +307,7 @@ impl Job {
 /// ```json
 /// {
 ///   "model": "qwen3-vl:8b",
+///   "language": "Italian",
 ///   "photo_ids": null
 /// }
 /// ```
@@ -303,6 +317,11 @@ impl Job {
 pub struct CreateJobRequest {
     /// AI model to use for analysis
     pub model: String,
+
+    /// Language for AI-generated tags (e.g., "English", "Italian").
+    /// If omitted, the server-side default is used.
+    #[serde(default)]
+    pub language: Option<String>,
 
     /// Photo IDs to process (None = all photos in task)
     pub photo_ids: Option<Vec<Uuid>>,
@@ -321,6 +340,7 @@ pub struct CreateJobRequest {
 ///   "task_id": "550e8400-e29b-41d4-a716-446655440001",
 ///   "status": "queued",
 ///   "model": "qwen3-vl:8b",
+///   "language": "Italian",
 ///   "photo_count": 15,
 ///   "created_at": "2024-01-15T10:35:00Z",
 ///   "started_at": null,
@@ -340,6 +360,10 @@ pub struct JobResponse {
 
     /// AI model used
     pub model: String,
+
+    /// Language for AI-generated tags
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 
     /// Number of photos to process
     pub photo_count: usize,
@@ -387,6 +411,10 @@ pub struct JobSummary {
 
     /// AI model used
     pub model: String,
+
+    /// Language for AI-generated tags
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 
     /// Number of photos in this job
     pub photo_count: usize,
@@ -489,6 +517,10 @@ pub struct JobDetailResponse {
 
     /// AI model used
     pub model: String,
+
+    /// Language for AI-generated tags
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
 
     /// Number of photos to process
     pub photo_count: usize,
@@ -604,6 +636,10 @@ pub struct RetryJobResponse {
     /// AI model (same as original job)
     pub model: String,
 
+    /// Language for AI-generated tags (same as original job)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+
     /// Number of failed photos being retried
     pub photo_count: usize,
 
@@ -625,6 +661,7 @@ impl From<Job> for JobResponse {
             task_id: job.task_id,
             status: job.status,
             model: job.model,
+            language: job.language,
             photo_count: job.photo_ids.len(),
             created_at: job.created_at,
             started_at: job.started_at,
@@ -640,6 +677,7 @@ impl From<&Job> for JobResponse {
             task_id: job.task_id,
             status: job.status,
             model: job.model.clone(),
+            language: job.language.clone(),
             photo_count: job.photo_ids.len(),
             created_at: job.created_at,
             started_at: job.started_at,
@@ -658,6 +696,7 @@ impl From<Job> for JobSummary {
             task_id: job.task_id,
             status: job.status,
             model: job.model.clone(),
+            language: job.language.clone(),
             created_at: job.created_at,
             completed_at: job.completed_at,
         }
@@ -674,6 +713,7 @@ impl From<&Job> for JobSummary {
             task_id: job.task_id,
             status: job.status,
             model: job.model.clone(),
+            language: job.language.clone(),
             created_at: job.created_at,
             completed_at: job.completed_at,
         }
@@ -688,6 +728,7 @@ impl From<Job> for JobDetailResponse {
             task_id: job.task_id,
             status: job.status,
             model: job.model,
+            language: job.language,
             photo_count: job.photo_ids.len(),
             created_at: job.created_at,
             started_at: job.started_at,
@@ -705,6 +746,7 @@ impl From<&Job> for JobDetailResponse {
             task_id: job.task_id,
             status: job.status,
             model: job.model.clone(),
+            language: job.language.clone(),
             photo_count: job.photo_ids.len(),
             created_at: job.created_at,
             started_at: job.started_at,
@@ -774,7 +816,7 @@ mod tests {
     fn test_job_new_generates_uuid() {
         let task_id = Uuid::new_v4();
         let photo_id = Uuid::new_v4();
-        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![photo_id]);
+        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), None, vec![photo_id]);
         assert!(!job.job_id.is_nil());
     }
 
@@ -782,7 +824,7 @@ mod tests {
     fn test_job_new_sets_fields() {
         let task_id = Uuid::new_v4();
         let photo_ids = vec![Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
-        let job = Job::new(task_id, "llava".to_string(), photo_ids.clone());
+        let job = Job::new(task_id, "llava".to_string(), None, photo_ids.clone());
 
         assert_eq!(job.task_id, task_id);
         assert_eq!(job.model, "llava");
@@ -800,6 +842,7 @@ mod tests {
         let job = Job::new(
             task_id,
             "qwen3-vl:8b".to_string(),
+            None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         assert_eq!(job.photo_count(), 2);
@@ -810,7 +853,12 @@ mod tests {
     #[test]
     fn test_job_lifecycle_start() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
 
         assert_eq!(job.status, JobStatus::Queued);
         assert!(job.started_at.is_none());
@@ -824,7 +872,12 @@ mod tests {
     #[test]
     fn test_job_lifecycle_complete() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
 
         job.start();
         job.complete();
@@ -837,7 +890,12 @@ mod tests {
     #[test]
     fn test_job_lifecycle_fail() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
 
         job.start();
         job.fail();
@@ -849,7 +907,12 @@ mod tests {
     #[test]
     fn test_job_lifecycle_cancel() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
 
         job.cancel();
 
@@ -860,7 +923,12 @@ mod tests {
     #[test]
     fn test_job_is_finished() {
         let task_id = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let mut job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
 
         assert!(!job.is_finished()); // Queued
         job.start();
@@ -911,6 +979,7 @@ mod tests {
         let mut job = Job::new(
             task_id,
             "qwen3-vl:8b".to_string(),
+            None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         job.start();
@@ -929,7 +998,7 @@ mod tests {
     #[test]
     fn test_job_to_summary_conversion() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "llava".to_string(), vec![Uuid::new_v4()]);
+        let job = Job::new(task_id, "llava".to_string(), None, vec![Uuid::new_v4()]);
 
         let summary: JobSummary = (&job).into();
 
@@ -965,7 +1034,12 @@ mod tests {
     #[test]
     fn test_job_response_skips_none_timestamps() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
         let response: JobResponse = job.into();
         let json = serde_json::to_string(&response).unwrap();
 
@@ -977,7 +1051,12 @@ mod tests {
     #[test]
     fn test_job_serialization() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
         let json = serde_json::to_string(&job).unwrap();
 
         assert!(json.contains("job_id"));
@@ -997,7 +1076,12 @@ mod tests {
     #[test]
     fn test_job_new_initializes_empty_results() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![Uuid::new_v4()]);
+        let job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
         assert!(job.results.is_empty());
     }
 
@@ -1007,6 +1091,7 @@ mod tests {
         let job = Job::new(
             task_id,
             "qwen3-vl:8b".to_string(),
+            None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
 
@@ -1029,6 +1114,7 @@ mod tests {
         let mut job = Job::new(
             task_id,
             "qwen3-vl:8b".to_string(),
+            None,
             vec![photo1, photo2, photo3],
         );
         job.start();
@@ -1070,7 +1156,12 @@ mod tests {
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
 
-        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![photo1, photo2]);
+        let mut job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![photo1, photo2],
+        );
         job.start();
 
         let progress = job.calculate_progress().unwrap();
@@ -1084,6 +1175,7 @@ mod tests {
         let job = Job::new(
             task_id,
             "qwen3-vl:8b".to_string(),
+            None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
 
@@ -1100,6 +1192,7 @@ mod tests {
         let mut job = Job::new(
             task_id,
             "qwen3-vl:8b".to_string(),
+            None,
             vec![photo1, photo2, photo3],
         );
 
@@ -1165,6 +1258,7 @@ mod tests {
         let mut job = Job::new(
             task_id,
             "qwen3-vl:8b".to_string(),
+            None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
         job.start();
@@ -1186,6 +1280,7 @@ mod tests {
         let job = Job::new(
             task_id,
             "qwen3-vl:8b".to_string(),
+            None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
 
@@ -1201,7 +1296,12 @@ mod tests {
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
 
-        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), vec![photo1, photo2]);
+        let mut job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![photo1, photo2],
+        );
 
         job.results.insert(
             photo1,
@@ -1233,6 +1333,7 @@ mod tests {
         let mut job = Job::new(
             task_id,
             "qwen3-vl:8b".to_string(),
+            None,
             vec![photo1, photo2, photo3],
         );
 
@@ -1283,5 +1384,153 @@ mod tests {
         assert!(!json.contains("\"tags\""));
         assert!(json.contains("\"error\""));
         assert!(!json.contains("\"processed_at\""));
+    }
+
+    // ========================================================================
+    // Language field tests
+    // ========================================================================
+
+    #[test]
+    fn test_job_new_with_language() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            Some("Italian".to_string()),
+            vec![Uuid::new_v4()],
+        );
+        assert_eq!(job.language.as_deref(), Some("Italian"));
+    }
+
+    #[test]
+    fn test_job_new_without_language() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(task_id, "llava".to_string(), None, vec![Uuid::new_v4()]);
+        assert!(job.language.is_none());
+    }
+
+    #[test]
+    fn test_job_response_includes_language() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            Some("French".to_string()),
+            vec![Uuid::new_v4()],
+        );
+
+        let response: JobResponse = (&job).into();
+        assert_eq!(response.language.as_deref(), Some("French"));
+    }
+
+    #[test]
+    fn test_job_response_skips_none_language() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(task_id, "llava".to_string(), None, vec![Uuid::new_v4()]);
+
+        let response: JobResponse = job.into();
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(!json.contains("\"language\""));
+    }
+
+    #[test]
+    fn test_job_summary_includes_language() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "llava".to_string(),
+            Some("Spanish".to_string()),
+            vec![Uuid::new_v4()],
+        );
+
+        let summary: JobSummary = (&job).into();
+        assert_eq!(summary.language.as_deref(), Some("Spanish"));
+    }
+
+    #[test]
+    fn test_job_detail_response_includes_language() {
+        let task_id = Uuid::new_v4();
+        let mut job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            Some("German".to_string()),
+            vec![Uuid::new_v4()],
+        );
+        job.start();
+
+        let response: JobDetailResponse = (&job).into();
+        assert_eq!(response.language.as_deref(), Some("German"));
+    }
+
+    #[test]
+    fn test_create_job_request_with_language() {
+        let json = r#"{"model":"qwen3-vl:8b","language":"Italian","photo_ids":null}"#;
+        let request: CreateJobRequest = serde_json::from_str(json).unwrap();
+
+        assert_eq!(request.model, "qwen3-vl:8b");
+        assert_eq!(request.language.as_deref(), Some("Italian"));
+        assert!(request.photo_ids.is_none());
+    }
+
+    #[test]
+    fn test_create_job_request_without_language() {
+        let json = r#"{"model":"llava","photo_ids":null}"#;
+        let request: CreateJobRequest = serde_json::from_str(json).unwrap();
+
+        assert!(request.language.is_none());
+    }
+
+    #[test]
+    fn test_job_serialization_includes_language() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            Some("Italian".to_string()),
+            vec![Uuid::new_v4()],
+        );
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(json.contains("\"language\":\"Italian\""));
+    }
+
+    #[test]
+    fn test_job_serialization_skips_none_language() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(task_id, "llava".to_string(), None, vec![Uuid::new_v4()]);
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(!json.contains("\"language\""));
+    }
+
+    #[test]
+    fn test_job_deserialization_with_language() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "qwen3-vl:8b".to_string(),
+            Some("Italian".to_string()),
+            vec![Uuid::new_v4()],
+        );
+        let json = serde_json::to_string(&job).unwrap();
+        let deserialized: Job = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.language.as_deref(), Some("Italian"));
+    }
+
+    #[test]
+    fn test_job_deserialization_without_language_field() {
+        let json = r#"{
+            "job_id": "550e8400-e29b-41d4-a716-446655440000",
+            "task_id": "550e8400-e29b-41d4-a716-446655440001",
+            "model": "llava",
+            "status": "queued",
+            "photo_ids": [],
+            "queued_photo_ids": [],
+            "processed_photo_ids": [],
+            "created_at": "2024-01-15T10:35:00Z"
+        }"#;
+        let job: Job = serde_json::from_str(json).unwrap();
+        assert!(
+            job.language.is_none(),
+            "Missing language field should deserialize as None for backward compatibility"
+        );
     }
 }

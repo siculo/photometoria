@@ -109,6 +109,7 @@ impl AIProvider for OllamaProvider {
                 id: id.clone(),
                 backend_model_name: config.ollama_model.clone(),
                 description: config.description.clone(),
+                supported_languages: config.supported_languages.clone(),
             })
             .collect()
     }
@@ -361,6 +362,7 @@ mod tests {
                 prompt_template: None,
                 description: None,
                 supports_vision: true,
+                supported_languages: vec![],
             },
         );
 
@@ -383,6 +385,7 @@ mod tests {
                 prompt_template: Some("Custom prompt".to_string()),
                 description: None,
                 supports_vision: true,
+                supported_languages: vec![],
             },
         );
 

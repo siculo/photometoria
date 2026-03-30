@@ -15,11 +15,19 @@ use crate::storage::{JobStore, PhotoStore, TaskStore};
 
 use super::queue::QueuedPhoto;
 
-const BASE_PROMPT: &str = "Analyze this image and return descriptive tags as keywords.\n\n\
+const BASE_PROMPT_TEMPLATE: &str = "Analyze this image and return descriptive tags as keywords in {language}.\n\n\
     Respond ONLY with valid JSON, no other text.\n\
     The JSON object must have a single key \"tags\" containing an array of objects.\n\
     Each object must have ONLY one key \"tag\" with a keyword string value.\n\
     Example: {\"tags\": [{\"tag\": \"sunset\"}, {\"tag\": \"mountain\"}, {\"tag\": \"landscape\"}]}";
+
+const DEFAULT_LANGUAGE: &str = "English";
+
+/// Builds the base prompt with the language placeholder resolved.
+fn build_base_prompt(language: Option<&str>) -> String {
+    let lang = language.unwrap_or(DEFAULT_LANGUAGE);
+    BASE_PROMPT_TEMPLATE.replace("{language}", lang)
+}
 
 // ============================================================================
 // Tag response model
@@ -45,9 +53,8 @@ struct TagResponse {
 fn parse_tag_response(raw: &str) -> Result<String, String> {
     let text = strip_code_fences(raw.trim());
 
-    let response: TagResponse = serde_json::from_str(&text).map_err(|e| {
-        format!("Invalid JSON in model response: {e}")
-    })?;
+    let response: TagResponse =
+        serde_json::from_str(&text).map_err(|e| format!("Invalid JSON in model response: {e}"))?;
 
     if response.tags.is_empty() {
         return Err("Model returned an empty tags array".to_string());
@@ -211,10 +218,11 @@ impl PhotoProcessor {
             }
         };
 
+        let base_prompt = build_base_prompt(photo.language.as_deref());
         let prompt = if context.is_empty() {
-            BASE_PROMPT.to_string()
+            base_prompt
         } else {
-            format!("Context: {}\n\n{}", context, BASE_PROMPT)
+            format!("Context: {}\n\n{}", context, base_prompt)
         };
 
         let request = AnalyzeImageRequest {
@@ -415,6 +423,41 @@ mod tests {
         }
     }
 
+    struct PromptCapturingProvider {
+        response_text: String,
+        captured_prompt: std::sync::Mutex<Option<String>>,
+    }
+
+    #[async_trait]
+    impl AIProvider for PromptCapturingProvider {
+        fn name(&self) -> &str {
+            "mock-capture"
+        }
+        fn configured_model_ids(&self) -> Vec<String> {
+            vec![]
+        }
+        fn configured_model_details(&self) -> Vec<crate::services::ai::ConfiguredModelInfo> {
+            vec![]
+        }
+        async fn check_health(&self) -> AIProviderResult<HealthStatus> {
+            unimplemented!()
+        }
+        async fn list_models(&self, _vision_only: bool) -> AIProviderResult<Vec<ModelInfo>> {
+            unimplemented!()
+        }
+        async fn analyze_image(
+            &self,
+            request: AnalyzeImageRequest,
+        ) -> AIProviderResult<AnalyzeImageResponse> {
+            *self.captured_prompt.lock().unwrap() = Some(request.prompt);
+            Ok(AnalyzeImageResponse {
+                text: self.response_text.clone(),
+                model: request.model,
+                tokens_used: None,
+            })
+        }
+    }
+
     struct FailingProvider {
         error_message: String,
     }
@@ -507,11 +550,50 @@ mod tests {
 
         let job = fixture
             .job_store
-            .create(Job::new(task.task_id, "llava".to_string(), vec![photo_id]))
+            .create(Job::new(
+                task.task_id,
+                "llava".to_string(),
+                None,
+                vec![photo_id],
+            ))
             .await
             .unwrap();
 
         (job, photo_id)
+    }
+
+    // -----------------------------------------------------------------------
+    // build_base_prompt unit tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_build_base_prompt_default_language() {
+        let prompt = build_base_prompt(None);
+        assert!(prompt.contains("in English"));
+        assert!(!prompt.contains("{language}"));
+    }
+
+    #[test]
+    fn test_build_base_prompt_explicit_language() {
+        let prompt = build_base_prompt(Some("Italian"));
+        assert!(prompt.contains("in Italian"));
+        assert!(!prompt.contains("{language}"));
+        assert!(!prompt.contains("English"));
+    }
+
+    #[test]
+    fn test_build_base_prompt_empty_string_language() {
+        let prompt = build_base_prompt(Some(""));
+        assert!(prompt.contains("in ."));
+        assert!(!prompt.contains("{language}"));
+    }
+
+    #[test]
+    fn test_build_base_prompt_preserves_json_structure() {
+        let prompt = build_base_prompt(Some("French"));
+        assert!(prompt.contains("Respond ONLY with valid JSON"));
+        assert!(prompt.contains(r#""tags""#));
+        assert!(prompt.contains("in French"));
     }
 
     // -----------------------------------------------------------------------
@@ -610,7 +692,10 @@ mod tests {
     // -----------------------------------------------------------------------
 
     fn json_tags(tags: &[&str]) -> String {
-        let entries: Vec<String> = tags.iter().map(|t| format!(r#"{{"tag": "{t}"}}"#)).collect();
+        let entries: Vec<String> = tags
+            .iter()
+            .map(|t| format!(r#"{{"tag": "{t}"}}"#))
+            .collect();
         format!(r#"{{"tags": [{}]}}"#, entries.join(", "))
     }
 
@@ -629,6 +714,7 @@ mod tests {
                 photo_id,
                 task_id: job.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -664,6 +750,7 @@ mod tests {
                 photo_id,
                 task_id: job.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -695,6 +782,7 @@ mod tests {
                 photo_id,
                 task_id: job.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -724,6 +812,7 @@ mod tests {
                 photo_id,
                 task_id: job.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -768,6 +857,7 @@ mod tests {
             .create(Job::new(
                 task.task_id,
                 "llava".to_string(),
+                None,
                 vec![photo_id_1, photo_id_2],
             ))
             .await
@@ -780,6 +870,7 @@ mod tests {
                 photo_id: photo_id_1,
                 task_id: task.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -795,6 +886,7 @@ mod tests {
                 photo_id: photo_id_2,
                 task_id: task.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -819,6 +911,7 @@ mod tests {
                 photo_id,
                 task_id: job.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -830,7 +923,13 @@ mod tests {
         let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
         let photo_result = updated_job.results.get(&photo_id).unwrap();
         assert_eq!(photo_result.status, PhotoResultStatus::Failed);
-        assert!(photo_result.error.as_ref().unwrap().contains("Tag validation failed"));
+        assert!(
+            photo_result
+                .error
+                .as_ref()
+                .unwrap()
+                .contains("Tag validation failed")
+        );
     }
 
     #[tokio::test]
@@ -854,7 +953,12 @@ mod tests {
 
         let job = fixture
             .job_store
-            .create(Job::new(task.task_id, "llava".to_string(), vec![photo_id]))
+            .create(Job::new(
+                task.task_id,
+                "llava".to_string(),
+                None,
+                vec![photo_id],
+            ))
             .await
             .unwrap();
 
@@ -865,6 +969,7 @@ mod tests {
                 photo_id,
                 task_id: task.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -889,6 +994,7 @@ mod tests {
                 photo_id,
                 task_id: job.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -920,6 +1026,7 @@ mod tests {
                 photo_id,
                 task_id: job.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
@@ -952,11 +1059,103 @@ mod tests {
                 photo_id,
                 task_id: job.task_id,
                 model: "llava".to_string(),
+                language: None,
             })
             .await;
 
         assert!(
             matches!(result.outcome, Outcome::AnalysisFailed { ref error } if error.contains("not found"))
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Language integration tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_process_with_language_includes_language_in_prompt() {
+        let provider = Arc::new(PromptCapturingProvider {
+            response_text: json_tags(&["tramonto", "montagna"]),
+            captured_prompt: std::sync::Mutex::new(None),
+        });
+        let provider_ref = provider.clone();
+        let fixture = make_fixture(provider).await;
+        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+
+        fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+                language: Some("Italian".to_string()),
+            })
+            .await;
+
+        let captured = provider_ref.captured_prompt.lock().unwrap();
+        let prompt = captured.as_ref().expect("prompt should be captured");
+        assert!(
+            prompt.contains("in Italian"),
+            "Prompt should contain 'in Italian', got: {}",
+            prompt
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_without_language_defaults_to_english() {
+        let provider = Arc::new(PromptCapturingProvider {
+            response_text: json_tags(&["sunset", "mountain"]),
+            captured_prompt: std::sync::Mutex::new(None),
+        });
+        let provider_ref = provider.clone();
+        let fixture = make_fixture(provider).await;
+        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+
+        fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+                language: None,
+            })
+            .await;
+
+        let captured = provider_ref.captured_prompt.lock().unwrap();
+        let prompt = captured.as_ref().expect("prompt should be captured");
+        assert!(
+            prompt.contains("in English"),
+            "Prompt should default to 'in English', got: {}",
+            prompt
+        );
+    }
+
+    #[tokio::test]
+    async fn test_process_with_language_and_context() {
+        let provider = Arc::new(PromptCapturingProvider {
+            response_text: json_tags(&["Parigi", "torre"]),
+            captured_prompt: std::sync::Mutex::new(None),
+        });
+        let provider_ref = provider.clone();
+        let fixture = make_fixture(provider).await;
+        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+
+        fixture
+            .processor
+            .process(QueuedPhoto {
+                job_id: job.job_id,
+                photo_id,
+                task_id: job.task_id,
+                model: "llava".to_string(),
+                language: Some("French".to_string()),
+            })
+            .await;
+
+        let captured = provider_ref.captured_prompt.lock().unwrap();
+        let prompt = captured.as_ref().expect("prompt should be captured");
+        assert!(prompt.contains("in French"));
+        assert!(prompt.contains("Context: test context"));
     }
 }

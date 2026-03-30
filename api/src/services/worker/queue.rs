@@ -17,6 +17,7 @@ pub struct QueuedPhoto {
     pub photo_id: Uuid,
     pub task_id: Uuid,
     pub model: String,
+    pub language: Option<String>,
 }
 
 // ============================================================================
@@ -64,6 +65,7 @@ impl PhotoBuffer {
                 photo_id,
                 task_id: job.task_id,
                 model: job.model.clone(),
+                language: job.language.clone(),
             });
             self.total += 1;
         }
@@ -147,7 +149,7 @@ mod tests {
 
     fn make_job(model: &str, photo_count: usize) -> Job {
         let photo_ids = (0..photo_count).map(|_| Uuid::new_v4()).collect();
-        Job::new(Uuid::new_v4(), model.to_string(), photo_ids)
+        Job::new(Uuid::new_v4(), model.to_string(), None, photo_ids)
     }
 
     // --- enqueue_job ---

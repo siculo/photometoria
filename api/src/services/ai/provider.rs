@@ -99,6 +99,9 @@ pub struct ConfiguredModelInfo {
 
     /// Optional human-readable description from the configuration.
     pub description: Option<String>,
+
+    /// Languages this model has been tested to support.
+    pub supported_languages: Vec<String>,
 }
 
 /// Trait for AI providers that can analyze images and generate metadata.

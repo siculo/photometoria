@@ -22,6 +22,7 @@ fn create_test_provider(mock_server_uri: &str) -> OllamaProvider {
             prompt_template: Some("Describe this image".to_string()),
             description: Some("Test vision model".to_string()),
             supports_vision: true,
+            supported_languages: vec![],
         },
     );
 
@@ -312,6 +313,7 @@ async fn test_provider_registry_from_config() {
 
     let config = AIConfig {
         default_provider: Some("ollama".to_string()),
+        default_language: None,
         providers,
     };
 
@@ -341,6 +343,7 @@ async fn test_provider_registry_invalid_default() {
 
     let config = AIConfig {
         default_provider: Some("nonexistent".to_string()),
+        default_language: None,
         providers: HashMap::new(),
     };
 

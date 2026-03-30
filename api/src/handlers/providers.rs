@@ -38,12 +38,16 @@ pub struct ModelEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub available: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub supported_languages: Vec<String>,
 }
 
 /// Response body for `GET /api/providers/{provider_name}`.
 #[derive(Debug, Serialize)]
 pub struct ProviderDetailsResponse {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_language: Option<String>,
     pub models: Vec<ModelEntry>,
 }
 
@@ -82,7 +86,8 @@ pub async fn provider_details(
         .get(&provider_name)
         .map_err(|e| AppError::not_found(e.to_string()))?;
 
-    Ok(Json(provider_response(&provider).await))
+    let default_language = state.config.ai.default_language.clone();
+    Ok(Json(provider_response(&provider, default_language).await))
 }
 
 /// Returns models for the default provider.
@@ -98,12 +103,16 @@ pub async fn list_default_provider_models(
         .default_provider()
         .map_err(|e| AppError::internal_error(e.to_string()))?;
 
-    Ok(Json(provider_response(&provider).await))
+    let default_language = state.config.ai.default_language.clone();
+    Ok(Json(provider_response(&provider, default_language).await))
 }
 
 /// Builds a [`ProviderDetailsResponse`] for the given provider by cross-referencing
 /// configured models against those actually installed on the backend.
-async fn provider_response(provider: &Arc<dyn AIProvider>) -> ProviderDetailsResponse {
+async fn provider_response(
+    provider: &Arc<dyn AIProvider>,
+    default_language: Option<String>,
+) -> ProviderDetailsResponse {
     let configured = provider.configured_model_details();
     let installed: HashSet<String> = available_models(provider).await;
 
@@ -115,12 +124,14 @@ async fn provider_response(provider: &Arc<dyn AIProvider>) -> ProviderDetailsRes
                 name: m.id,
                 description: m.description,
                 available,
+                supported_languages: m.supported_languages,
             }
         })
         .collect();
 
     ProviderDetailsResponse {
         name: provider.name().to_string(),
+        default_language,
         models,
     }
 }
@@ -274,6 +285,7 @@ mod tests {
             id: id.to_string(),
             backend_model_name: backend.to_string(),
             description: description.map(str::to_string),
+            supported_languages: vec![],
         }
     }
 
@@ -281,7 +293,7 @@ mod tests {
     /// registry + provider wiring used in production.
     async fn call_list_models(registry: Arc<ProviderRegistry>) -> Vec<super::ModelEntry> {
         let provider = registry.default_provider().unwrap();
-        super::provider_response(&provider).await.models
+        super::provider_response(&provider, None).await.models
     }
 
     #[tokio::test]
@@ -443,5 +455,72 @@ mod tests {
 
         let error = result.unwrap_err();
         assert_eq!(error.status, axum::http::StatusCode::NOT_FOUND);
+    }
+
+    // ---- language support tests ----
+
+    #[tokio::test]
+    async fn test_model_entry_includes_supported_languages() {
+        let provider = MockProvider::new(
+            vec![ConfiguredModelInfo {
+                id: "qwen3-vl".to_string(),
+                backend_model_name: "qwen3-vl:8b".to_string(),
+                description: None,
+                supported_languages: vec![
+                    "English".to_string(),
+                    "Italian".to_string(),
+                    "French".to_string(),
+                ],
+            }],
+            vec![make_model_info("qwen3-vl:8b")],
+        );
+        let models = call_list_models(registry_with(provider)).await;
+
+        assert_eq!(models[0].supported_languages.len(), 3);
+        assert_eq!(models[0].supported_languages[0], "English");
+        assert_eq!(models[0].supported_languages[1], "Italian");
+    }
+
+    #[tokio::test]
+    async fn test_model_entry_empty_languages_not_serialized() {
+        let provider = MockProvider::new(
+            vec![configured("llava", "llava:latest", None)],
+            vec![make_model_info("llava:latest")],
+        );
+        let models = call_list_models(registry_with(provider)).await;
+
+        let json = serde_json::to_string(&models[0]).unwrap();
+        assert!(
+            !json.contains("supported_languages"),
+            "Empty supported_languages should be skipped in JSON"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_provider_response_includes_default_language() {
+        let provider = MockProvider::new(
+            vec![configured("qwen3-vl", "qwen3-vl:8b", None)],
+            vec![make_model_info("qwen3-vl:8b")],
+        );
+        let registry = registry_with(provider);
+        let prov = registry.default_provider().unwrap();
+        let response = super::provider_response(&prov, Some("Italian".to_string())).await;
+
+        assert_eq!(response.default_language.as_deref(), Some("Italian"));
+    }
+
+    #[tokio::test]
+    async fn test_provider_response_no_default_language() {
+        let provider = MockProvider::new(
+            vec![configured("qwen3-vl", "qwen3-vl:8b", None)],
+            vec![make_model_info("qwen3-vl:8b")],
+        );
+        let registry = registry_with(provider);
+        let prov = registry.default_provider().unwrap();
+        let response = super::provider_response(&prov, None).await;
+
+        assert!(response.default_language.is_none());
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(!json.contains("default_language"));
     }
 }

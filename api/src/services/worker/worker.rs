@@ -259,6 +259,7 @@ mod tests {
             let job = Job::new(
                 Uuid::new_v4(),
                 "modelA".to_string(),
+                None,
                 (0..count_a).map(|_| Uuid::new_v4()).collect(),
             );
             buf.enqueue_job(&job);
@@ -267,6 +268,7 @@ mod tests {
             let job = Job::new(
                 Uuid::new_v4(),
                 "modelB".to_string(),
+                None,
                 (0..count_b).map(|_| Uuid::new_v4()).collect(),
             );
             buf.enqueue_job(&job);
@@ -358,6 +360,7 @@ mod tests {
         let job = Job::new(
             Uuid::new_v4(),
             "solo".to_string(),
+            None,
             (0..3).map(|_| Uuid::new_v4()).collect(),
         );
         buf.enqueue_job(&job);
