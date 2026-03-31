@@ -7,10 +7,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::config::OllamaModelConfig;
 use async_trait::async_trait;
 use reqwest::Client;
 use tracing::debug;
-use crate::config::OllamaModelConfig;
 
 use super::super::error::{AIProviderError, AIProviderResult};
 use super::super::provider::{
@@ -239,9 +239,13 @@ impl AIProvider for OllamaProvider {
         // the {language} placeholder so both config and default prompts get
         // the correct language substitution.
         let language = request.language.as_deref().unwrap_or("English");
-        let prompt = self
+        let mut prompt = self
             .get_prompt_for_model(&request.model, &request.prompt)
-            .replace("{language}", language);
+            .replace("{{language}}", language);
+
+        if let Some(ref context) = request.context {
+            prompt = format!("Context: {}\n\n{}", context, prompt);
+        }
 
         debug!(prompt);
 

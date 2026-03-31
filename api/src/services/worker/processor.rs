@@ -15,7 +15,7 @@ use crate::storage::{JobStore, PhotoStore, TaskStore};
 
 use super::queue::QueuedPhoto;
 
-const BASE_PROMPT_TEMPLATE: &str = "Analyze this image and return descriptive tags as keywords in {language}.\n\n\
+const BASE_PROMPT_TEMPLATE: &str = "Analyze this image and return descriptive tags as keywords in {{language}}.\n\n\
     Respond ONLY with valid JSON, no other text.\n\
     The JSON object must have a single key \"tags\" containing an array of objects.\n\
     Each object must have ONLY one key \"tag\" with a keyword string value.\n\
@@ -210,17 +210,16 @@ impl PhotoProcessor {
             }
         };
 
-        let prompt = if context.is_empty() {
-            BASE_PROMPT_TEMPLATE.to_string()
-        } else {
-            format!("Context: {}\n\n{}", context, BASE_PROMPT_TEMPLATE)
-        };
-
         let request = AnalyzeImageRequest {
             model: photo.model.clone(),
             image_base64: STANDARD.encode(&bytes),
-            prompt,
+            prompt: BASE_PROMPT_TEMPLATE.to_string(),
             language: photo.language.clone(),
+            context: if context.is_empty() {
+                None
+            } else {
+                Some(context)
+            },
         };
 
         match self.ai_provider.analyze_image(request).await {
@@ -419,6 +418,7 @@ mod tests {
         response_text: String,
         captured_prompt: std::sync::Mutex<Option<String>>,
         captured_language: std::sync::Mutex<Option<Option<String>>>,
+        captured_context: std::sync::Mutex<Option<Option<String>>>,
     }
 
     #[async_trait]
@@ -444,6 +444,7 @@ mod tests {
         ) -> AIProviderResult<AnalyzeImageResponse> {
             *self.captured_prompt.lock().unwrap() = Some(request.prompt);
             *self.captured_language.lock().unwrap() = Some(request.language);
+            *self.captured_context.lock().unwrap() = Some(request.context);
             Ok(AnalyzeImageResponse {
                 text: self.response_text.clone(),
                 model: request.model,
@@ -1049,6 +1050,7 @@ mod tests {
             response_text: json_tags(&["tramonto", "montagna"]),
             captured_prompt: std::sync::Mutex::new(None),
             captured_language: std::sync::Mutex::new(None),
+            captured_context: std::sync::Mutex::new(None),
         });
         let provider_ref = provider.clone();
         let fixture = make_fixture(provider).await;
@@ -1084,6 +1086,7 @@ mod tests {
             response_text: json_tags(&["sunset", "mountain"]),
             captured_prompt: std::sync::Mutex::new(None),
             captured_language: std::sync::Mutex::new(None),
+            captured_context: std::sync::Mutex::new(None),
         });
         let provider_ref = provider.clone();
         let fixture = make_fixture(provider).await;
@@ -1119,6 +1122,7 @@ mod tests {
             response_text: json_tags(&["Parigi", "torre"]),
             captured_prompt: std::sync::Mutex::new(None),
             captured_language: std::sync::Mutex::new(None),
+            captured_context: std::sync::Mutex::new(None),
         });
         let provider_ref = provider.clone();
         let fixture = make_fixture(provider).await;
@@ -1138,10 +1142,18 @@ mod tests {
         let captured_prompt = provider_ref.captured_prompt.lock().unwrap();
         let prompt = captured_prompt.as_ref().expect("prompt should be captured");
         assert!(prompt.contains("{language}"));
-        assert!(prompt.contains("Context: test context"));
+        assert!(
+            !prompt.contains("Context:"),
+            "Context should not be embedded in prompt, got: {}",
+            prompt
+        );
 
         let captured_lang = provider_ref.captured_language.lock().unwrap();
         let language = captured_lang.as_ref().expect("language should be captured");
         assert_eq!(language.as_deref(), Some("French"));
+
+        let captured_ctx = provider_ref.captured_context.lock().unwrap();
+        let context = captured_ctx.as_ref().expect("context should be captured");
+        assert_eq!(context.as_deref(), Some("test context"));
     }
 }
