@@ -6,6 +6,7 @@ local LrDialogs = import 'LrDialogs'
 local LrView = import 'LrView'
 local LrBinding = import 'LrBinding'
 local LrColor = import 'LrColor'
+local LrPrefs = import 'LrPrefs'
 
 local bind = LrView.bind
 
@@ -45,12 +46,45 @@ local function buildProviderItems(providers)
 	return items
 end
 
---- Shows the New Job dialog. Returns {provider, model} or nil if cancelled.
---- providers: array of {name, models: [{name, description, available}]}
+--- Returns the model object matching modelName within provider, or nil.
+local function findModel(provider, modelName)
+	if not provider or not modelName then return nil end
+	for _, model in ipairs(provider.models) do
+		if model.name == modelName then return model end
+	end
+	return nil
+end
+
+--- Builds language popup_menu items from a model's supported_languages list.
+local function buildLanguageItems(model)
+	if not model or not model.supported_languages then return {} end
+	local items = {}
+	for _, lang in ipairs(model.supported_languages) do
+		items[#items + 1] = { title = lang, value = lang }
+	end
+	return items
+end
+
+--- Selects a language: saved preference > provider default > first available.
+local function selectLanguage(languageItems, savedLanguage, defaultLanguage)
+	if #languageItems == 0 then return nil end
+	for _, item in ipairs(languageItems) do
+		if item.value == savedLanguage then return savedLanguage end
+	end
+	for _, item in ipairs(languageItems) do
+		if item.value == defaultLanguage then return defaultLanguage end
+	end
+	return languageItems[1].value
+end
+
+--- Shows the New Job dialog. Returns {provider, model, language} or nil if cancelled.
+--- providers: array of {name, default_language, models: [{name, description, available, supported_languages}]}
 --- photoCount: number of photos in the task
 --- defaultProviderName: optional provider name to pre-select
 function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 	local result = nil
+	local prefs = LrPrefs.prefsForPlugin()
+	local savedLanguage = prefs.lastLanguage
 
 	local defaultIndex = 1
 	if defaultProviderName then
@@ -69,12 +103,17 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 		local firstProvider = providers[defaultIndex]
 		local modelItems = buildModelItems(firstProvider)
 		local firstModel = firstAvailableModel(firstProvider)
+		local firstModelObj = findModel(firstProvider, firstModel)
+		local languageItems = buildLanguageItems(firstModelObj)
 
 		props.providerItems = buildProviderItems(providers)
 		props.selectedProvider = defaultIndex
 		props.modelItems = modelItems
 		props.selectedModel = firstModel
 		props.noModelsVisible = (#modelItems == 0)
+		props.languageItems = languageItems
+		props.selectedLanguage = selectLanguage(languageItems, savedLanguage, firstProvider.default_language)
+		props.languageVisible = (#languageItems > 0)
 		props.confirmEnabled = (firstModel ~= nil)
 		props.photoSummary = string.format(
 			'%d %s',
@@ -84,18 +123,27 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 
 		props:addObserver('selectedProvider', function(propTable, key, value)
 			local provider = providers[value]
-			if not provider then
-				return
-			end
+			if not provider then return end
 			local items = buildModelItems(provider)
 			local model = firstAvailableModel(provider)
+			local modelObj = findModel(provider, model)
+			local langItems = buildLanguageItems(modelObj)
 			propTable.modelItems = items
 			propTable.selectedModel = model
 			propTable.noModelsVisible = (#items == 0)
+			propTable.languageItems = langItems
+			propTable.selectedLanguage = selectLanguage(langItems, propTable.selectedLanguage, provider.default_language)
+			propTable.languageVisible = (#langItems > 0)
 			propTable.confirmEnabled = (model ~= nil)
 		end)
 
 		props:addObserver('selectedModel', function(propTable, key, value)
+			local provider = providers[propTable.selectedProvider]
+			local modelObj = findModel(provider, value)
+			local langItems = buildLanguageItems(modelObj)
+			propTable.languageItems = langItems
+			propTable.selectedLanguage = selectLanguage(langItems, propTable.selectedLanguage, provider and provider.default_language)
+			propTable.languageVisible = (#langItems > 0)
 			propTable.confirmEnabled = (value ~= nil)
 		end)
 
@@ -139,6 +187,23 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 					},
 				},
 
+				f:row {
+					spacing = f:label_spacing(),
+
+					f:static_text {
+						title = LOC "$$$/Photometoria/NewJob/Language=Language",
+						width = 70,
+						visible = bind 'languageVisible',
+					},
+
+					f:popup_menu {
+						value = bind 'selectedLanguage',
+						items = bind 'languageItems',
+						width = 220,
+						visible = bind 'languageVisible',
+					},
+				},
+
 				f:static_text {
 					title = LOC "$$$/Photometoria/NewJob/NoModels=No available models for this provider",
 					visible = bind 'noModelsVisible',
@@ -168,9 +233,14 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 
 		if dialogResult == 'ok' then
 			local provider = providers[props.selectedProvider]
+			local language = props.languageVisible and props.selectedLanguage or nil
+			if language then
+				prefs.lastLanguage = language
+			end
 			result = {
 				provider = provider.name,
 				model = props.selectedModel,
+				language = language,
 			}
 		end
 	end)
