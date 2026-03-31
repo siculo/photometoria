@@ -218,9 +218,14 @@ end
 --- Returns `(true, data)` on success or `(false, data)` on failure.
 --- On success, data contains job_id, task_id, status, model, photo_count, created_at.
 --- On failure, data contains `message` with the error description.
-function ServerConnection.createJob(host, taskId, model)
+--- language: optional language string; omitted from the request when nil.
+function ServerConnection.createJob(host, taskId, model, language)
 	local url = 'http://' .. host .. '/api/tasks/' .. taskId .. '/jobs'
-	local body = JSON.encode({ model = model })
+	local payload = { model = model }
+	if language then
+		payload.language = language
+	end
+	local body = JSON.encode(payload)
 
 	local headers = {
 		{ field = 'Content-Type', value = 'application/json' },

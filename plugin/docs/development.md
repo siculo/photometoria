@@ -86,7 +86,7 @@ plugin/
 │   ├── PluginInfoProvider.lua    # Plugin Manager UI (connection settings)
 │   ├── AddPhotosDialog.lua       # Add photos dialog (Library > Plugin Extras)
 │   ├── ApplyTagsDialog.lua       # Apply tags dialog (Library > Plugin Extras)
-│   ├── NewJobDialog.lua          # New job creation dialog
+│   ├── NewJobDialog.lua          # New job creation dialog (provider, model, language selection)
 │   ├── TaskDialog.lua            # Task management dialog (Library > Plugin Extras)
 │   ├── TaskDialogUI.lua          # Task dialog UI builder
 │   └── TranslatedStrings_it.txt  # Italian localization
