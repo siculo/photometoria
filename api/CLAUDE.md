@@ -10,7 +10,7 @@
 5. POST /api/catalogs/{catalog_id}/tasks   → Create task (working session)
    GET  /api/catalogs/{catalog_id}/tasks   → List tasks by catalog
 6. POST /api/tasks/{id}/photos             → Upload photos (multipart)
-7. POST /api/tasks/{id}/jobs               → Start job (choose AI model)
+7. POST /api/tasks/{id}/jobs               → Start job (choose AI model, optional language)
 8. GET  /api/tasks/{id}/jobs               → List jobs for a task
 9. [TODO #11] SSE streaming                → Monitor progress
 10. POST /api/jobs/{id}/cancel             → Cancel job (optional)
@@ -112,6 +112,8 @@ AppState         →  holds Arc<ProviderRegistry>
 - `ProviderRegistry::from_config()` instantiates all providers at startup
 - Auto-selects default if only one provider is configured
 - `is_model_configured()` validates model IDs against static config (no network call)
+- Language support: jobs accept an optional `language` field; falls back to `default_language` in `[ai]` config, then to English
+- Provider details expose `default_language` and per-model `supported_languages` from config
 
 ---
 

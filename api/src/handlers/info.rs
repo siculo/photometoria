@@ -116,14 +116,14 @@ mod tests {
         let photo = Photo::new(task1_id, None, "photo1.jpg".to_string(), 5000);
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let job = Job::new(task1_id, "test".to_string(), vec![]);
+        let job = Job::new(task1_id, "test".to_string(), None, vec![]);
         ts.state.job_store.create(job).await.unwrap();
 
-        let mut processing_job = Job::new(task1_id, "test".to_string(), vec![]);
+        let mut processing_job = Job::new(task1_id, "test".to_string(), None, vec![]);
         processing_job.start();
         ts.state.job_store.create(processing_job).await.unwrap();
 
-        let mut finished_job = Job::new(task1_id, "test".to_string(), vec![]);
+        let mut finished_job = Job::new(task1_id, "test".to_string(), None, vec![]);
         finished_job.start();
         finished_job.complete();
         ts.state.job_store.create(finished_job).await.unwrap();

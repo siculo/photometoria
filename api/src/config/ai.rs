@@ -11,6 +11,10 @@ pub struct AIConfig {
     #[serde(default)]
     pub default_provider: Option<String>,
 
+    /// The default language for AI-generated tags when not specified per-job.
+    #[serde(default)]
+    pub default_language: Option<String>,
+
     /// Named provider configurations.
     #[serde(default)]
     pub providers: HashMap<String, ProviderConfig>,
@@ -23,6 +27,10 @@ impl AIConfig {
         out.push_str(&format!(
             "    default_provider: {}\n",
             self.default_provider.as_deref().unwrap_or("<none>")
+        ));
+        out.push_str(&format!(
+            "    default_language: {}\n",
+            self.default_language.as_deref().unwrap_or("<none>")
         ));
         for (name, provider) in &self.providers {
             match provider {
@@ -42,6 +50,7 @@ impl Default for AIConfig {
         );
         Self {
             default_provider: Some(default_provider_name.to_string()),
+            default_language: None,
             providers,
         }
     }
@@ -133,6 +142,10 @@ pub struct OllamaModelConfig {
     /// Whether this model supports vision/image analysis.
     #[serde(default = "OllamaModelConfig::default_supports_vision")]
     pub supports_vision: bool,
+
+    /// Languages this model has been tested or verified to support.
+    #[serde(default)]
+    pub supported_languages: Vec<String>,
 }
 
 impl OllamaModelConfig {
@@ -159,6 +172,12 @@ impl OllamaModelConfig {
             out.push_str(&format!(
                 "        prompt_template: {}\n",
                 truncate_for_log(template, 50)
+            ));
+        }
+        if !self.supported_languages.is_empty() {
+            out.push_str(&format!(
+                "        supported_languages: {}\n",
+                self.supported_languages.join(", ")
             ));
         }
     }
@@ -195,5 +214,59 @@ mod tests {
     #[test]
     fn test_truncate_for_log_empty() {
         assert_eq!(truncate_for_log("", 10), "");
+    }
+
+    #[test]
+    fn test_ai_config_default_language() {
+        let toml = r#"
+            default_provider = "ollama"
+            default_language = "Italian"
+        "#;
+        let config: AIConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.default_language.as_deref(), Some("Italian"));
+    }
+
+    #[test]
+    fn test_ai_config_without_default_language() {
+        let toml = r#"
+            default_provider = "ollama"
+        "#;
+        let config: AIConfig = toml::from_str(toml).unwrap();
+        assert!(config.default_language.is_none());
+    }
+
+    #[test]
+    fn test_model_config_supported_languages() {
+        let toml = r#"
+            ollama_model = "qwen3-vl:8b"
+            supports_vision = true
+            supported_languages = ["English", "Italian", "French"]
+        "#;
+        let config: OllamaModelConfig = toml::from_str(toml).unwrap();
+        assert_eq!(
+            config.supported_languages,
+            vec!["English", "Italian", "French"]
+        );
+    }
+
+    #[test]
+    fn test_model_config_without_supported_languages() {
+        let toml = r#"
+            ollama_model = "llava:latest"
+            supports_vision = true
+        "#;
+        let config: OllamaModelConfig = toml::from_str(toml).unwrap();
+        assert!(config.supported_languages.is_empty());
+    }
+
+    #[test]
+    fn test_model_config_empty_supported_languages() {
+        let toml = r#"
+            ollama_model = "llava:latest"
+            supports_vision = true
+            supported_languages = []
+        "#;
+        let config: OllamaModelConfig = toml::from_str(toml).unwrap();
+        assert!(config.supported_languages.is_empty());
     }
 }

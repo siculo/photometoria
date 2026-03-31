@@ -192,6 +192,7 @@ mod tests {
                 prompt_template: None,
                 description: None,
                 supports_vision: true,
+                supported_languages: vec![],
             },
         );
 
@@ -207,6 +208,7 @@ mod tests {
 
         AIConfig {
             default_provider: Some("ollama".to_string()),
+            default_language: None,
             providers,
         }
     }
@@ -246,6 +248,7 @@ mod tests {
     fn test_invalid_default_provider() {
         let config = AIConfig {
             default_provider: Some("nonexistent".to_string()),
+            default_language: None,
             providers: HashMap::new(),
         };
 
@@ -263,6 +266,7 @@ mod tests {
 
         let config = AIConfig {
             default_provider: None, // Not explicitly set
+            default_language: None,
             providers,
         };
 

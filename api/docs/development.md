@@ -360,7 +360,21 @@ curl -X DELETE http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440
 curl http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/jobs
 ```
 
-**7. Create multiple tasks (to test multi-task support):**
+**7. Create a job (with optional language):**
+
+```bash
+# Default language (falls back to config default_language, then English)
+curl -X POST http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen3-vl","photo_ids":null}'
+
+# Specify language for generated tags
+curl -X POST http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen3-vl","photo_ids":null,"language":"Italian"}'
+```
+
+**8. Create multiple tasks (to test multi-task support):**
 
 ```bash
 # Create first task

@@ -629,7 +629,7 @@ mod tests {
         .await
         .unwrap();
 
-        let job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
+        let job = crate::models::Job::new(task.task_id, "llava".to_string(), None, vec![]);
         ts.state.job_store.create(job).await.unwrap();
 
         let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
@@ -653,7 +653,7 @@ mod tests {
         .await
         .unwrap();
 
-        let mut job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
+        let mut job = crate::models::Job::new(task.task_id, "llava".to_string(), None, vec![]);
         job.start();
         ts.state.job_store.create(job).await.unwrap();
 
@@ -678,7 +678,7 @@ mod tests {
         .await
         .unwrap();
 
-        let mut job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
+        let mut job = crate::models::Job::new(task.task_id, "llava".to_string(), None, vec![]);
         job.start();
         job.complete();
         ts.state.job_store.create(job).await.unwrap();
@@ -703,7 +703,7 @@ mod tests {
         .await
         .unwrap();
 
-        let mut job = crate::models::Job::new(task.task_id, "llava".to_string(), vec![]);
+        let mut job = crate::models::Job::new(task.task_id, "llava".to_string(), None, vec![]);
         job.cancel();
         ts.state.job_store.create(job).await.unwrap();
 
@@ -876,9 +876,9 @@ mod tests {
         .await
         .unwrap();
 
-        let job1 = Job::new(task1.task_id, "llava".to_string(), vec![]);
-        let job2 = Job::new(task1.task_id, "llava".to_string(), vec![]);
-        let job3 = Job::new(task2.task_id, "llava".to_string(), vec![]);
+        let job1 = Job::new(task1.task_id, "llava".to_string(), None, vec![]);
+        let job2 = Job::new(task1.task_id, "llava".to_string(), None, vec![]);
+        let job3 = Job::new(task2.task_id, "llava".to_string(), None, vec![]);
         ts.state.job_store.create(job1).await.unwrap();
         ts.state.job_store.create(job2).await.unwrap();
         ts.state.job_store.create(job3).await.unwrap();
@@ -915,10 +915,10 @@ mod tests {
         .await
         .unwrap();
 
-        let mut job1 = Job::new(task.task_id, "llava".to_string(), vec![]);
+        let mut job1 = Job::new(task.task_id, "llava".to_string(), None, vec![]);
         job1.start();
         job1.complete();
-        let mut job2 = Job::new(task.task_id, "llava".to_string(), vec![]);
+        let mut job2 = Job::new(task.task_id, "llava".to_string(), None, vec![]);
         job2.cancel();
         ts.state.job_store.create(job1).await.unwrap();
         ts.state.job_store.create(job2).await.unwrap();
@@ -962,8 +962,8 @@ mod tests {
         .await
         .unwrap();
 
-        let job1 = Job::new(task.task_id, "llava".to_string(), vec![]);
-        let job2 = Job::new(task.task_id, "llava".to_string(), vec![]);
+        let job1 = Job::new(task.task_id, "llava".to_string(), None, vec![]);
+        let job2 = Job::new(task.task_id, "llava".to_string(), None, vec![]);
         ts.state.job_store.create(job1).await.unwrap();
         ts.state.job_store.create(job2).await.unwrap();
 

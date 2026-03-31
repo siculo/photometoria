@@ -175,7 +175,7 @@
 								"ollama"
 							]
 						},
-						"description": "Returns details for a specific provider, including its configured models and their current availability.\n\nReplace `ollama` in the URL with the desired provider name from `GET /api/providers`."
+						"description": "Returns details for a specific provider, including its configured models and their current availability.\n\nReplace `ollama` in the URL with the desired provider name from `GET /api/providers`.\n\n- `default_language`: configured default language for tag generation (omitted if not set)\n- `supported_languages`: per-model list of supported languages (omitted if empty)"
 					},
 					"response": [
 						{
@@ -204,7 +204,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"name\": \"ollama\",\n    \"models\": [\n        {\n            \"name\": \"qwen3-vl\",\n            \"description\": \"Best quality, slower processing\",\n            \"available\": true\n        },\n        {\n            \"name\": \"llava\",\n            \"description\": \"Faster, good for testing\",\n            \"available\": true\n        }\n    ]\n}"
+							"body": "{\n    \"name\": \"ollama\",\n    \"default_language\": \"English\",\n    \"models\": [\n        {\n            \"name\": \"qwen3-vl\",\n            \"description\": \"Best quality, slower processing\",\n            \"available\": true,\n            \"supported_languages\": [\"English\", \"Italian\", \"French\"]\n        },\n        {\n            \"name\": \"llava\",\n            \"description\": \"Faster, good for testing\",\n            \"available\": true\n        }\n    ]\n}"
 						},
 						{
 							"name": "Not Found",
@@ -893,7 +893,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null\n}"
+							"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
@@ -907,7 +907,7 @@
 								"jobs"
 							]
 						},
-						"description": "Creates a new job to process photos with the specified AI model.\n\n- `model`: AI model to use (e.g. `qwen3-vl`, `llava`)\n- `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task\n\nThe job is created in `queued` status. The `job_id` is saved automatically for subsequent requests."
+						"description": "Creates a new job to process photos with the specified AI model.\n\n- `model`: AI model to use (e.g. `qwen3-vl`, `llava`)\n- `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task\n- `language`: language for generated tags (optional). Falls back to server-side `default_language` config, then to English\n\nThe job is created in `queued` status. The `job_id` is saved automatically for subsequent requests."
 					},
 					"response": [
 						{
@@ -922,7 +922,7 @@
 								],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null\n}"
+									"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
@@ -946,7 +946,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"Italian\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
 						},
 						{
 							"name": "Task Not Found",
@@ -960,7 +960,7 @@
 								],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null\n}"
+									"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
 								},
 								"url": {
 									"raw": "{{base_url}}/api/tasks/nonexistent/jobs",
@@ -1073,7 +1073,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen3-vl\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    }\n]"
+							"body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen3-vl\",\n        \"language\": \"English\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    }\n]"
 						},
 						{
 							"name": "Task Not Found",
@@ -1149,7 +1149,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen3-vl\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    },\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440011\",\n        \"status\": \"queued\",\n        \"model\": \"llava\",\n        \"photo_count\": 5,\n        \"queued_photo_count\": 5,\n        \"processed_photo_count\": 0,\n        \"created_at\": \"2024-01-15T11:00:00Z\"\n    }\n]"
+							"body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen3-vl\",\n        \"language\": \"English\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    },\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440011\",\n        \"status\": \"queued\",\n        \"model\": \"llava\",\n        \"language\": \"Italian\",\n        \"photo_count\": 5,\n        \"queued_photo_count\": 5,\n        \"processed_photo_count\": 0,\n        \"created_at\": \"2024-01-15T11:00:00Z\"\n    }\n]"
 						}
 					]
 				},
@@ -1198,7 +1198,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
 						},
 						{
 							"name": "Success (processing with progress)",
@@ -1226,7 +1226,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"processing\",\n    \"model\": \"qwen3-vl\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"progress\": {\n        \"completed\": 5,\n        \"failed\": 1,\n        \"remaining\": 9,\n        \"current_photo_id\": \"550e8400-e29b-41d4-a716-446655440003\"\n    }\n}"
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"processing\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"progress\": {\n        \"completed\": 5,\n        \"failed\": 1,\n        \"remaining\": 9,\n        \"current_photo_id\": \"550e8400-e29b-41d4-a716-446655440003\"\n    }\n}"
 						},
 						{
 							"name": "Success (completed)",
@@ -1254,7 +1254,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"completed\",\n    \"model\": \"qwen3-vl\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:45:00Z\"\n}"
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"completed\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:45:00Z\"\n}"
 						},
 						{
 							"name": "Success (cancelled)",
@@ -1282,7 +1282,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:40:00Z\"\n}"
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:40:00Z\"\n}"
 						},
 						{
 							"name": "Not Found",
@@ -1441,7 +1441,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"Italian\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
 						},
 						{
 							"name": "Already Finished",
@@ -1565,7 +1565,7 @@
 									"value": "application/json"
 								}
 							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440020\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"photo_count\": 3,\n    \"created_at\": \"2024-01-15T11:00:00Z\",\n    \"parent_job_id\": \"550e8400-e29b-41d4-a716-446655440010\"\n}"
+							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440020\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"Italian\",\n    \"photo_count\": 3,\n    \"created_at\": \"2024-01-15T11:00:00Z\",\n    \"parent_job_id\": \"550e8400-e29b-41d4-a716-446655440010\"\n}"
 						},
 						{
 							"name": "Job Still Processing",

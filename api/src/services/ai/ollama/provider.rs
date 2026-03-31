@@ -7,10 +7,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::config::OllamaModelConfig;
 use async_trait::async_trait;
 use reqwest::Client;
-
-use crate::config::OllamaModelConfig;
+use tracing::debug;
 
 use super::super::error::{AIProviderError, AIProviderResult};
 use super::super::provider::{
@@ -109,6 +109,7 @@ impl AIProvider for OllamaProvider {
                 id: id.clone(),
                 backend_model_name: config.ollama_model.clone(),
                 description: config.description.clone(),
+                supported_languages: config.supported_languages.clone(),
             })
             .collect()
     }
@@ -234,8 +235,19 @@ impl AIProvider for OllamaProvider {
             .map(|s| s.to_string())
             .unwrap_or_else(|| request.model.clone());
 
-        // Get the prompt (from config template or use provided)
-        let prompt = self.get_prompt_for_model(&request.model, &request.prompt);
+        // Get the prompt (from config template or use provided), then resolve
+        // the {language} placeholder so both config and default prompts get
+        // the correct language substitution.
+        let language = request.language.as_deref().unwrap_or("English");
+        let mut prompt = self
+            .get_prompt_for_model(&request.model, &request.prompt)
+            .replace("{{language}}", language);
+
+        if let Some(ref context) = request.context {
+            prompt = format!("Context: {}\n\n{}", context, prompt);
+        }
+
+        debug!(prompt);
 
         let ollama_request = OllamaGenerateRequest {
             model: ollama_model.clone(),
@@ -361,6 +373,7 @@ mod tests {
                 prompt_template: None,
                 description: None,
                 supports_vision: true,
+                supported_languages: vec![],
             },
         );
 
@@ -380,9 +393,10 @@ mod tests {
             "qwen3-vl".to_string(),
             OllamaModelConfig {
                 ollama_model: "qwen3-vl:8b".to_string(),
-                prompt_template: Some("Custom prompt".to_string()),
+                prompt_template: Some("Custom prompt in {language}".to_string()),
                 description: None,
                 supports_vision: true,
+                supported_languages: vec![],
             },
         );
 
@@ -390,7 +404,7 @@ mod tests {
 
         assert_eq!(
             provider.get_prompt_for_model("qwen3-vl", "default"),
-            "Custom prompt"
+            "Custom prompt in {language}"
         );
         assert_eq!(
             provider.get_prompt_for_model("unknown", "default"),

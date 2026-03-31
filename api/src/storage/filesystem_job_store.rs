@@ -463,7 +463,7 @@ mod tests {
 
     // Helper function to create a test job
     fn create_test_job(task_id: Uuid, model: &str, photo_ids: Vec<Uuid>) -> Job {
-        Job::new(task_id, model.to_string(), photo_ids)
+        Job::new(task_id, model.to_string(), None, photo_ids)
     }
 
     // Helper function to create a test job with specific timestamp
@@ -473,7 +473,7 @@ mod tests {
         photo_ids: Vec<Uuid>,
         timestamp: DateTime<Utc>,
     ) -> Job {
-        let job = Job::new(task_id, model.to_string(), photo_ids);
+        let job = Job::new(task_id, model.to_string(), None, photo_ids);
         // Use a hack to set the timestamp via serialization
         let mut job_value = serde_json::to_value(&job).unwrap();
         job_value["created_at"] = serde_json::to_value(timestamp).unwrap();

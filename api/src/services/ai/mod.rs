@@ -45,6 +45,8 @@
 //!     model: "qwen3-vl:8b".to_string(),
 //!     image_base64: base64_data,
 //!     prompt: "Describe this image".to_string(),
+//!     language: Some("English".to_string()),
+//!     context: None,
 //! };
 //! let response = provider.analyze_image(request).await?;
 //! ```

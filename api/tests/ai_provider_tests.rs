@@ -22,6 +22,7 @@ fn create_test_provider(mock_server_uri: &str) -> OllamaProvider {
             prompt_template: Some("Describe this image".to_string()),
             description: Some("Test vision model".to_string()),
             supports_vision: true,
+            supported_languages: vec![],
         },
     );
 
@@ -185,6 +186,8 @@ async fn test_analyze_image_success() {
         model: "test-vision".to_string(), // Uses configured model mapping
         image_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==".to_string(),
         prompt: "Describe this image".to_string(),
+        language: None,
+        context: None,
     };
 
     let response = provider.analyze_image(request).await.unwrap();
@@ -217,6 +220,8 @@ async fn test_analyze_image_model_not_found() {
         model: "nonexistent".to_string(),
         image_base64: "base64data".to_string(),
         prompt: "Describe".to_string(),
+        language: None,
+        context: None,
     };
 
     let result = provider.analyze_image(request).await;
@@ -254,6 +259,8 @@ async fn test_analyze_image_uses_configured_model() {
         model: "test-vision".to_string(),
         image_base64: "base64data".to_string(),
         prompt: "Test prompt".to_string(),
+        language: None,
+        context: None,
     };
 
     let response = provider.analyze_image(request).await.unwrap();
@@ -281,6 +288,8 @@ async fn test_analyze_image_without_token_stats() {
         model: "llava:latest".to_string(),
         image_base64: "base64data".to_string(),
         prompt: "Describe".to_string(),
+        language: None,
+        context: None,
     };
 
     let response = provider.analyze_image(request).await.unwrap();
@@ -312,6 +321,7 @@ async fn test_provider_registry_from_config() {
 
     let config = AIConfig {
         default_provider: Some("ollama".to_string()),
+        default_language: None,
         providers,
     };
 
@@ -341,6 +351,7 @@ async fn test_provider_registry_invalid_default() {
 
     let config = AIConfig {
         default_provider: Some("nonexistent".to_string()),
+        default_language: None,
         providers: HashMap::new(),
     };
 

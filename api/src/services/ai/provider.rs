@@ -39,6 +39,13 @@ pub struct AnalyzeImageRequest {
 
     /// The prompt to send with the image.
     pub prompt: String,
+
+    /// The language for tag generation (e.g., "English", "Italian").
+    /// Used to resolve `{language}` placeholders in the prompt template.
+    pub language: Option<String>,
+
+    /// Optional context to prepend to the prompt (e.g., task description).
+    pub context: Option<String>,
 }
 
 /// Response from an image analysis request.
@@ -99,6 +106,9 @@ pub struct ConfiguredModelInfo {
 
     /// Optional human-readable description from the configuration.
     pub description: Option<String>,
+
+    /// Languages this model has been tested to support.
+    pub supported_languages: Vec<String>,
 }
 
 /// Trait for AI providers that can analyze images and generate metadata.

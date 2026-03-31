@@ -45,6 +45,9 @@ max_photo_size = "20MB"
 [ai]
 # The default provider to use when none is specified in API requests.
 default_provider = "ollama"
+# The default language for AI-generated tags when not specified per-job.
+# If omitted, tags are generated in English.
+default_language = "English"
 
 # Ollama Provider Configuration
 # ----------------------------
@@ -79,6 +82,7 @@ Each object must have ONLY one key "tag" with a keyword string value.
 Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
 description = "Qwen 3.5 model: recommended for production"
 supports_vision = true
+supported_languages = ["English", "Italian", "French", "German", "Spanish"]
 
 [ai.providers.ollama.models.qwen3-vl]
 ollama_model = "qwen3-vl:8b"
