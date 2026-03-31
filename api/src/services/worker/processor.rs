@@ -21,14 +21,6 @@ const BASE_PROMPT_TEMPLATE: &str = "Analyze this image and return descriptive ta
     Each object must have ONLY one key \"tag\" with a keyword string value.\n\
     Example: {\"tags\": [{\"tag\": \"sunset\"}, {\"tag\": \"mountain\"}, {\"tag\": \"landscape\"}]}";
 
-const DEFAULT_LANGUAGE: &str = "English";
-
-/// Builds the base prompt with the language placeholder resolved.
-fn build_base_prompt(language: Option<&str>) -> String {
-    let lang = language.unwrap_or(DEFAULT_LANGUAGE);
-    BASE_PROMPT_TEMPLATE.replace("{language}", lang)
-}
-
 // ============================================================================
 // Tag response model
 // ============================================================================
@@ -218,17 +210,17 @@ impl PhotoProcessor {
             }
         };
 
-        let base_prompt = build_base_prompt(photo.language.as_deref());
         let prompt = if context.is_empty() {
-            base_prompt
+            BASE_PROMPT_TEMPLATE.to_string()
         } else {
-            format!("Context: {}\n\n{}", context, base_prompt)
+            format!("Context: {}\n\n{}", context, BASE_PROMPT_TEMPLATE)
         };
 
         let request = AnalyzeImageRequest {
             model: photo.model.clone(),
             image_base64: STANDARD.encode(&bytes),
             prompt,
+            language: photo.language.clone(),
         };
 
         match self.ai_provider.analyze_image(request).await {
@@ -426,6 +418,7 @@ mod tests {
     struct PromptCapturingProvider {
         response_text: String,
         captured_prompt: std::sync::Mutex<Option<String>>,
+        captured_language: std::sync::Mutex<Option<Option<String>>>,
     }
 
     #[async_trait]
@@ -450,6 +443,7 @@ mod tests {
             request: AnalyzeImageRequest,
         ) -> AIProviderResult<AnalyzeImageResponse> {
             *self.captured_prompt.lock().unwrap() = Some(request.prompt);
+            *self.captured_language.lock().unwrap() = Some(request.language);
             Ok(AnalyzeImageResponse {
                 text: self.response_text.clone(),
                 model: request.model,
@@ -563,37 +557,14 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // build_base_prompt unit tests
+    // BASE_PROMPT_TEMPLATE unit tests
     // -----------------------------------------------------------------------
 
     #[test]
-    fn test_build_base_prompt_default_language() {
-        let prompt = build_base_prompt(None);
-        assert!(prompt.contains("in English"));
-        assert!(!prompt.contains("{language}"));
-    }
-
-    #[test]
-    fn test_build_base_prompt_explicit_language() {
-        let prompt = build_base_prompt(Some("Italian"));
-        assert!(prompt.contains("in Italian"));
-        assert!(!prompt.contains("{language}"));
-        assert!(!prompt.contains("English"));
-    }
-
-    #[test]
-    fn test_build_base_prompt_empty_string_language() {
-        let prompt = build_base_prompt(Some(""));
-        assert!(prompt.contains("in ."));
-        assert!(!prompt.contains("{language}"));
-    }
-
-    #[test]
-    fn test_build_base_prompt_preserves_json_structure() {
-        let prompt = build_base_prompt(Some("French"));
-        assert!(prompt.contains("Respond ONLY with valid JSON"));
-        assert!(prompt.contains(r#""tags""#));
-        assert!(prompt.contains("in French"));
+    fn test_base_prompt_template_contains_language_placeholder() {
+        assert!(BASE_PROMPT_TEMPLATE.contains("{language}"));
+        assert!(BASE_PROMPT_TEMPLATE.contains("Respond ONLY with valid JSON"));
+        assert!(BASE_PROMPT_TEMPLATE.contains(r#""tags""#));
     }
 
     // -----------------------------------------------------------------------
@@ -1073,10 +1044,11 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[tokio::test]
-    async fn test_process_with_language_includes_language_in_prompt() {
+    async fn test_process_with_language_passes_language_to_provider() {
         let provider = Arc::new(PromptCapturingProvider {
             response_text: json_tags(&["tramonto", "montagna"]),
             captured_prompt: std::sync::Mutex::new(None),
+            captured_language: std::sync::Mutex::new(None),
         });
         let provider_ref = provider.clone();
         let fixture = make_fixture(provider).await;
@@ -1093,20 +1065,25 @@ mod tests {
             })
             .await;
 
-        let captured = provider_ref.captured_prompt.lock().unwrap();
-        let prompt = captured.as_ref().expect("prompt should be captured");
+        let captured_prompt = provider_ref.captured_prompt.lock().unwrap();
+        let prompt = captured_prompt.as_ref().expect("prompt should be captured");
         assert!(
-            prompt.contains("in Italian"),
-            "Prompt should contain 'in Italian', got: {}",
+            prompt.contains("{language}"),
+            "Prompt should contain '{{language}}' placeholder for provider resolution, got: {}",
             prompt
         );
+
+        let captured_lang = provider_ref.captured_language.lock().unwrap();
+        let language = captured_lang.as_ref().expect("language should be captured");
+        assert_eq!(language.as_deref(), Some("Italian"));
     }
 
     #[tokio::test]
-    async fn test_process_without_language_defaults_to_english() {
+    async fn test_process_without_language_passes_none_to_provider() {
         let provider = Arc::new(PromptCapturingProvider {
             response_text: json_tags(&["sunset", "mountain"]),
             captured_prompt: std::sync::Mutex::new(None),
+            captured_language: std::sync::Mutex::new(None),
         });
         let provider_ref = provider.clone();
         let fixture = make_fixture(provider).await;
@@ -1123,13 +1100,17 @@ mod tests {
             })
             .await;
 
-        let captured = provider_ref.captured_prompt.lock().unwrap();
-        let prompt = captured.as_ref().expect("prompt should be captured");
+        let captured_prompt = provider_ref.captured_prompt.lock().unwrap();
+        let prompt = captured_prompt.as_ref().expect("prompt should be captured");
         assert!(
-            prompt.contains("in English"),
-            "Prompt should default to 'in English', got: {}",
+            prompt.contains("{language}"),
+            "Prompt should contain '{{language}}' placeholder, got: {}",
             prompt
         );
+
+        let captured_lang = provider_ref.captured_language.lock().unwrap();
+        let language = captured_lang.as_ref().expect("language should be captured");
+        assert_eq!(*language, None);
     }
 
     #[tokio::test]
@@ -1137,6 +1118,7 @@ mod tests {
         let provider = Arc::new(PromptCapturingProvider {
             response_text: json_tags(&["Parigi", "torre"]),
             captured_prompt: std::sync::Mutex::new(None),
+            captured_language: std::sync::Mutex::new(None),
         });
         let provider_ref = provider.clone();
         let fixture = make_fixture(provider).await;
@@ -1153,9 +1135,13 @@ mod tests {
             })
             .await;
 
-        let captured = provider_ref.captured_prompt.lock().unwrap();
-        let prompt = captured.as_ref().expect("prompt should be captured");
-        assert!(prompt.contains("in French"));
+        let captured_prompt = provider_ref.captured_prompt.lock().unwrap();
+        let prompt = captured_prompt.as_ref().expect("prompt should be captured");
+        assert!(prompt.contains("{language}"));
         assert!(prompt.contains("Context: test context"));
+
+        let captured_lang = provider_ref.captured_language.lock().unwrap();
+        let language = captured_lang.as_ref().expect("language should be captured");
+        assert_eq!(language.as_deref(), Some("French"));
     }
 }

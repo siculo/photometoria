@@ -186,6 +186,7 @@ async fn test_analyze_image_success() {
         model: "test-vision".to_string(), // Uses configured model mapping
         image_base64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==".to_string(),
         prompt: "Describe this image".to_string(),
+        language: None,
     };
 
     let response = provider.analyze_image(request).await.unwrap();
@@ -218,6 +219,7 @@ async fn test_analyze_image_model_not_found() {
         model: "nonexistent".to_string(),
         image_base64: "base64data".to_string(),
         prompt: "Describe".to_string(),
+        language: None,
     };
 
     let result = provider.analyze_image(request).await;
@@ -255,6 +257,7 @@ async fn test_analyze_image_uses_configured_model() {
         model: "test-vision".to_string(),
         image_base64: "base64data".to_string(),
         prompt: "Test prompt".to_string(),
+        language: None,
     };
 
     let response = provider.analyze_image(request).await.unwrap();
@@ -282,6 +285,7 @@ async fn test_analyze_image_without_token_stats() {
         model: "llava:latest".to_string(),
         image_base64: "base64data".to_string(),
         prompt: "Describe".to_string(),
+        language: None,
     };
 
     let response = provider.analyze_image(request).await.unwrap();

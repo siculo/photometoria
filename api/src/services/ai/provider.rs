@@ -39,6 +39,10 @@ pub struct AnalyzeImageRequest {
 
     /// The prompt to send with the image.
     pub prompt: String,
+
+    /// The language for tag generation (e.g., "English", "Italian").
+    /// Used to resolve `{language}` placeholders in the prompt template.
+    pub language: Option<String>,
 }
 
 /// Response from an image analysis request.
