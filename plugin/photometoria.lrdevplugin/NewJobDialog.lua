@@ -16,7 +16,10 @@ local LANGUAGE_LABELS = {
 	English = LOC "$$$/Photometoria/Language/English=English",
 	Italian = LOC "$$$/Photometoria/Language/Italian=Italian",
 	French  = LOC "$$$/Photometoria/Language/French=French",
-	German  = LOC "$$$/Photometoria/Language/German=German",
+	German   = LOC "$$$/Photometoria/Language/German=German",
+	Spanish  = LOC "$$$/Photometoria/Language/Spanish=Spanish",
+	Arabic   = LOC "$$$/Photometoria/Language/Arabic=Arabic",
+	Chinese  = LOC "$$$/Photometoria/Language/Chinese=Chinese",
 }
 
 --- Returns the first available model name for a provider, or nil.
