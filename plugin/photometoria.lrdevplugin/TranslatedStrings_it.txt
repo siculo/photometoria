@@ -91,6 +91,11 @@
 "$$$/Photometoria/NewJob/Provider=Provider"
 "$$$/Photometoria/NewJob/Model=Modello"
 "$$$/Photometoria/NewJob/Language=Lingua"
+
+"$$$/Photometoria/Language/English=Inglese"
+"$$$/Photometoria/Language/Italian=Italiano"
+"$$$/Photometoria/Language/French=Francese"
+"$$$/Photometoria/Language/German=Tedesco"
 "$$$/Photometoria/NewJob/CostEstimate=Costo stimato: ~^1 per ^2 foto"
 "$$$/Photometoria/NewJob/PhotosToProcess=foto da processare"
 "$$$/Photometoria/NewJob/Start=Avvia job"

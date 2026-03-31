@@ -12,6 +12,13 @@ local bind = LrView.bind
 
 local NewJobDialog = {}
 
+local LANGUAGE_LABELS = {
+	English = LOC "$$$/Photometoria/Language/English=English",
+	Italian = LOC "$$$/Photometoria/Language/Italian=Italian",
+	French  = LOC "$$$/Photometoria/Language/French=French",
+	German  = LOC "$$$/Photometoria/Language/German=German",
+}
+
 --- Returns the first available model name for a provider, or nil.
 local function firstAvailableModel(provider)
 	for _, model in ipairs(provider.models) do
@@ -60,7 +67,7 @@ local function buildLanguageItems(model)
 	if not model or not model.supported_languages then return {} end
 	local items = {}
 	for _, lang in ipairs(model.supported_languages) do
-		items[#items + 1] = { title = lang, value = lang }
+		items[#items + 1] = { title = LANGUAGE_LABELS[lang] or lang, value = lang }
 	end
 	return items
 end
