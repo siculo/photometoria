@@ -328,31 +328,38 @@ impl JobStore for FileSystemJobStore {
     async fn delete(&self, job_id: Uuid) -> JobStoreResult<()> {
         debug!("Deleting job: {}", job_id);
 
-        // remove() returns Some((key, value)) if the entry existed
-        match self.jobs.remove(&job_id) {
-            Some((_, job)) => {
-                let catalog_id = self.resolve_catalog_id(job.task_id).await?;
-                // Remove job JSON file
-                let job_path = self
-                    .layout
-                    .job_file_path(catalog_id, job.task_id, job.job_id);
-                if job_path.exists() {
-                    if let Err(e) = tokio::fs::remove_file(&job_path).await {
-                        error!("Failed to remove job file {:?}: {}", job_path, e);
-                        // Log but don't fail - the job metadata is already removed from memory
-                    } else {
-                        debug!("Removed job file: {:?}", job_path);
-                    }
-                }
+        let task_id = match self.jobs.get(&job_id) {
+            Some(entry) => entry.value().task_id,
+            None => return Err(JobStoreError::NotFound(job_id)),
+        };
 
-                info!(
-                    "Job deleted successfully: {} (task: {}, status: {})",
-                    job_id, job.task_id, job.status
-                );
-                Ok(())
+        let catalog_id = self.resolve_catalog_id(task_id).await?;
+
+        let (_, job) = match self.jobs.remove(&job_id) {
+            Some(entry) => entry,
+            None => return Err(JobStoreError::NotFound(job_id)),
+        };
+
+        let job_path = self
+            .layout
+            .job_file_path(catalog_id, job.task_id, job.job_id);
+        if job_path.exists() {
+            if let Err(e) = tokio::fs::remove_file(&job_path).await {
+                error!("Failed to remove job file {:?}: {}", job_path, e);
+                self.jobs.insert(job_id, job);
+                return Err(JobStoreError::StorageError(format!(
+                    "Failed to remove job file: {}",
+                    e
+                )));
             }
-            None => Err(JobStoreError::NotFound(job_id)),
+            debug!("Removed job file: {:?}", job_path);
         }
+
+        info!(
+            "Job deleted successfully: {} (task: {}, status: {})",
+            job_id, job.task_id, job.status
+        );
+        Ok(())
     }
 
     async fn delete_by_task(&self, task_id: Uuid) -> JobStoreResult<usize> {
@@ -980,6 +987,88 @@ mod tests {
         let store = FileSystemJobStore::new(storage_path, task_store).await;
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
         assert!(!store.exists(job_id).await.unwrap());
+    }
+
+    // ========================================================================
+    // Resilience Tests
+    // ========================================================================
+
+    /// Simulates a failure writing the `.tmp` file by making the jobs directory
+    /// non-writable, then verifies the in-memory job is unchanged.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_update_memory_unchanged_when_tmp_write_fails() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let ts = create_store().await;
+        let task_id = Uuid::new_v4();
+        let catalog_id = setup_task(&ts, task_id).await;
+        let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
+        ts.store.create(job.clone()).await.unwrap();
+
+        let jobs_dir = ts.store.layout.jobs_dir(catalog_id, task_id);
+        std::fs::set_permissions(&jobs_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let mut updated = job.clone();
+        updated.start();
+        let result = ts.store.update(updated).await;
+
+        std::fs::set_permissions(&jobs_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert!(result.is_err());
+        let in_memory = ts.store.get(job.job_id).await.unwrap().unwrap();
+        assert_eq!(in_memory.status, job.status);
+    }
+
+    /// Simulates a rename failure by replacing the job JSON file with a directory,
+    /// then verifies the in-memory job is unchanged.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_update_memory_unchanged_when_rename_fails() {
+        let ts = create_store().await;
+        let task_id = Uuid::new_v4();
+        let catalog_id = setup_task(&ts, task_id).await;
+        let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
+        ts.store.create(job.clone()).await.unwrap();
+
+        let job_path = ts.store.layout.job_file_path(catalog_id, task_id, job.job_id);
+        tokio::fs::remove_file(&job_path).await.unwrap();
+        tokio::fs::create_dir(&job_path).await.unwrap();
+
+        let mut updated = job.clone();
+        updated.start();
+        let result = ts.store.update(updated).await;
+
+        tokio::fs::remove_dir(&job_path).await.unwrap();
+
+        assert!(result.is_err());
+        let in_memory = ts.store.get(job.job_id).await.unwrap().unwrap();
+        assert_eq!(in_memory.status, job.status);
+    }
+
+    /// Simulates a filesystem failure during delete by making the jobs directory
+    /// non-writable, then verifies the job is rolled back into memory.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_delete_memory_rolled_back_when_filesystem_fails() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let ts = create_store().await;
+        let task_id = Uuid::new_v4();
+        let catalog_id = setup_task(&ts, task_id).await;
+        let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
+        ts.store.create(job.clone()).await.unwrap();
+
+        let jobs_dir = ts.store.layout.jobs_dir(catalog_id, task_id);
+        std::fs::set_permissions(&jobs_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let result = ts.store.delete(job.job_id).await;
+
+        std::fs::set_permissions(&jobs_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert!(result.is_err());
+        let in_memory = ts.store.get(job.job_id).await.unwrap();
+        assert!(in_memory.is_some());
     }
 
     #[tokio::test]
