@@ -240,23 +240,17 @@ impl TaskStore for FileSystemTaskStore {
 
         debug!("Updating task: {}", task_id);
 
-        // Use get_mut to modify in-place
         match self.tasks.get_mut(&task_id) {
             Some(mut entry) => {
-                match self.save_task_to_file(&task).await {
-                    Ok(_) => {
-                        let old_context = entry.context.clone();
-                        *entry = task.clone();
-                        info!(
-                            "Task updated successfully: {} (context: '{}' -> '{}')",
-                            task_id, old_context, task.context
-                        );
-                        return Ok(task);
-                    }
-                    Err(e) => {
-                        return Err(e);
-                    }
-                }
+                self.save_task_to_file(&task).await?;
+
+                let old_context = entry.context.clone();
+                *entry = task.clone();
+                info!(
+                    "Task updated successfully: {} (context: '{}' -> '{}')",
+                    task_id, old_context, task.context
+                );
+                Ok(task)
             }
             None => Err(TaskStoreError::NotFound(task_id)),
         }
