@@ -198,13 +198,19 @@ impl FileSystemPhotoStore {
             return Ok(());
         }
 
+        let tmp_path = path.with_extension("tmp");
         let content = serde_json::to_string_pretty(&photos).map_err(|e| {
             PhotoStoreError::StorageError(format!("Failed to serialize photos: {}", e))
         })?;
 
-        tokio::fs::write(&path, content).await.map_err(|e| {
-            error!("Failed to write photos file {:?}: {}", path, e);
+        tokio::fs::write(&tmp_path, &content).await.map_err(|e| {
+            error!("Failed to write temporary photos file {:?}: {}", tmp_path, e);
             PhotoStoreError::StorageError(format!("Failed to write photos file: {}", e))
+        })?;
+
+        tokio::fs::rename(&tmp_path, &path).await.map_err(|e| {
+            error!("Failed to rename {:?} -> {:?}: {}", tmp_path, path, e);
+            PhotoStoreError::StorageError(format!("Failed to atomically save photos file: {}", e))
         })?;
 
         debug!("Saved {} photos metadata to {:?}", photos.len(), path);
@@ -217,23 +223,17 @@ impl FileSystemPhotoStore {
         photo: &Photo,
         catalog_id: Uuid,
     ) -> Result<(), PhotoStoreError> {
-        // Also delete the file from disk
+        self.save_photos_for_task(catalog_id, photo.task_id).await?;
+
         let file_path = self
             .layout
             .photo_file_path(catalog_id, photo.task_id, photo.photo_id);
         if file_path.exists() {
             if let Err(e) = tokio::fs::remove_file(&file_path).await {
                 error!("Failed to remove photo file {:?}: {}", file_path, e);
-                // Log but don't fail - metadata is already removed
             } else {
                 debug!("Removed photo file: {:?}", file_path);
             }
-        }
-
-        // Save updated photos.json
-        if let Err(e) = self.save_photos_for_task(catalog_id, photo.task_id).await {
-            warn!("Failed to update photos.json after delete: {}", e);
-            // Don't fail - the photo is already deleted from memory
         }
 
         info!(
@@ -339,14 +339,27 @@ impl PhotoStore for FileSystemPhotoStore {
     async fn delete(&self, photo_id: Uuid) -> PhotoStoreResult<()> {
         debug!("Deleting photo: {}", photo_id);
 
-        match self.photos.remove(&photo_id) {
-            Some((_, photo)) => {
-                let catalog_id = self.resolve_catalog_id(photo.task_id).await?;
-                self.delete_file_and_save_updated_photos(photo_id, &photo, catalog_id)
-                    .await
-            }
-            None => Err(PhotoStoreError::NotFound(photo_id)),
+        let task_id = match self.photos.get(&photo_id) {
+            Some(entry) => entry.value().task_id,
+            None => return Err(PhotoStoreError::NotFound(photo_id)),
+        };
+
+        let catalog_id = self.resolve_catalog_id(task_id).await?;
+
+        let (_, photo) = match self.photos.remove(&photo_id) {
+            Some(entry) => entry,
+            None => return Err(PhotoStoreError::NotFound(photo_id)),
+        };
+
+        if let Err(e) = self
+            .delete_file_and_save_updated_photos(photo_id, &photo, catalog_id)
+            .await
+        {
+            self.photos.insert(photo_id, photo);
+            return Err(e);
         }
+
+        Ok(())
     }
 
     async fn delete_by_task(&self, task_id: Uuid) -> PhotoStoreResult<usize> {
@@ -475,7 +488,11 @@ impl PhotoStore for FileSystemPhotoStore {
                 .photo_file_path(catalog_id, photo_clone.task_id, photo_clone.photo_id);
         let data = tokio::fs::read(&file_path).await.map_err(|e| {
             error!("Failed to read photo file {:?}: {}", file_path, e);
-            PhotoStoreError::NotFound(photo_id)
+            if e.kind() == std::io::ErrorKind::NotFound {
+                PhotoStoreError::NotFound(photo_id)
+            } else {
+                PhotoStoreError::StorageError(format!("Failed to read photo file: {}", e))
+            }
         })?;
 
         debug!("Loaded {} bytes for photo: {}", data.len(), photo_id);
