@@ -143,16 +143,25 @@ impl FileSystemTaskStore {
             .map_err(|e| TaskStoreError::StorageError(format!("Failed to parse task JSON: {}", e)))
     }
 
-    /// Saves a task's metadata to the filesystem.
+    /// Saves a task's metadata to the filesystem atomically.
+    ///
+    /// Writes to a temporary file first, then renames to the final path.
+    /// This ensures the target file is never left in a partially-written state.
     async fn save_task_to_file(&self, task: &Task) -> TaskStoreResult<()> {
         let path = self.layout.task_json_path(task.catalog_id, task.task_id);
+        let tmp_path = path.with_extension("tmp");
         let content = serde_json::to_string_pretty(task).map_err(|e| {
             TaskStoreError::StorageError(format!("Failed to serialize task: {}", e))
         })?;
 
-        tokio::fs::write(&path, content).await.map_err(|e| {
-            error!("Failed to write task file {:?}: {}", path, e);
+        tokio::fs::write(&tmp_path, &content).await.map_err(|e| {
+            error!("Failed to write temporary task file {:?}: {}", tmp_path, e);
             TaskStoreError::StorageError(format!("Failed to write task file: {}", e))
+        })?;
+
+        tokio::fs::rename(&tmp_path, &path).await.map_err(|e| {
+            error!("Failed to rename {:?} -> {:?}: {}", tmp_path, path, e);
+            TaskStoreError::StorageError(format!("Failed to atomically save task file: {}", e))
         })?;
 
         debug!("Saved task metadata to {:?}", path);
@@ -234,23 +243,20 @@ impl TaskStore for FileSystemTaskStore {
         // Use get_mut to modify in-place
         match self.tasks.get_mut(&task_id) {
             Some(mut entry) => {
-                let old_context = entry.context.clone();
-                *entry = task.clone();
-
-                // Save updated metadata to filesystem
-                if let Err(e) = self.save_task_to_file(&task).await {
-                    // Rollback in-memory change on filesystem error
-                    let mut rollback_task = task.clone();
-                    rollback_task.context = old_context.clone();
-                    *entry = rollback_task;
-                    return Err(e);
+                match self.save_task_to_file(&task).await {
+                    Ok(_) => {
+                        let old_context = entry.context.clone();
+                        *entry = task.clone();
+                        info!(
+                            "Task updated successfully: {} (context: '{}' -> '{}')",
+                            task_id, old_context, task.context
+                        );
+                        return Ok(task);
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
                 }
-
-                info!(
-                    "Task updated successfully: {} (context: '{}' -> '{}')",
-                    task_id, old_context, task.context
-                );
-                Ok(task)
             }
             None => Err(TaskStoreError::NotFound(task_id)),
         }
@@ -659,6 +665,59 @@ mod tests {
         let store = FileSystemTaskStore::new(storage_path).await;
         let loaded = store.get(task_id).await.unwrap().unwrap();
         assert_eq!(loaded.context, "Updated context");
+    }
+
+    // ========================================================================
+    // Resilience Tests
+    // ========================================================================
+
+    /// Simulates a failure writing the `.tmp` file by making the task directory
+    /// non-writable, then verifies the in-memory task is unchanged.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_update_memory_unchanged_when_tmp_write_fails() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let ts = create_store().await;
+        let task = create_test_task("original");
+        ts.store.create(task.clone()).await.unwrap();
+
+        let task_dir = ts.store.layout.task_dir(task.catalog_id, task.task_id);
+        std::fs::set_permissions(&task_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let mut updated = task.clone();
+        updated.context = "updated context".to_string();
+        let result = ts.store.update(updated).await;
+
+        std::fs::set_permissions(&task_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert!(result.is_err());
+        let in_memory = ts.store.get(task.task_id).await.unwrap().unwrap();
+        assert_eq!(in_memory.context, task.context);
+    }
+
+    /// Simulates a rename failure by replacing `task.json` with a directory,
+    /// then verifies the in-memory task is unchanged.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_update_memory_unchanged_when_rename_fails() {
+        let ts = create_store().await;
+        let task = create_test_task("original");
+        ts.store.create(task.clone()).await.unwrap();
+
+        let task_json = ts.store.layout.task_json_path(task.catalog_id, task.task_id);
+        tokio::fs::remove_file(&task_json).await.unwrap();
+        tokio::fs::create_dir(&task_json).await.unwrap();
+
+        let mut updated = task.clone();
+        updated.context = "updated context".to_string();
+        let result = ts.store.update(updated).await;
+
+        tokio::fs::remove_dir(&task_json).await.unwrap();
+
+        assert!(result.is_err());
+        let in_memory = ts.store.get(task.task_id).await.unwrap().unwrap();
+        assert_eq!(in_memory.context, task.context);
     }
 
     // ========================================================================
