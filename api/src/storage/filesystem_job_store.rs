@@ -188,17 +188,26 @@ impl FileSystemJobStore {
             .map_err(|e| JobStoreError::StorageError(format!("Failed to parse job JSON: {}", e)))
     }
 
-    /// Saves a job's metadata to the filesystem.
+    /// Saves a job's metadata to the filesystem atomically.
+    ///
+    /// Writes to a temporary file first, then renames to the final path.
+    /// This ensures the target file is never left in a partially-written state.
     async fn save_job_to_file(&self, job: &Job, catalog_id: Uuid) -> JobStoreResult<()> {
         let path = self
             .layout
             .job_file_path(catalog_id, job.task_id, job.job_id);
+        let tmp_path = path.with_extension("tmp");
         let content = serde_json::to_string_pretty(job)
             .map_err(|e| JobStoreError::StorageError(format!("Failed to serialize job: {}", e)))?;
 
-        tokio::fs::write(&path, content).await.map_err(|e| {
-            error!("Failed to write job file {:?}: {}", path, e);
+        tokio::fs::write(&tmp_path, &content).await.map_err(|e| {
+            error!("Failed to write temporary job file {:?}: {}", tmp_path, e);
             JobStoreError::StorageError(format!("Failed to write job file: {}", e))
+        })?;
+
+        tokio::fs::rename(&tmp_path, &path).await.map_err(|e| {
+            error!("Failed to rename {:?} -> {:?}: {}", tmp_path, path, e);
+            JobStoreError::StorageError(format!("Failed to atomically save job file: {}", e))
         })?;
 
         debug!("Saved job metadata to {:?}", path);
@@ -300,20 +309,12 @@ impl JobStore for FileSystemJobStore {
 
         let catalog_id = self.resolve_catalog_id(job.task_id).await?;
 
-        // Use get_mut to modify in-place
         match self.jobs.get_mut(&job_id) {
             Some(mut entry) => {
+                self.save_job_to_file(&job, catalog_id).await?;
+
                 let old_status = entry.status;
-                let old_job = entry.clone();
                 *entry = job.clone();
-
-                // Save updated metadata to filesystem
-                if let Err(e) = self.save_job_to_file(&job, catalog_id).await {
-                    // Rollback in-memory change on filesystem error
-                    *entry = old_job;
-                    return Err(e);
-                }
-
                 info!(
                     "Job updated successfully: {} (status: {} -> {})",
                     job_id, old_status, job.status
