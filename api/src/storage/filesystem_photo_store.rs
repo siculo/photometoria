@@ -488,7 +488,11 @@ impl PhotoStore for FileSystemPhotoStore {
                 .photo_file_path(catalog_id, photo_clone.task_id, photo_clone.photo_id);
         let data = tokio::fs::read(&file_path).await.map_err(|e| {
             error!("Failed to read photo file {:?}: {}", file_path, e);
-            PhotoStoreError::NotFound(photo_id)
+            if e.kind() == std::io::ErrorKind::NotFound {
+                PhotoStoreError::NotFound(photo_id)
+            } else {
+                PhotoStoreError::StorageError(format!("Failed to read photo file: {}", e))
+            }
         })?;
 
         debug!("Loaded {} bytes for photo: {}", data.len(), photo_id);
