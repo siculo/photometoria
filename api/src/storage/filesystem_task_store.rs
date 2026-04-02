@@ -265,28 +265,29 @@ impl TaskStore for FileSystemTaskStore {
     async fn delete(&self, task_id: Uuid) -> TaskStoreResult<()> {
         debug!("Deleting task: {}", task_id);
 
-        // remove() returns Some((key, value)) if the entry existed
-        match self.tasks.remove(&task_id) {
-            Some((_, task)) => {
-                // Remove task directory and all its contents (includes task.json and photos)
-                let task_dir = self.layout.task_dir(task.catalog_id, task.task_id);
-                if task_dir.exists() {
-                    if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
-                        error!("Failed to remove task directory {:?}: {}", task_dir, e);
-                        // Log but don't fail - the task metadata is already removed from memory
-                    } else {
-                        debug!("Removed task directory: {:?}", task_dir);
-                    }
-                }
+        let (_, task) = match self.tasks.remove(&task_id) {
+            Some(entry) => entry,
+            None => return Err(TaskStoreError::NotFound(task_id)),
+        };
 
-                info!(
-                    "Task deleted successfully: {} (context: '{}')",
-                    task_id, task.context
-                );
-                Ok(())
+        let task_dir = self.layout.task_dir(task.catalog_id, task.task_id);
+        if task_dir.exists() {
+            if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
+                error!("Failed to remove task directory {:?}: {}", task_dir, e);
+                self.tasks.insert(task_id, task);
+                return Err(TaskStoreError::StorageError(format!(
+                    "Failed to remove task directory: {}",
+                    e
+                )));
             }
-            None => Err(TaskStoreError::NotFound(task_id)),
+            debug!("Removed task directory: {:?}", task_dir);
         }
+
+        info!(
+            "Task deleted successfully: {} (context: '{}')",
+            task_id, task.context
+        );
+        Ok(())
     }
 
     async fn exists(&self, task_id: Uuid) -> TaskStoreResult<bool> {
@@ -670,6 +671,30 @@ mod tests {
     // ========================================================================
     // Resilience Tests
     // ========================================================================
+
+    /// Simulates a filesystem failure during delete by making the task directory
+    /// non-removable, then verifies the task is rolled back into memory.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_delete_memory_rolled_back_when_filesystem_fails() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let ts = create_store().await;
+        let task = create_test_task("to delete");
+        ts.store.create(task.clone()).await.unwrap();
+
+        let task_dir = ts.store.layout.task_dir(task.catalog_id, task.task_id);
+        let parent_dir = task_dir.parent().unwrap();
+        std::fs::set_permissions(parent_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let result = ts.store.delete(task.task_id).await;
+
+        std::fs::set_permissions(parent_dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert!(result.is_err());
+        let in_memory = ts.store.get(task.task_id).await.unwrap();
+        assert!(in_memory.is_some());
+    }
 
     /// Simulates a failure writing the `.tmp` file by making the task directory
     /// non-writable, then verifies the in-memory task is unchanged.
