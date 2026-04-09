@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::models::Job;
 
-use super::utils::parse_uuid_from_dir;
+use super::utils::{parse_uuid_from_dir, quarantine_move};
 use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult, TaskStore};
 
 fn sorted_jobs(iter: impl Iterator<Item = Job>) -> Vec<Job> {
@@ -119,6 +119,8 @@ impl FileSystemJobStore {
     /// Loads all jobs for a single catalog from the filesystem.
     ///
     /// Returns the count of successfully loaded jobs and errors encountered.
+    /// Job files with corrupt, inconsistent, or unresolvable data are moved to
+    /// the boot-scoped quarantine directory.
     async fn load_catalog_jobs(&self, catalog_id: Uuid) -> (usize, usize) {
         let task_dirs = match self.layout.scan_task_dirs(catalog_id).await {
             Ok(dirs) => dirs,
@@ -150,16 +152,54 @@ impl FileSystemJobStore {
             };
 
             for job_path in job_files {
-                match self.load_job_from_file(&job_path).await {
-                    Ok(job) => {
-                        self.jobs.insert(job.job_id, job);
-                        loaded += 1;
-                    }
+                let filename_id = job_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .and_then(|s| s.parse::<Uuid>().ok());
+
+                let job = match self.load_job_from_file(&job_path).await {
+                    Ok(j) => j,
                     Err(e) => {
-                        warn!("Failed to load job from {:?}: {}", job_path, e);
+                        error!(
+                            "Corrupt job file {:?}: {} — quarantining",
+                            job_path, e
+                        );
+                        if let Err(qe) = quarantine_move(&self.layout, &job_path).await {
+                            error!("Failed to quarantine {:?}: {}", job_path, qe);
+                        }
                         errors += 1;
+                        continue;
+                    }
+                };
+
+                if let Some(fid) = filename_id {
+                    if fid != job.job_id {
+                        error!(
+                            "Inconsistent job file {:?}: job_id {} does not match filename {} — quarantining",
+                            job_path, job.job_id, fid
+                        );
+                        if let Err(qe) = quarantine_move(&self.layout, &job_path).await {
+                            error!("Failed to quarantine {:?}: {}", job_path, qe);
+                        }
+                        errors += 1;
+                        continue;
                     }
                 }
+
+                if job.task_id != task_id {
+                    error!(
+                        "Inconsistent job file {:?}: task_id {} does not match directory {} — quarantining",
+                        job_path, job.task_id, task_id
+                    );
+                    if let Err(qe) = quarantine_move(&self.layout, &job_path).await {
+                        error!("Failed to quarantine {:?}: {}", job_path, qe);
+                    }
+                    errors += 1;
+                    continue;
+                }
+
+                self.jobs.insert(job.job_id, job);
+                loaded += 1;
             }
         }
 
@@ -1019,5 +1059,119 @@ mod tests {
         assert_eq!(store.list().await.unwrap().len(), 4);
         assert_eq!(store.count_by_task(task_a).await.unwrap(), 2);
         assert_eq!(store.count_by_task(task_b).await.unwrap(), 2);
+    }
+
+    /// Sets up a task on disk and returns its catalog_id and the job file path for `job`.
+    async fn setup_task_and_job(
+        storage_path: &PathBuf,
+        task_id: Uuid,
+        catalog_id: Uuid,
+        job: &Job,
+    ) -> PathBuf {
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let task = Task {
+            task_id,
+            catalog_id,
+            name: "test".to_string(),
+            context: "ctx".to_string(),
+            created_at: Utc::now(),
+        };
+        task_store.create(task).await.unwrap();
+        let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
+        store.create(job.clone()).await.unwrap();
+        store
+            .layout
+            .job_file_path(catalog_id, task_id, job.job_id)
+    }
+
+    #[tokio::test]
+    async fn test_load_quarantines_corrupt_job_file() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
+        let job = create_test_job(task_id, "llava", vec![Uuid::new_v4()]);
+        let job_id = job.job_id;
+
+        let job_file = setup_task_and_job(&storage_path, task_id, catalog_id, &job).await;
+        tokio::fs::write(&job_file, b"not valid json").await.unwrap();
+
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, task_store).await;
+
+        assert!(!store.exists(job_id).await.unwrap());
+        assert!(!job_file.exists());
+        assert!(store.layout.quarantine_path_for(&job_file).exists());
+    }
+
+    #[tokio::test]
+    async fn test_load_quarantines_inconsistent_job_id() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
+        let job = create_test_job(task_id, "llava", vec![Uuid::new_v4()]);
+
+        let job_file = setup_task_and_job(&storage_path, task_id, catalog_id, &job).await;
+
+        let mut tampered = job.clone();
+        tampered.job_id = Uuid::new_v4();
+        tokio::fs::write(&job_file, serde_json::to_string(&tampered).unwrap())
+            .await
+            .unwrap();
+
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, task_store).await;
+
+        assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
+        assert!(!job_file.exists());
+        assert!(store.layout.quarantine_path_for(&job_file).exists());
+    }
+
+    #[tokio::test]
+    async fn test_load_quarantines_inconsistent_task_id() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
+        let job = create_test_job(task_id, "llava", vec![Uuid::new_v4()]);
+
+        let job_file = setup_task_and_job(&storage_path, task_id, catalog_id, &job).await;
+
+        let mut tampered = job.clone();
+        tampered.task_id = Uuid::new_v4();
+        tokio::fs::write(&job_file, serde_json::to_string(&tampered).unwrap())
+            .await
+            .unwrap();
+
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, task_store).await;
+
+        assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
+        assert!(!job_file.exists());
+        assert!(store.layout.quarantine_path_for(&job_file).exists());
+    }
+
+    #[tokio::test]
+    async fn test_load_valid_job_not_quarantined() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
+        let job = create_test_job(task_id, "llava", vec![Uuid::new_v4()]);
+        let job_id = job.job_id;
+
+        setup_task_and_job(&storage_path, task_id, catalog_id, &job).await;
+
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, task_store).await;
+
+        assert!(store.exists(job_id).await.unwrap());
+        assert!(!store.layout.quarantine_dir().exists());
     }
 }
