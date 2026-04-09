@@ -10,13 +10,14 @@
 use async_trait::async_trait;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::models::Photo;
 
+use super::utils::parse_uuid_from_dir;
 use super::{FileSystemLayout, PhotoStore, PhotoStoreError, PhotoStoreResult, TaskStore};
 
 // ============================================================================
@@ -102,72 +103,75 @@ impl FileSystemPhotoStore {
             }
         };
 
-        let mut loaded_count = 0;
-        let mut error_count = 0;
+        let mut loaded = 0;
+        let mut errors = 0;
 
         for catalog_dir in catalog_dirs {
-            let catalog_id = match catalog_dir
-                .file_name()
-                .and_then(|n| n.to_str())
-                .and_then(|s| s.parse::<Uuid>().ok())
-            {
-                Some(id) => id,
-                None => {
-                    warn!("Skipping invalid catalog directory: {:?}", catalog_dir);
-                    continue;
-                }
+            let Some(catalog_id) = parse_uuid_from_dir(&catalog_dir) else {
+                warn!("Skipping invalid catalog directory: {:?}", catalog_dir);
+                continue;
             };
+            let (n_loaded, n_errors) = self.load_catalog_photos(catalog_id).await;
+            loaded += n_loaded;
+            errors += n_errors;
+        }
 
-            let tasks_dir = self.layout.tasks_root(catalog_id);
-            if !tasks_dir.exists() {
+        info!("Loaded {} photos from filesystem ({} errors)", loaded, errors);
+    }
+
+    /// Loads all photos for a single catalog from the filesystem.
+    ///
+    /// Returns the count of successfully loaded photos and errors encountered.
+    async fn load_catalog_photos(&self, catalog_id: Uuid) -> (usize, usize) {
+        let tasks_dir = self.layout.tasks_root(catalog_id);
+        if !tasks_dir.exists() {
+            return (0, 0);
+        }
+
+        let mut entries = match tokio::fs::read_dir(&tasks_dir).await {
+            Ok(entries) => entries,
+            Err(e) => {
+                warn!(
+                    "Failed to read tasks directory for catalog {}: {}",
+                    catalog_id, e
+                );
+                return (0, 1);
+            }
+        };
+
+        let mut loaded = 0;
+        let mut errors = 0;
+
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            if !path.is_dir() {
                 continue;
             }
 
-            let mut entries = match tokio::fs::read_dir(&tasks_dir).await {
-                Ok(entries) => entries,
+            let photos_json = path.join("photos.json");
+            if !photos_json.exists() {
+                continue;
+            }
+
+            match self.load_photos_from_file(&photos_json).await {
+                Ok(photos) => {
+                    loaded += photos.len();
+                    for photo in photos {
+                        self.photos.insert(photo.photo_id, photo);
+                    }
+                }
                 Err(e) => {
-                    warn!(
-                        "Failed to read tasks directory for catalog {}: {}",
-                        catalog_id, e
-                    );
-                    continue;
-                }
-            };
-
-            while let Ok(Some(entry)) = entries.next_entry().await {
-                let path = entry.path();
-                if !path.is_dir() {
-                    continue;
-                }
-
-                let photos_json = path.join("photos.json");
-                if !photos_json.exists() {
-                    continue;
-                }
-
-                match self.load_photos_from_file(&photos_json).await {
-                    Ok(photos) => {
-                        for photo in photos {
-                            self.photos.insert(photo.photo_id, photo);
-                            loaded_count += 1;
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Failed to load photos from {:?}: {}", photos_json, e);
-                        error_count += 1;
-                    }
+                    warn!("Failed to load photos from {:?}: {}", photos_json, e);
+                    errors += 1;
                 }
             }
         }
 
-        info!(
-            "Loaded {} photos from filesystem ({} errors)",
-            loaded_count, error_count
-        );
+        (loaded, errors)
     }
 
     /// Loads photos from a JSON file.
-    async fn load_photos_from_file(&self, path: &PathBuf) -> PhotoStoreResult<Vec<Photo>> {
+    async fn load_photos_from_file(&self, path: &Path) -> PhotoStoreResult<Vec<Photo>> {
         let content = tokio::fs::read_to_string(path).await.map_err(|e| {
             PhotoStoreError::StorageError(format!("Failed to read photos file: {}", e))
         })?;

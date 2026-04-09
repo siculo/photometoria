@@ -16,13 +16,8 @@ use uuid::Uuid;
 
 use crate::models::Task;
 
+use super::utils::parse_uuid_from_dir;
 use super::{FileSystemLayout, TaskStore, TaskStoreError, TaskStoreResult};
-
-fn parse_uuid_from_dir(path: &Path) -> Option<Uuid> {
-    path.file_name()
-        .and_then(|n| n.to_str())
-        .and_then(|s| s.parse().ok())
-}
 
 fn sorted_tasks(iter: impl Iterator<Item = Task>) -> Vec<Task> {
     let mut tasks: Vec<Task> = iter.collect();
