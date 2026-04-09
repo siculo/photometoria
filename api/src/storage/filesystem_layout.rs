@@ -219,10 +219,11 @@ impl FileSystemLayout {
         Ok(result)
     }
 
-    /// Scans the filesystem and returns paths to all task.json files within a catalog.
+    /// Scans the filesystem and returns paths to all task directories within a catalog.
     ///
-    /// Used by TaskStore during initialization to load existing tasks.
-    pub async fn scan_task_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
+    /// Returns all subdirectories under `tasks/`, regardless of their contents.
+    /// Used as the base primitive for more specific scan methods.
+    pub async fn scan_task_dirs(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
         let tasks_dir = self.tasks_root(catalog_id);
 
         if !tasks_dir.exists() {
@@ -234,45 +235,36 @@ impl FileSystemLayout {
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-
-            let task_json = path.join("task.json");
-            if task_json.exists() {
-                result.push(task_json);
+            if path.is_dir() {
+                result.push(path);
             }
         }
 
         Ok(result)
     }
 
+    /// Scans the filesystem and returns paths to all task.json files within a catalog.
+    ///
+    /// Used by TaskStore during initialization to load existing tasks.
+    pub async fn scan_task_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
+        let dirs = self.scan_task_dirs(catalog_id).await?;
+        Ok(dirs
+            .into_iter()
+            .map(|d| d.join("task.json"))
+            .filter(|p| p.exists())
+            .collect())
+    }
+
     /// Scans the filesystem and returns paths to all photos.json files within a catalog.
     ///
     /// Used by PhotoStore during initialization to load existing photos.
     pub async fn scan_photos_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
-        let tasks_dir = self.tasks_root(catalog_id);
-
-        if !tasks_dir.exists() {
-            return Ok(Vec::new());
-        }
-
-        let mut result = Vec::new();
-        let mut entries = tokio::fs::read_dir(&tasks_dir).await?;
-
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-
-            let photos_json = path.join("photos.json");
-            if photos_json.exists() {
-                result.push(photos_json);
-            }
-        }
-
-        Ok(result)
+        let dirs = self.scan_task_dirs(catalog_id).await?;
+        Ok(dirs
+            .into_iter()
+            .map(|d| d.join("photos.json"))
+            .filter(|p| p.exists())
+            .collect())
     }
 
     /// Checks if a photos.json file exists for a given task.
@@ -525,6 +517,37 @@ mod tests {
         layout.ensure_catalog_dir(catalog2_id).await.unwrap();
 
         let dirs = layout.scan_catalog_dirs().await.unwrap();
+        assert_eq!(dirs.len(), 2);
+
+        for dir in &dirs {
+            assert!(dir.exists());
+            assert!(dir.is_dir());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scan_task_dirs_empty() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
+        let catalog_id = Uuid::new_v4();
+
+        let dirs = layout.scan_task_dirs(catalog_id).await.unwrap();
+        assert!(dirs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_scan_task_dirs() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
+        let catalog_id = Uuid::new_v4();
+
+        let task1_id = Uuid::new_v4();
+        let task2_id = Uuid::new_v4();
+
+        layout.ensure_task_dir(catalog_id, task1_id).await.unwrap();
+        layout.ensure_task_dir(catalog_id, task2_id).await.unwrap();
+
+        let dirs = layout.scan_task_dirs(catalog_id).await.unwrap();
         assert_eq!(dirs.len(), 2);
 
         for dir in &dirs {

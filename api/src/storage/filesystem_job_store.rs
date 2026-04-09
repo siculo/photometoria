@@ -10,13 +10,14 @@
 use async_trait::async_trait;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::models::Job;
 
+use super::utils::parse_uuid_from_dir;
 use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult, TaskStore};
 
 // ============================================================================
@@ -98,88 +99,74 @@ impl FileSystemJobStore {
             }
         };
 
-        let mut loaded_count = 0;
-        let mut error_count = 0;
+        let mut loaded = 0;
+        let mut errors = 0;
 
         for catalog_dir in catalog_dirs {
-            let catalog_id = match catalog_dir
-                .file_name()
-                .and_then(|n| n.to_str())
-                .and_then(|s| s.parse::<Uuid>().ok())
-            {
-                Some(id) => id,
-                None => {
-                    warn!("Skipping invalid catalog directory: {:?}", catalog_dir);
-                    continue;
-                }
-            };
-
-            let tasks_dir = self.layout.tasks_root(catalog_id);
-            if !tasks_dir.exists() {
+            let Some(catalog_id) = parse_uuid_from_dir(&catalog_dir) else {
+                warn!("Skipping invalid catalog directory: {:?}", catalog_dir);
                 continue;
-            }
+            };
+            let (n_loaded, n_errors) = self.load_catalog_jobs(catalog_id).await;
+            loaded += n_loaded;
+            errors += n_errors;
+        }
 
-            let mut task_entries = match tokio::fs::read_dir(&tasks_dir).await {
-                Ok(entries) => entries,
+        info!("Loaded {} jobs from filesystem ({} errors)", loaded, errors);
+    }
+
+    /// Loads all jobs for a single catalog from the filesystem.
+    ///
+    /// Returns the count of successfully loaded jobs and errors encountered.
+    async fn load_catalog_jobs(&self, catalog_id: Uuid) -> (usize, usize) {
+        let task_dirs = match self.layout.scan_task_dirs(catalog_id).await {
+            Ok(dirs) => dirs,
+            Err(e) => {
+                warn!(
+                    "Failed to scan task directories for catalog {}: {}",
+                    catalog_id, e
+                );
+                return (0, 1);
+            }
+        };
+
+        let mut loaded = 0;
+        let mut errors = 0;
+
+        for task_dir in task_dirs {
+            let Some(task_id) = parse_uuid_from_dir(&task_dir) else {
+                warn!("Skipping invalid task directory: {:?}", task_dir);
+                continue;
+            };
+
+            let job_files = match self.layout.scan_job_files(catalog_id, task_id).await {
+                Ok(files) => files,
                 Err(e) => {
-                    warn!(
-                        "Failed to read tasks directory for catalog {}: {}",
-                        catalog_id, e
-                    );
+                    warn!("Failed to scan jobs for task {}: {}", task_id, e);
+                    errors += 1;
                     continue;
                 }
             };
 
-            while let Ok(Some(task_entry)) = task_entries.next_entry().await {
-                let task_path = task_entry.path();
-                if !task_path.is_dir() {
-                    continue;
-                }
-
-                let task_id = match task_path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .and_then(|s| s.parse::<Uuid>().ok())
-                {
-                    Some(id) => id,
-                    None => {
-                        warn!("Skipping invalid task directory: {:?}", task_path);
-                        continue;
+            for job_path in job_files {
+                match self.load_job_from_file(&job_path).await {
+                    Ok(job) => {
+                        self.jobs.insert(job.job_id, job);
+                        loaded += 1;
                     }
-                };
-
-                let job_files = match self.layout.scan_job_files(catalog_id, task_id).await {
-                    Ok(files) => files,
                     Err(e) => {
-                        warn!("Failed to scan jobs for task {}: {}", task_id, e);
-                        error_count += 1;
-                        continue;
-                    }
-                };
-
-                for job_path in job_files {
-                    match self.load_job_from_file(&job_path).await {
-                        Ok(job) => {
-                            self.jobs.insert(job.job_id, job);
-                            loaded_count += 1;
-                        }
-                        Err(e) => {
-                            warn!("Failed to load job from {:?}: {}", job_path, e);
-                            error_count += 1;
-                        }
+                        warn!("Failed to load job from {:?}: {}", job_path, e);
+                        errors += 1;
                     }
                 }
             }
         }
 
-        info!(
-            "Loaded {} jobs from filesystem ({} errors)",
-            loaded_count, error_count
-        );
+        (loaded, errors)
     }
 
     /// Loads a single job from a JSON file.
-    async fn load_job_from_file(&self, path: &PathBuf) -> JobStoreResult<Job> {
+    async fn load_job_from_file(&self, path: &Path) -> JobStoreResult<Job> {
         let content = tokio::fs::read_to_string(path)
             .await
             .map_err(|e| JobStoreError::StorageError(format!("Failed to read job file: {}", e)))?;
