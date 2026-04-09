@@ -247,6 +247,34 @@ impl FileSystemLayout {
         Ok(result)
     }
 
+    /// Scans the filesystem and returns paths to all photos.json files within a catalog.
+    ///
+    /// Used by PhotoStore during initialization to load existing photos.
+    pub async fn scan_photos_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
+        let tasks_dir = self.tasks_root(catalog_id);
+
+        if !tasks_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut result = Vec::new();
+        let mut entries = tokio::fs::read_dir(&tasks_dir).await?;
+
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+
+            let photos_json = path.join("photos.json");
+            if photos_json.exists() {
+                result.push(photos_json);
+            }
+        }
+
+        Ok(result)
+    }
+
     /// Checks if a photos.json file exists for a given task.
     ///
     /// Returns Some(path) if the file exists, None otherwise.
@@ -545,6 +573,46 @@ mod tests {
         for file in &files {
             assert!(file.exists());
             assert!(file.ends_with("task.json"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scan_photos_json_files_empty() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
+        let catalog_id = Uuid::new_v4();
+
+        let files = layout.scan_photos_json_files(catalog_id).await.unwrap();
+        assert!(files.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_scan_photos_json_files() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
+        let catalog_id = Uuid::new_v4();
+
+        let task1_id = Uuid::new_v4();
+        let task2_id = Uuid::new_v4();
+        let task3_id = Uuid::new_v4();
+
+        layout.ensure_task_dir(catalog_id, task1_id).await.unwrap();
+        layout.ensure_task_dir(catalog_id, task2_id).await.unwrap();
+        layout.ensure_task_dir(catalog_id, task3_id).await.unwrap();
+
+        tokio::fs::write(layout.photos_json_path(catalog_id, task1_id), b"[]")
+            .await
+            .unwrap();
+        tokio::fs::write(layout.photos_json_path(catalog_id, task2_id), b"[]")
+            .await
+            .unwrap();
+
+        let files = layout.scan_photos_json_files(catalog_id).await.unwrap();
+        assert_eq!(files.len(), 2);
+
+        for file in &files {
+            assert!(file.exists());
+            assert!(file.ends_with("photos.json"));
         }
     }
 
