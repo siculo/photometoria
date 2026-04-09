@@ -17,7 +17,7 @@ use uuid::Uuid;
 
 use crate::models::Photo;
 
-use super::utils::parse_uuid_from_dir;
+use super::utils::{parse_uuid_from_dir, quarantine_move, quarantine_write};
 use super::{FileSystemLayout, PhotoStore, PhotoStoreError, PhotoStoreResult, TaskStore};
 
 /// Filesystem-backed implementation of PhotoStore with full persistence.
@@ -139,7 +139,13 @@ impl FileSystemPhotoStore {
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to load photos from {:?}: {}", photos_json, e);
+                    error!(
+                        "Corrupt photos.json at {:?}: {} — quarantining",
+                        photos_json, e
+                    );
+                    if let Err(qe) = quarantine_move(&self.layout, &photos_json).await {
+                        error!("Failed to quarantine {:?}: {}", photos_json, qe);
+                    }
                     errors += 1;
                 }
             }
@@ -148,15 +154,77 @@ impl FileSystemPhotoStore {
         (loaded, errors)
     }
 
-    /// Loads photos from a JSON file.
+    /// Loads photos from a JSON file, with partial recovery for bad records.
+    ///
+    /// If the file is completely unparseable, returns `Err` — the caller is
+    /// responsible for quarantining it. If some records are valid and some are not,
+    /// the bad records are written to quarantine and the file is rewritten with only
+    /// the good records. If all records are invalid, returns `Err`.
     async fn load_photos_from_file(&self, path: &Path) -> PhotoStoreResult<Vec<Photo>> {
         let content = tokio::fs::read_to_string(path).await.map_err(|e| {
             PhotoStoreError::StorageError(format!("Failed to read photos file: {}", e))
         })?;
 
-        serde_json::from_str(&content).map_err(|e| {
+        let raw: Vec<serde_json::Value> = serde_json::from_str(&content).map_err(|e| {
             PhotoStoreError::StorageError(format!("Failed to parse photos JSON: {}", e))
-        })
+        })?;
+
+        let mut good = Vec::new();
+        let mut bad = Vec::new();
+
+        for value in raw {
+            match serde_json::from_value::<Photo>(value.clone()) {
+                Ok(photo) => good.push(photo),
+                Err(e) => {
+                    warn!("Invalid photo record in {:?}: {}", path, e);
+                    bad.push(value);
+                }
+            }
+        }
+
+        if bad.is_empty() {
+            return Ok(good);
+        }
+
+        if good.is_empty() {
+            return Err(PhotoStoreError::StorageError(format!(
+                "All {} photo records in {:?} are invalid",
+                bad.len(),
+                path
+            )));
+        }
+
+        if let Ok(bad_json) = serde_json::to_vec_pretty(&bad) {
+            if let Err(e) = quarantine_write(&self.layout, path, &bad_json).await {
+                error!(
+                    "Failed to write quarantine for bad records in {:?}: {}",
+                    path, e
+                );
+            }
+        }
+
+        let good_json = serde_json::to_string_pretty(&good).map_err(|e| {
+            PhotoStoreError::StorageError(format!("Failed to serialize corrected photos: {}", e))
+        })?;
+        let tmp_path = path.with_extension("tmp");
+        tokio::fs::write(&tmp_path, &good_json).await.map_err(|e| {
+            PhotoStoreError::StorageError(format!("Failed to write corrected photos file: {}", e))
+        })?;
+        tokio::fs::rename(&tmp_path, path).await.map_err(|e| {
+            PhotoStoreError::StorageError(format!(
+                "Failed to atomically save corrected photos: {}",
+                e
+            ))
+        })?;
+
+        info!(
+            "Partial recovery in {:?}: kept {} records, quarantined {} bad records",
+            path,
+            good.len(),
+            bad.len()
+        );
+
+        Ok(good)
     }
 
     /// Saves all photos for a task to the filesystem.
@@ -1073,5 +1141,141 @@ mod tests {
         let results = ts.store.find_by_client_id(task_id, "lr:42").await.unwrap();
 
         assert!(results.is_empty());
+    }
+
+    /// Creates the storage structure for a task and writes the given content to photos.json.
+    /// Prerequisite: a valid task.json must already exist (created via task_store) so that
+    /// the task store does not quarantine the directory on load.
+    async fn write_photos_json(storage_path: &PathBuf, catalog_id: Uuid, task_id: Uuid, content: &[u8]) -> PathBuf {
+        let photos_json = storage_path
+            .join("catalogs")
+            .join(catalog_id.to_string())
+            .join("tasks")
+            .join(task_id.to_string())
+            .join("photos.json");
+        tokio::fs::write(&photos_json, content).await.unwrap();
+        photos_json
+    }
+
+    /// Creates a task on disk and returns its catalog_id, ready for photo tests.
+    async fn setup_task_on_disk(storage_path: &PathBuf, task_id: Uuid) -> (Arc<dyn TaskStore>, Uuid) {
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let catalog_id = Uuid::new_v4();
+        let task = Task {
+            task_id,
+            catalog_id,
+            name: "test".to_string(),
+            context: "ctx".to_string(),
+            created_at: Utc::now(),
+        };
+        task_store.create(task).await.unwrap();
+        (task_store, catalog_id)
+    }
+
+    #[tokio::test]
+    async fn test_load_quarantines_corrupt_photos_json() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_id = Uuid::new_v4();
+
+        let (task_store, catalog_id) = setup_task_on_disk(&storage_path, task_id).await;
+        let photos_json = write_photos_json(&storage_path, catalog_id, task_id, b"not valid json").await;
+
+        let store = FileSystemPhotoStore::new(storage_path, task_store).await;
+
+        assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
+        assert!(!photos_json.exists());
+        assert!(store.layout.quarantine_path_for(&photos_json).exists());
+    }
+
+    #[tokio::test]
+    async fn test_load_quarantines_all_bad_records() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_id = Uuid::new_v4();
+
+        let (task_store, catalog_id) = setup_task_on_disk(&storage_path, task_id).await;
+        let photos_json = write_photos_json(
+            &storage_path,
+            catalog_id,
+            task_id,
+            b"[{\"invalid\": true}, {\"also\": \"bad\"}]",
+        ).await;
+
+        let store = FileSystemPhotoStore::new(storage_path, task_store).await;
+
+        assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
+        assert!(!photos_json.exists());
+        assert!(store.layout.quarantine_path_for(&photos_json).exists());
+    }
+
+    #[tokio::test]
+    async fn test_load_partial_recovery_bad_records() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_id = Uuid::new_v4();
+
+        let (task_store, catalog_id) = setup_task_on_disk(&storage_path, task_id).await;
+
+        let good_photo = Photo::new(task_id, None, "good.jpg".to_string(), 1000);
+        let bad_record = serde_json::json!({"invalid": true});
+        let mixed = serde_json::json!([good_photo, bad_record]);
+        let photos_json = write_photos_json(
+            &storage_path,
+            catalog_id,
+            task_id,
+            &serde_json::to_vec(&mixed).unwrap(),
+        ).await;
+
+        let store = FileSystemPhotoStore::new(storage_path, task_store).await;
+
+        assert_eq!(store.count_by_task(task_id).await.unwrap(), 1);
+        assert!(store.exists(good_photo.photo_id).await.unwrap());
+
+        assert!(photos_json.exists());
+        let corrected: Vec<Photo> =
+            serde_json::from_str(&tokio::fs::read_to_string(&photos_json).await.unwrap())
+                .unwrap();
+        assert_eq!(corrected.len(), 1);
+        assert_eq!(corrected[0].photo_id, good_photo.photo_id);
+
+        let quarantine_path = store.layout.quarantine_path_for(&photos_json);
+        assert!(quarantine_path.exists());
+        let quarantined: Vec<serde_json::Value> =
+            serde_json::from_str(&tokio::fs::read_to_string(&quarantine_path).await.unwrap())
+                .unwrap();
+        assert_eq!(quarantined.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_load_valid_photos_not_quarantined() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let task_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
+        let task = Task {
+            task_id,
+            catalog_id,
+            name: "test".to_string(),
+            context: "ctx".to_string(),
+            created_at: Utc::now(),
+        };
+        task_store.create(task).await.unwrap();
+
+        {
+            let store =
+                FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await;
+            let photo = create_test_photo(task_id, "valid.jpg", 2000);
+            store.create(photo).await.unwrap();
+        }
+
+        let store = FileSystemPhotoStore::new(storage_path, task_store).await;
+
+        assert_eq!(store.count_by_task(task_id).await.unwrap(), 1);
+        assert!(!store.layout.quarantine_dir().exists());
     }
 }

@@ -33,3 +33,24 @@ pub(super) async fn quarantine_move(layout: &FileSystemLayout, path: &Path) -> i
     tokio::fs::rename(path, &dest).await?;
     Ok(dest)
 }
+
+/// Writes content to the boot-scoped quarantine path for a given file.
+///
+/// Unlike [`quarantine_move`], this does not remove the original file — it only
+/// creates a quarantine copy. Used for partial recovery (e.g., writing only the
+/// bad records extracted from a partially-corrupt file).
+/// Parent directories in the quarantine tree are created as needed.
+///
+/// Returns the quarantine path on success.
+pub(super) async fn quarantine_write(
+    layout: &FileSystemLayout,
+    original_path: &Path,
+    content: &[u8],
+) -> io::Result<PathBuf> {
+    let dest = layout.quarantine_path_for(original_path);
+    if let Some(parent) = dest.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    tokio::fs::write(&dest, content).await?;
+    Ok(dest)
+}
