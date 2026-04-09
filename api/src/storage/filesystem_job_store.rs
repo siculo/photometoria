@@ -20,9 +20,11 @@ use crate::models::Job;
 use super::utils::parse_uuid_from_dir;
 use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult, TaskStore};
 
-// ============================================================================
-// FileSystemJobStore Implementation
-// ============================================================================
+fn sorted_jobs(iter: impl Iterator<Item = Job>) -> Vec<Job> {
+    let mut jobs: Vec<Job> = iter.collect();
+    jobs.sort_by_key(|j| j.created_at);
+    jobs
+}
 
 /// Filesystem-backed implementation of JobStore with full persistence.
 ///
@@ -48,7 +50,6 @@ use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult, TaskStore
 pub struct FileSystemJobStore {
     jobs: Arc<DashMap<Uuid, Job>>,
     layout: FileSystemLayout,
-    /// Reference to the task store for resolving catalog identity
     task_store: Arc<dyn TaskStore>,
 }
 
@@ -202,10 +203,6 @@ impl FileSystemJobStore {
     }
 }
 
-// ============================================================================
-// JobStore Trait Implementation
-// ============================================================================
-
 #[async_trait]
 impl JobStore for FileSystemJobStore {
     async fn create(&self, job: Job) -> JobStoreResult<Job> {
@@ -215,7 +212,6 @@ impl JobStore for FileSystemJobStore {
 
         let catalog_id = self.resolve_catalog_id(job.task_id).await?;
 
-        // Use entry API to atomically check and insert
         match self.jobs.entry(job_id) {
             Entry::Occupied(_) => Err(JobStoreError::AlreadyExists(job_id)),
             Entry::Vacant(entry) => {
@@ -232,7 +228,6 @@ impl JobStore for FileSystemJobStore {
                     })?;
                 debug!("Ensured jobs directory exists: {:?}", job_dir);
 
-                // Save metadata to filesystem
                 self.save_job_to_file(&job, catalog_id).await?;
 
                 entry.insert(job.clone());
@@ -251,22 +246,13 @@ impl JobStore for FileSystemJobStore {
     async fn get(&self, job_id: Uuid) -> JobStoreResult<Option<Job>> {
         debug!("Retrieving job: {}", job_id);
 
-        // Lock-free read with DashMap
         Ok(self.jobs.get(&job_id).map(|entry| entry.value().clone()))
     }
 
     async fn list(&self) -> JobStoreResult<Vec<Job>> {
         debug!("Listing all jobs");
 
-        // Collect all jobs into a vector
-        let mut jobs: Vec<Job> = self
-            .jobs
-            .iter()
-            .map(|entry| entry.value().clone())
-            .collect();
-
-        // Sort by created_at (oldest first) for deterministic output
-        jobs.sort_by_key(|job| job.created_at);
+        let jobs = sorted_jobs(self.jobs.iter().map(|e| e.value().clone()));
 
         info!("Listed {} jobs", jobs.len());
         Ok(jobs)
@@ -275,15 +261,12 @@ impl JobStore for FileSystemJobStore {
     async fn list_by_task(&self, task_id: Uuid) -> JobStoreResult<Vec<Job>> {
         debug!("Listing jobs for task: {}", task_id);
 
-        let mut jobs: Vec<Job> = self
-            .jobs
-            .iter()
-            .filter(|entry| entry.value().task_id == task_id)
-            .map(|entry| entry.value().clone())
-            .collect();
-
-        // Sort by created_at (oldest first) for deterministic output
-        jobs.sort_by_key(|job| job.created_at);
+        let jobs = sorted_jobs(
+            self.jobs
+                .iter()
+                .filter(|e| e.value().task_id == task_id)
+                .map(|e| e.value().clone()),
+        );
 
         info!("Listed {} jobs for task {}", jobs.len(), task_id);
         Ok(jobs)
@@ -330,8 +313,10 @@ impl JobStore for FileSystemJobStore {
         let job_path = self
             .layout
             .job_file_path(catalog_id, job.task_id, job.job_id);
-        if job_path.exists() {
-            if let Err(e) = tokio::fs::remove_file(&job_path).await {
+        match tokio::fs::remove_file(&job_path).await {
+            Ok(()) => debug!("Removed job file: {:?}", job_path),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
                 error!("Failed to remove job file {:?}: {}", job_path, e);
                 self.jobs.insert(job_id, job);
                 return Err(JobStoreError::StorageError(format!(
@@ -339,7 +324,6 @@ impl JobStore for FileSystemJobStore {
                     e
                 )));
             }
-            debug!("Removed job file: {:?}", job_path);
         }
 
         info!(
@@ -352,7 +336,6 @@ impl JobStore for FileSystemJobStore {
     async fn delete_by_task(&self, task_id: Uuid) -> JobStoreResult<usize> {
         debug!("Deleting all jobs for task: {}", task_id);
 
-        // Collect job_ids to delete (can't delete while iterating)
         let job_ids: Vec<Uuid> = self
             .jobs
             .iter()
@@ -367,18 +350,15 @@ impl JobStore for FileSystemJobStore {
 
         let catalog_id = self.resolve_catalog_id(task_id).await?;
 
-        // Remove all jobs and their files
         for job_id in job_ids {
             if let Some((_, job)) = self.jobs.remove(&job_id) {
                 let job_path = self
                     .layout
                     .job_file_path(catalog_id, job.task_id, job.job_id);
-                if job_path.exists() {
-                    if let Err(e) = tokio::fs::remove_file(&job_path).await {
-                        error!("Failed to remove job file {:?}: {}", job_path, e);
-                    } else {
-                        debug!("Removed job file: {:?}", job_path);
-                    }
+                match tokio::fs::remove_file(&job_path).await {
+                    Ok(()) => debug!("Removed job file: {:?}", job_path),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => error!("Failed to remove job file {:?}: {}", job_path, e),
                 }
             }
         }
@@ -390,7 +370,6 @@ impl JobStore for FileSystemJobStore {
     async fn exists(&self, job_id: Uuid) -> JobStoreResult<bool> {
         debug!("Checking if job exists: {}", job_id);
 
-        // Lock-free existence check
         Ok(self.jobs.contains_key(&job_id))
     }
 
@@ -407,10 +386,6 @@ impl JobStore for FileSystemJobStore {
     }
 }
 
-// ============================================================================
-// Unit Tests
-// ============================================================================
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -420,14 +395,12 @@ mod tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    // Helper struct to keep temp dir alive during test
     struct TestStore {
         store: FileSystemJobStore,
         task_store: Arc<dyn TaskStore>,
         _temp_dir: TempDir,
     }
 
-    // Helper function to create a fresh store with temp directory
     async fn create_store() -> TestStore {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let storage_path = temp_dir.path().to_path_buf();
@@ -456,12 +429,11 @@ mod tests {
         catalog_id
     }
 
-    // Helper function to create a test job
+
     fn create_test_job(task_id: Uuid, model: &str, photo_ids: Vec<Uuid>) -> Job {
         Job::new(task_id, model.to_string(), None, photo_ids)
     }
 
-    // Helper function to create a test job with specific timestamp
     fn create_test_job_with_timestamp(
         task_id: Uuid,
         model: &str,
@@ -469,7 +441,6 @@ mod tests {
         timestamp: DateTime<Utc>,
     ) -> Job {
         let job = Job::new(task_id, model.to_string(), None, photo_ids);
-        // Use a hack to set the timestamp via serialization
         let mut job_value = serde_json::to_value(&job).unwrap();
         job_value["created_at"] = serde_json::to_value(timestamp).unwrap();
         serde_json::from_value(job_value).unwrap()
@@ -492,14 +463,11 @@ mod tests {
         assert_eq!(created.model, job.model);
         assert_eq!(created.status, JobStatus::Queued);
 
-        // Verify it exists in the store
         let exists = ts.store.exists(job.job_id).await.unwrap();
         assert!(exists);
 
-        // Verify jobs directory was created
         assert!(ts.store.layout.jobs_dir(catalog_id, task_id).exists());
 
-        // Verify job JSON file was created
         assert!(
             ts.store
                 .layout
@@ -516,10 +484,8 @@ mod tests {
         let photo_ids = vec![Uuid::new_v4()];
         let job = create_test_job(task_id, "qwen3-vl:8b", photo_ids);
 
-        // First creation should succeed
         ts.store.create(job.clone()).await.unwrap();
 
-        // Second creation with same ID should fail
         let result = ts.store.create(job.clone()).await;
 
         assert!(result.is_err());
@@ -566,7 +532,6 @@ mod tests {
         let task_id = Uuid::new_v4();
         setup_task(&ts, task_id).await;
 
-        // Create jobs with explicit timestamps to control ordering
         let now = Utc::now();
         let job1 =
             create_test_job_with_timestamp(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()], now);
@@ -583,12 +548,10 @@ mod tests {
             now + Duration::seconds(2),
         );
 
-        // Insert in random order
         ts.store.create(job2.clone()).await.unwrap();
         ts.store.create(job1.clone()).await.unwrap();
         ts.store.create(job3.clone()).await.unwrap();
 
-        // List should return ordered by created_at (oldest first)
         let jobs = ts.store.list().await.unwrap();
 
         assert_eq!(jobs.len(), 3);
@@ -601,7 +564,6 @@ mod tests {
     async fn test_list_by_task() {
         let ts = create_store().await;
 
-        // Create jobs for two different tasks
         let task_a = Uuid::new_v4();
         let task_b = Uuid::new_v4();
         let task_c = Uuid::new_v4();
@@ -616,17 +578,14 @@ mod tests {
         ts.store.create(job2).await.unwrap();
         ts.store.create(job3).await.unwrap();
 
-        // List jobs for task_a
         let jobs_a = ts.store.list_by_task(task_a).await.unwrap();
         assert_eq!(jobs_a.len(), 2);
         assert!(jobs_a.iter().all(|j| j.task_id == task_a));
 
-        // List jobs for task_b
         let jobs_b = ts.store.list_by_task(task_b).await.unwrap();
         assert_eq!(jobs_b.len(), 1);
         assert_eq!(jobs_b[0].task_id, task_b);
 
-        // List jobs for nonexistent task
         let jobs_c = ts.store.list_by_task(task_c).await.unwrap();
         assert!(jobs_c.is_empty());
     }
@@ -640,7 +599,6 @@ mod tests {
 
         ts.store.create(job.clone()).await.unwrap();
 
-        // Update the job status
         job.start();
         let result = ts.store.update(job.clone()).await;
 
@@ -649,7 +607,6 @@ mod tests {
         assert_eq!(updated.status, JobStatus::Processing);
         assert!(updated.started_at.is_some());
 
-        // Verify the change persisted
         let retrieved = ts.store.get(job.job_id).await.unwrap().unwrap();
         assert_eq!(retrieved.status, JobStatus::Processing);
     }
@@ -661,7 +618,6 @@ mod tests {
         setup_task(&ts, task_id).await;
         let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
-        // Try to update without creating first
         let result = ts.store.update(job.clone()).await;
 
         assert!(result.is_err());
@@ -687,16 +643,13 @@ mod tests {
             .job_file_path(catalog_id, job.task_id, job.job_id);
         assert!(job_path.exists());
 
-        // Delete the job
         let result = ts.store.delete(job.job_id).await;
 
         assert!(result.is_ok());
 
-        // Verify it no longer exists
         let retrieved = ts.store.get(job.job_id).await.unwrap();
         assert!(retrieved.is_none());
 
-        // Verify file was removed
         assert!(!job_path.exists());
     }
 
@@ -720,7 +673,6 @@ mod tests {
     async fn test_delete_by_task() {
         let ts = create_store().await;
 
-        // Create jobs for two different tasks
         let task_a = Uuid::new_v4();
         let task_b = Uuid::new_v4();
         let catalog_id_a = setup_task(&ts, task_a).await;
@@ -745,19 +697,15 @@ mod tests {
         assert!(job1_path.exists());
         assert!(job2_path.exists());
 
-        // Delete all jobs for task_a
         let deleted = ts.store.delete_by_task(task_a).await.unwrap();
         assert_eq!(deleted, 2);
 
-        // Verify task_a jobs are gone
         let jobs_a = ts.store.list_by_task(task_a).await.unwrap();
         assert!(jobs_a.is_empty());
 
-        // Verify files were removed
         assert!(!job1_path.exists());
         assert!(!job2_path.exists());
 
-        // Verify task_b job still exists
         let jobs_b = ts.store.list_by_task(task_b).await.unwrap();
         assert_eq!(jobs_b.len(), 1);
     }
@@ -766,7 +714,6 @@ mod tests {
     async fn test_delete_by_task_nonexistent_returns_zero() {
         let ts = create_store().await;
 
-        // No task created — delete_by_task should find no jobs and return Ok(0)
         let result = ts.store.delete_by_task(Uuid::new_v4()).await;
 
         assert!(result.is_ok());
@@ -780,18 +727,14 @@ mod tests {
         setup_task(&ts, task_id).await;
         let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
 
-        // Should not exist initially
         let exists = ts.store.exists(job.job_id).await.unwrap();
         assert!(!exists);
 
-        // Create the job
         ts.store.create(job.clone()).await.unwrap();
 
-        // Should exist now
         let exists = ts.store.exists(job.job_id).await.unwrap();
         assert!(exists);
 
-        // Random ID should not exist
         let exists = ts.store.exists(Uuid::new_v4()).await.unwrap();
         assert!(!exists);
     }
@@ -805,11 +748,9 @@ mod tests {
         setup_task(&ts, task_a).await;
         setup_task(&ts, task_b).await;
 
-        // Empty task should have count 0
         let count = ts.store.count_by_task(task_a).await.unwrap();
         assert_eq!(count, 0);
 
-        // Add jobs
         let photo_id = Uuid::new_v4();
         let job1 = create_test_job(task_a, "qwen3-vl:8b", vec![photo_id]);
         let job2 = create_test_job(task_a, "llava", vec![photo_id]);
@@ -819,11 +760,9 @@ mod tests {
         ts.store.create(job2).await.unwrap();
         ts.store.create(job3).await.unwrap();
 
-        // Count for task_a
         let count = ts.store.count_by_task(task_a).await.unwrap();
         assert_eq!(count, 2);
 
-        // Count for task_b
         let count = ts.store.count_by_task(task_b).await.unwrap();
         assert_eq!(count, 1);
     }
@@ -835,19 +774,16 @@ mod tests {
         setup_task(&ts, task_id).await;
         let mut job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4(), Uuid::new_v4()]);
 
-        // Create job (Queued)
         ts.store.create(job.clone()).await.unwrap();
         let retrieved = ts.store.get(job.job_id).await.unwrap().unwrap();
         assert_eq!(retrieved.status, JobStatus::Queued);
 
-        // Start job (Processing)
         job.start();
         ts.store.update(job.clone()).await.unwrap();
         let retrieved = ts.store.get(job.job_id).await.unwrap().unwrap();
         assert_eq!(retrieved.status, JobStatus::Processing);
         assert!(retrieved.started_at.is_some());
 
-        // Complete job
         job.complete();
         ts.store.update(job.clone()).await.unwrap();
         let retrieved = ts.store.get(job.job_id).await.unwrap().unwrap();
@@ -856,16 +792,11 @@ mod tests {
         assert!(retrieved.is_finished());
     }
 
-    // ========================================================================
-    // Persistence Tests
-    // ========================================================================
-
     #[tokio::test]
     async fn test_persistence_survives_reload() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let storage_path = temp_dir.path().to_path_buf();
 
-        // Create store and add jobs
         let task_id = Uuid::new_v4();
         let catalog_id = Uuid::new_v4();
         let job1 = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
@@ -890,12 +821,10 @@ mod tests {
             assert_eq!(store.count_by_task(task_id).await.unwrap(), 2);
         }
 
-        // Create new store instance (simulates server restart)
         let task_store: Arc<dyn TaskStore> =
             Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
         let store = FileSystemJobStore::new(storage_path, task_store).await;
 
-        // Jobs should be loaded from filesystem
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 2);
         assert!(store.exists(job1_id).await.unwrap());
         assert!(store.exists(job2_id).await.unwrap());
@@ -928,12 +857,10 @@ mod tests {
             let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
             store.create(job.clone()).await.unwrap();
 
-            // Update the job
             job.start();
             store.update(job.clone()).await.unwrap();
         }
 
-        // Reload and verify update persisted
         let task_store: Arc<dyn TaskStore> =
             Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
         let store = FileSystemJobStore::new(storage_path, task_store).await;
@@ -968,17 +895,12 @@ mod tests {
             store.delete(job_id).await.unwrap();
         }
 
-        // Reload and verify job is gone
         let task_store: Arc<dyn TaskStore> =
             Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
         let store = FileSystemJobStore::new(storage_path, task_store).await;
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
         assert!(!store.exists(job_id).await.unwrap());
     }
-
-    // ========================================================================
-    // Resilience Tests
-    // ========================================================================
 
     /// Simulates a failure writing the `.tmp` file by making the jobs directory
     /// non-writable, then verifies the in-memory job is unchanged.
@@ -1063,7 +985,6 @@ mod tests {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let storage_path = temp_dir.path().to_path_buf();
 
-        // Create multiple tasks with multiple jobs each
         let task_a = Uuid::new_v4();
         let task_b = Uuid::new_v4();
         let catalog_id = Uuid::new_v4();
@@ -1092,7 +1013,6 @@ mod tests {
             store.create(job4).await.unwrap();
         }
 
-        // Reload and verify all jobs loaded correctly
         let task_store: Arc<dyn TaskStore> =
             Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
         let store = FileSystemJobStore::new(storage_path, task_store).await;
