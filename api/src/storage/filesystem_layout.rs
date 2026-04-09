@@ -64,10 +64,17 @@ impl FileSystemLayout {
     /// The boot timestamp is captured at construction time and used to namespace
     /// any quarantine directories created during this server boot.
     pub fn new(storage_path: PathBuf) -> Self {
-        Self {
-            storage_path,
-            boot_ts: Local::now().format("%Y%m%d_%H%M%S").to_string(),
-        }
+        Self::new_with_boot_ts(storage_path, Local::now().format("%Y%m%d_%H%M%S").to_string())
+    }
+
+    /// Creates a new layout with an explicit boot timestamp.
+    ///
+    /// Use this when multiple stores must share the same quarantine directory for
+    /// a single server boot (e.g., all stores initialized in [`startup`]).
+    ///
+    /// [`startup`]: crate::startup
+    pub fn new_with_boot_ts(storage_path: PathBuf, boot_ts: String) -> Self {
+        Self { storage_path, boot_ts }
     }
 
     /// Returns the boot timestamp string used to namespace the quarantine directory.

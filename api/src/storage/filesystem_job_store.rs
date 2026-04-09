@@ -8,6 +8,7 @@
 //! within each task's directory.
 
 use async_trait::async_trait;
+use chrono::Local;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use std::path::{Path, PathBuf};
@@ -63,9 +64,21 @@ impl FileSystemJobStore {
     /// * `storage_path` - Base path for storing task directories
     /// * `task_store` - Reference to the task store for resolving task-to-catalog relationships
     pub async fn new(storage_path: PathBuf, task_store: Arc<dyn TaskStore>) -> Self {
+        Self::new_with_boot_ts(storage_path, task_store, Local::now().format("%Y%m%d_%H%M%S").to_string()).await
+    }
+
+    /// Creates a new filesystem-backed job store with an explicit boot timestamp.
+    ///
+    /// Use this when multiple stores must share the same quarantine directory for
+    /// a single server boot.
+    pub async fn new_with_boot_ts(
+        storage_path: PathBuf,
+        task_store: Arc<dyn TaskStore>,
+        boot_ts: String,
+    ) -> Self {
         let store = Self {
             jobs: Arc::new(DashMap::new()),
-            layout: FileSystemLayout::new(storage_path),
+            layout: FileSystemLayout::new_with_boot_ts(storage_path, boot_ts),
             task_store,
         };
         store.load_all().await;

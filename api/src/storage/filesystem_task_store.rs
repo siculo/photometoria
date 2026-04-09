@@ -7,6 +7,7 @@
 //! with full persistence to the filesystem. Task metadata is stored as JSON files.
 
 use async_trait::async_trait;
+use chrono::Local;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use std::path::{Path, PathBuf};
@@ -59,9 +60,17 @@ impl FileSystemTaskStore {
     /// # Arguments
     /// * `storage_path` - Base path for storing task directories
     pub async fn new(storage_path: PathBuf) -> Self {
+        Self::new_with_boot_ts(storage_path, Local::now().format("%Y%m%d_%H%M%S").to_string()).await
+    }
+
+    /// Creates a new filesystem-backed task store with an explicit boot timestamp.
+    ///
+    /// Use this when multiple stores must share the same quarantine directory for
+    /// a single server boot.
+    pub async fn new_with_boot_ts(storage_path: PathBuf, boot_ts: String) -> Self {
         let store = Self {
             tasks: Arc::new(DashMap::new()),
-            layout: FileSystemLayout::new(storage_path),
+            layout: FileSystemLayout::new_with_boot_ts(storage_path, boot_ts),
         };
         store.load_all().await;
         store
