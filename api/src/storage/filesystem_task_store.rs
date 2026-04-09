@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use crate::models::Task;
 
-use super::utils::parse_uuid_from_dir;
+use super::utils::{parse_uuid_from_dir, quarantine_move};
 use super::{FileSystemLayout, TaskStore, TaskStoreError, TaskStoreResult};
 
 fn sorted_tasks(iter: impl Iterator<Item = Task>) -> Vec<Task> {
@@ -98,12 +98,14 @@ impl FileSystemTaskStore {
     /// Loads all tasks for a single catalog from the filesystem.
     ///
     /// Returns the count of successfully loaded tasks and errors encountered.
+    /// Task directories with corrupt, inconsistent, or missing task.json are
+    /// moved to the boot-scoped quarantine directory.
     async fn load_catalog_tasks(&self, catalog_id: Uuid) -> (usize, usize) {
-        let task_files = match self.layout.scan_task_json_files(catalog_id).await {
-            Ok(files) => files,
+        let task_dirs = match self.layout.scan_task_dirs(catalog_id).await {
+            Ok(dirs) => dirs,
             Err(e) => {
                 warn!(
-                    "Failed to scan task files for catalog {}: {}",
+                    "Failed to scan task directories for catalog {}: {}",
                     catalog_id, e
                 );
                 return (0, 1);
@@ -113,17 +115,49 @@ impl FileSystemTaskStore {
         let mut loaded = 0;
         let mut errors = 0;
 
-        for task_json in task_files {
-            match self.load_task_from_file(&task_json).await {
-                Ok(task) => {
-                    self.tasks.insert(task.task_id, task);
-                    loaded += 1;
+        for task_dir in task_dirs {
+            let task_json = task_dir.join("task.json");
+
+            if !task_json.exists() {
+                warn!("Orphan task directory (no task.json): {:?}", task_dir);
+                if let Err(e) = quarantine_move(&self.layout, &task_dir).await {
+                    error!("Failed to quarantine orphan task directory {:?}: {}", task_dir, e);
                 }
+                errors += 1;
+                continue;
+            }
+
+            let task = match self.load_task_from_file(&task_json).await {
+                Ok(t) => t,
                 Err(e) => {
-                    warn!("Failed to load task from {:?}: {}", task_json, e);
+                    error!(
+                        "Corrupt task.json in {:?}: {} — quarantining task directory",
+                        task_dir, e
+                    );
+                    if let Err(qe) = quarantine_move(&self.layout, &task_dir).await {
+                        error!("Failed to quarantine {:?}: {}", task_dir, qe);
+                    }
                     errors += 1;
+                    continue;
+                }
+            };
+
+            if let Some(dir_id) = parse_uuid_from_dir(&task_dir) {
+                if dir_id != task.task_id {
+                    error!(
+                        "Inconsistent task.json in {:?}: task_id {} does not match directory {} — quarantining",
+                        task_dir, task.task_id, dir_id
+                    );
+                    if let Err(qe) = quarantine_move(&self.layout, &task_dir).await {
+                        error!("Failed to quarantine {:?}: {}", task_dir, qe);
+                    }
+                    errors += 1;
+                    continue;
                 }
             }
+
+            self.tasks.insert(task.task_id, task);
+            loaded += 1;
         }
 
         (loaded, errors)
@@ -764,5 +798,103 @@ mod tests {
         let store = FileSystemTaskStore::new(storage_path).await;
         assert_eq!(store.count().await.unwrap(), 0);
         assert!(!store.exists(task_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_load_quarantines_corrupt_task_json() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+
+        let catalog_id = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+        let task_dir = storage_path
+            .join("catalogs")
+            .join(catalog_id.to_string())
+            .join("tasks")
+            .join(task_id.to_string());
+        tokio::fs::create_dir_all(&task_dir).await.unwrap();
+        tokio::fs::write(task_dir.join("task.json"), b"not valid json")
+            .await
+            .unwrap();
+
+        let store = FileSystemTaskStore::new(storage_path).await;
+
+        assert_eq!(store.count().await.unwrap(), 0);
+        assert!(!task_dir.exists());
+        assert!(store.layout.quarantine_path_for(&task_dir).exists());
+    }
+
+    #[tokio::test]
+    async fn test_load_quarantines_inconsistent_task_id() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+
+        let catalog_id = Uuid::new_v4();
+        let dir_task_id = Uuid::new_v4();
+        let json_task_id = Uuid::new_v4();
+
+        let task_dir = storage_path
+            .join("catalogs")
+            .join(catalog_id.to_string())
+            .join("tasks")
+            .join(dir_task_id.to_string());
+        tokio::fs::create_dir_all(&task_dir).await.unwrap();
+
+        let task = Task {
+            task_id: json_task_id,
+            catalog_id,
+            name: "test".to_string(),
+            context: "ctx".to_string(),
+            created_at: Utc::now(),
+        };
+        tokio::fs::write(task_dir.join("task.json"), serde_json::to_string(&task).unwrap())
+            .await
+            .unwrap();
+
+        let store = FileSystemTaskStore::new(storage_path).await;
+
+        assert_eq!(store.count().await.unwrap(), 0);
+        assert!(!task_dir.exists());
+        assert!(store.layout.quarantine_path_for(&task_dir).exists());
+    }
+
+    #[tokio::test]
+    async fn test_load_quarantines_orphan_task_dir() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+
+        let catalog_id = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+        let task_dir = storage_path
+            .join("catalogs")
+            .join(catalog_id.to_string())
+            .join("tasks")
+            .join(task_id.to_string());
+        tokio::fs::create_dir_all(&task_dir).await.unwrap();
+
+        let store = FileSystemTaskStore::new(storage_path).await;
+
+        assert_eq!(store.count().await.unwrap(), 0);
+        assert!(!task_dir.exists());
+        assert!(store.layout.quarantine_path_for(&task_dir).exists());
+    }
+
+    #[tokio::test]
+    async fn test_load_valid_task_not_quarantined() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+
+        let task = create_test_task("valid task");
+
+        {
+            let store = FileSystemTaskStore::new(storage_path.clone()).await;
+            store.create(task.clone()).await.unwrap();
+        }
+
+        let store = FileSystemTaskStore::new(storage_path).await;
+
+        assert_eq!(store.count().await.unwrap(), 1);
+        assert!(store.exists(task.task_id).await.unwrap());
+        assert!(!store.layout.quarantine_dir().exists());
     }
 }
