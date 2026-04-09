@@ -12,6 +12,7 @@
 //! [`FileSystemPhotoStore`]: crate::storage::FileSystemPhotoStore
 //! [`FileSystemJobStore`]: crate::storage::FileSystemJobStore
 
+use chrono::Local;
 use std::io;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -32,28 +33,46 @@ use uuid::Uuid;
 ///
 /// ```text
 /// {storage_path}/
-/// └── catalogs/
-///     └── {catalog_id}/
-///         ├── catalog.json       # Catalog metadata
-///         └── tasks/
-///             └── {task_id}/
-///                 ├── task.json          # Task metadata
-///                 ├── photos.json        # Photos metadata
-///                 ├── imgs/              # Photo binary data
-///                 │   ├── {photo_id_1}
-///                 │   └── {photo_id_2}
-///                 └── jobs/              # Job metadata
-///                     ├── {job_id_1}.json
-///                     └── {job_id_2}.json
+/// ├── catalogs/
+/// │   └── {catalog_id}/
+/// │       ├── catalog.json       # Catalog metadata
+/// │       └── tasks/
+/// │           └── {task_id}/
+/// │               ├── task.json          # Task metadata
+/// │               ├── photos.json        # Photos metadata
+/// │               ├── imgs/              # Photo binary data
+/// │               │   ├── {photo_id_1}
+/// │               │   └── {photo_id_2}
+/// │               └── jobs/              # Job metadata
+/// │                   ├── {job_id_1}.json
+/// │                   └── {job_id_2}.json
+/// └── quarantine/
+///     └── {boot_ts}/             # One dir per server boot that found anomalies
+///         └── catalogs/          # Mirrors the catalogs/ hierarchy
+///             └── {catalog_id}/
+///                 └── tasks/
+///                     └── {task_id}/     # Quarantined task dir or files
 /// ```
 pub struct FileSystemLayout {
     storage_path: PathBuf,
+    boot_ts: String,
 }
 
 impl FileSystemLayout {
     /// Creates a new layout with the given storage root path.
+    ///
+    /// The boot timestamp is captured at construction time and used to namespace
+    /// any quarantine directories created during this server boot.
     pub fn new(storage_path: PathBuf) -> Self {
-        Self { storage_path }
+        Self {
+            storage_path,
+            boot_ts: Local::now().format("%Y%m%d_%H%M%S").to_string(),
+        }
+    }
+
+    /// Returns the boot timestamp string used to namespace the quarantine directory.
+    pub fn boot_ts(&self) -> &str {
+        &self.boot_ts
     }
 
     // ========================================================================
@@ -304,6 +323,31 @@ impl FileSystemLayout {
     }
 
     // ========================================================================
+    // Quarantine Paths
+    // ========================================================================
+
+    /// Returns the quarantine directory for the current server boot.
+    ///
+    /// Example: `{storage_path}/quarantine/20260409_153012/`
+    pub fn quarantine_dir(&self) -> PathBuf {
+        self.storage_path.join("quarantine").join(&self.boot_ts)
+    }
+
+    /// Maps a storage path to its quarantine equivalent for the current boot.
+    ///
+    /// Preserves the path hierarchy relative to the storage root.
+    ///
+    /// Example:
+    /// - original: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/task.json`
+    /// - quarantine: `{storage_path}/quarantine/{boot_ts}/catalogs/{catalog_id}/tasks/{task_id}/task.json`
+    pub fn quarantine_path_for(&self, path: &Path) -> PathBuf {
+        let relative = path
+            .strip_prefix(&self.storage_path)
+            .unwrap_or(path);
+        self.quarantine_dir().join(relative)
+    }
+
+    // ========================================================================
     // Utility Methods
     // ========================================================================
 
@@ -327,6 +371,66 @@ mod tests {
         let storage_path = PathBuf::from("/tmp/storage");
         let layout = FileSystemLayout::new(storage_path.clone());
         assert_eq!(layout.root(), storage_path.as_path());
+        assert!(!layout.boot_ts().is_empty());
+    }
+
+    #[test]
+    fn test_boot_ts_stable() {
+        let layout = FileSystemLayout::new(PathBuf::from("/tmp/storage"));
+        let ts1 = layout.boot_ts().to_string();
+        let ts2 = layout.boot_ts().to_string();
+        assert_eq!(ts1, ts2);
+    }
+
+    #[test]
+    fn test_quarantine_dir() {
+        let storage_path = PathBuf::from("/tmp/storage");
+        let layout = FileSystemLayout::new(storage_path.clone());
+        let expected = storage_path.join("quarantine").join(layout.boot_ts());
+        assert_eq!(layout.quarantine_dir(), expected);
+    }
+
+    #[test]
+    fn test_quarantine_path_for() {
+        let storage_path = PathBuf::from("/tmp/storage");
+        let layout = FileSystemLayout::new(storage_path.clone());
+        let catalog_id = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+
+        let original = storage_path
+            .join("catalogs")
+            .join(catalog_id.to_string())
+            .join("tasks")
+            .join(task_id.to_string())
+            .join("task.json");
+
+        let quarantine = layout.quarantine_path_for(&original);
+
+        let expected = storage_path
+            .join("quarantine")
+            .join(layout.boot_ts())
+            .join("catalogs")
+            .join(catalog_id.to_string())
+            .join("tasks")
+            .join(task_id.to_string())
+            .join("task.json");
+
+        assert_eq!(quarantine, expected);
+    }
+
+    #[test]
+    fn test_quarantine_path_for_preserves_hierarchy() {
+        let storage_path = PathBuf::from("/tmp/storage");
+        let layout = FileSystemLayout::new(storage_path.clone());
+        let catalog_id = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+        let job_id = Uuid::new_v4();
+
+        let original = layout.job_file_path(catalog_id, task_id, job_id);
+        let quarantine = layout.quarantine_path_for(&original);
+
+        assert!(quarantine.starts_with(layout.quarantine_dir()));
+        assert!(quarantine.ends_with(format!("{}.json", job_id)));
     }
 
     #[test]
