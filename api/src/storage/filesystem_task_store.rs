@@ -250,8 +250,10 @@ impl TaskStore for FileSystemTaskStore {
         };
 
         let task_dir = self.layout.task_dir(task.catalog_id, task.task_id);
-        if task_dir.exists() {
-            if let Err(e) = tokio::fs::remove_dir_all(&task_dir).await {
+        match tokio::fs::remove_dir_all(&task_dir).await {
+            Ok(()) => debug!("Removed task directory: {:?}", task_dir),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
                 error!("Failed to remove task directory {:?}: {}", task_dir, e);
                 self.tasks.insert(task_id, task);
                 return Err(TaskStoreError::StorageError(format!(
@@ -259,7 +261,6 @@ impl TaskStore for FileSystemTaskStore {
                     e
                 )));
             }
-            debug!("Removed task directory: {:?}", task_dir);
         }
 
         info!(
