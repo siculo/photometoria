@@ -162,12 +162,6 @@ Returns details for a specific provider, including its configured models and the
 
 - `404` - Provider not found
 
-### GET /api/models *(deprecated)*
-
-> **Deprecated:** use `GET /api/providers/{provider_name}` instead. Scheduled for removal in #32.
-
-Returns models for the default provider. The response format matches `GET /api/providers/{provider_name}`.
-
 ## Task Endpoints
 
 ### POST /api/catalogs/{catalog_id}/tasks
