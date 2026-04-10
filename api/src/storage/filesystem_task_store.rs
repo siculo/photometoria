@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use chrono::Local;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
@@ -17,7 +18,7 @@ use uuid::Uuid;
 
 use crate::models::Task;
 
-use super::utils::{parse_uuid_from_dir, quarantine_move};
+use super::utils::{load_json_from_file, parse_uuid_from_dir, try_quarantine, try_scan_task_dirs};
 use super::{FileSystemLayout, TaskStore, TaskStoreError, TaskStoreResult};
 
 fn sorted_tasks(iter: impl Iterator<Item = Task>) -> Vec<Task> {
@@ -110,59 +111,48 @@ impl FileSystemTaskStore {
     /// Task directories with corrupt, inconsistent, or missing task.json are
     /// moved to the boot-scoped quarantine directory.
     async fn load_catalog_tasks(&self, catalog_id: Uuid) -> (usize, usize) {
-        let task_dirs = match self.layout.scan_task_dirs(catalog_id).await {
-            Ok(dirs) => dirs,
-            Err(e) => {
-                warn!(
-                    "Failed to scan task directories for catalog {}: {}",
-                    catalog_id, e
-                );
-                return (0, 1);
-            }
+        let Some(task_dirs) = try_scan_task_dirs(&self.layout, catalog_id).await else {
+            return (0, 1);
         };
 
         let mut loaded = 0;
         let mut errors = 0;
 
         for task_dir in task_dirs {
+            let Some(dir_id) = parse_uuid_from_dir(&task_dir) else {
+                warn!("Skipping non-UUID task directory: {:?}", task_dir);
+                continue;
+            };
+
             let task_json = task_dir.join("task.json");
 
-            if !task_json.exists() {
-                warn!("Orphan task directory (no task.json): {:?}", task_dir);
-                if let Err(e) = quarantine_move(&self.layout, &task_dir).await {
-                    error!("Failed to quarantine orphan task directory {:?}: {}", task_dir, e);
-                }
-                errors += 1;
-                continue;
-            }
-
-            let task = match self.load_task_from_file(&task_json).await {
+            let task = match load_json_from_file::<Task>(&task_json).await {
                 Ok(t) => t,
+                Err(e) if e.kind() == ErrorKind::NotFound => {
+                    warn!("Orphan task directory (no task.json): {:?}", task_dir);
+                    try_quarantine(&self.layout, &task_dir).await;
+                    errors += 1;
+                    continue;
+                }
                 Err(e) => {
                     error!(
                         "Corrupt task.json in {:?}: {} — quarantining task directory",
                         task_dir, e
                     );
-                    if let Err(qe) = quarantine_move(&self.layout, &task_dir).await {
-                        error!("Failed to quarantine {:?}: {}", task_dir, qe);
-                    }
+                    try_quarantine(&self.layout, &task_dir).await;
                     errors += 1;
                     continue;
                 }
             };
 
-            if let Some(dir_id) = parse_uuid_from_dir(&task_dir) {
-                if dir_id != task.task_id {
-                    error!(
-                        "Inconsistent task.json in {:?}: task_id {} does not match directory {} — quarantining",
-                        task_dir, task.task_id, dir_id
-                    );
-                    if let Err(qe) = quarantine_move(&self.layout, &task_dir).await {
-                        error!("Failed to quarantine {:?}: {}", task_dir, qe);
-                    }
-                    errors += 1;
-                    continue;
-                }
+            if dir_id != task.task_id {
+                error!(
+                    "Inconsistent task.json in {:?}: task_id {} does not match directory {} — quarantining",
+                    task_dir, task.task_id, dir_id
+                );
+                try_quarantine(&self.layout, &task_dir).await;
+                errors += 1;
+                continue;
             }
 
             self.tasks.insert(task.task_id, task);
@@ -170,16 +160,6 @@ impl FileSystemTaskStore {
         }
 
         (loaded, errors)
-    }
-
-    /// Loads a single task from a JSON file.
-    async fn load_task_from_file(&self, path: &Path) -> TaskStoreResult<Task> {
-        let content = tokio::fs::read_to_string(path).await.map_err(|e| {
-            TaskStoreError::StorageError(format!("Failed to read task file: {}", e))
-        })?;
-
-        serde_json::from_str(&content)
-            .map_err(|e| TaskStoreError::StorageError(format!("Failed to parse task JSON: {}", e)))
     }
 
     /// Saves a task's metadata to the filesystem atomically.
@@ -290,7 +270,7 @@ impl TaskStore for FileSystemTaskStore {
         let task_dir = self.layout.task_dir(task.catalog_id, task.task_id);
         match tokio::fs::remove_dir_all(&task_dir).await {
             Ok(()) => debug!("Removed task directory: {:?}", task_dir),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => {}
             Err(e) => {
                 error!("Failed to remove task directory {:?}: {}", task_dir, e);
                 self.tasks.insert(task_id, task);

@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use chrono::Local;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
@@ -18,7 +19,7 @@ use uuid::Uuid;
 
 use crate::models::Photo;
 
-use super::utils::{parse_uuid_from_dir, quarantine_move, quarantine_write};
+use super::utils::{load_json_from_file, parse_uuid_from_dir, quarantine_write, try_quarantine};
 use super::{FileSystemLayout, PhotoStore, PhotoStoreError, PhotoStoreResult, TaskStore};
 
 /// Filesystem-backed implementation of PhotoStore with full persistence.
@@ -156,9 +157,7 @@ impl FileSystemPhotoStore {
                         "Corrupt photos.json at {:?}: {} — quarantining",
                         photos_json, e
                     );
-                    if let Err(qe) = quarantine_move(&self.layout, &photos_json).await {
-                        error!("Failed to quarantine {:?}: {}", photos_json, qe);
-                    }
+                    try_quarantine(&self.layout, &photos_json).await;
                     errors += 1;
                 }
             }
@@ -174,12 +173,8 @@ impl FileSystemPhotoStore {
     /// the bad records are written to quarantine and the file is rewritten with only
     /// the good records. If all records are invalid, returns `Err`.
     async fn load_photos_from_file(&self, path: &Path) -> PhotoStoreResult<Vec<Photo>> {
-        let content = tokio::fs::read_to_string(path).await.map_err(|e| {
-            PhotoStoreError::StorageError(format!("Failed to read photos file: {}", e))
-        })?;
-
-        let raw: Vec<serde_json::Value> = serde_json::from_str(&content).map_err(|e| {
-            PhotoStoreError::StorageError(format!("Failed to parse photos JSON: {}", e))
+        let raw: Vec<serde_json::Value> = load_json_from_file(path).await.map_err(|e| {
+            PhotoStoreError::StorageError(format!("Failed to load photos file: {}", e))
         })?;
 
         let mut good = Vec::new();
@@ -254,7 +249,7 @@ impl FileSystemPhotoStore {
         if photos.is_empty() {
             match tokio::fs::remove_file(&path).await {
                 Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) if e.kind() == ErrorKind::NotFound => {}
                 Err(e) => debug!("Failed to remove empty photos.json: {}", e),
             }
             return Ok(());
@@ -292,7 +287,7 @@ impl FileSystemPhotoStore {
             .photo_file_path(catalog_id, photo.task_id, photo.photo_id);
         match tokio::fs::remove_file(&file_path).await {
             Ok(()) => debug!("Removed photo file: {:?}", file_path),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => {}
             Err(e) => error!("Failed to remove photo file {:?}: {}", file_path, e),
         }
 
@@ -303,7 +298,6 @@ impl FileSystemPhotoStore {
         Ok(())
     }
 }
-
 
 #[async_trait]
 impl PhotoStore for FileSystemPhotoStore {
@@ -534,7 +528,7 @@ impl PhotoStore for FileSystemPhotoStore {
                 .photo_file_path(catalog_id, photo_clone.task_id, photo_clone.photo_id);
         let data = tokio::fs::read(&file_path).await.map_err(|e| {
             error!("Failed to read photo file {:?}: {}", file_path, e);
-            if e.kind() == std::io::ErrorKind::NotFound {
+            if e.kind() == ErrorKind::NotFound {
                 PhotoStoreError::NotFound(photo_id)
             } else {
                 PhotoStoreError::StorageError(format!("Failed to read photo file: {}", e))
@@ -558,7 +552,7 @@ impl PhotoStore for FileSystemPhotoStore {
                     .photo_file_path(catalog_id, photo_clone.task_id, photo_clone.photo_id);
             match tokio::fs::remove_file(&file_path).await {
                 Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) if e.kind() == ErrorKind::NotFound => {}
                 Err(e) => error!("Failed to remove photo file {:?}: {}", file_path, e),
             }
         }

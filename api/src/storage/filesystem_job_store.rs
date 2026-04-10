@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use chrono::Local;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
@@ -18,7 +19,7 @@ use uuid::Uuid;
 
 use crate::models::Job;
 
-use super::utils::{parse_uuid_from_dir, quarantine_move};
+use super::utils::{load_json_from_file, parse_uuid_from_dir, try_quarantine, try_scan_task_dirs};
 use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult, TaskStore};
 
 fn sorted_jobs(iter: impl Iterator<Item = Job>) -> Vec<Job> {
@@ -135,15 +136,8 @@ impl FileSystemJobStore {
     /// Job files with corrupt, inconsistent, or unresolvable data are moved to
     /// the boot-scoped quarantine directory.
     async fn load_catalog_jobs(&self, catalog_id: Uuid) -> (usize, usize) {
-        let task_dirs = match self.layout.scan_task_dirs(catalog_id).await {
-            Ok(dirs) => dirs,
-            Err(e) => {
-                warn!(
-                    "Failed to scan task directories for catalog {}: {}",
-                    catalog_id, e
-                );
-                return (0, 1);
-            }
+        let Some(task_dirs) = try_scan_task_dirs(&self.layout, catalog_id).await else {
+            return (0, 1);
         };
 
         let mut loaded = 0;
@@ -165,38 +159,33 @@ impl FileSystemJobStore {
             };
 
             for job_path in job_files {
-                let filename_id = job_path
+                let Some(filename_id) = job_path
                     .file_stem()
                     .and_then(|s| s.to_str())
-                    .and_then(|s| s.parse::<Uuid>().ok());
+                    .and_then(|s| s.parse::<Uuid>().ok())
+                else {
+                    warn!("Skipping non-UUID job file: {:?}", job_path);
+                    continue;
+                };
 
-                let job = match self.load_job_from_file(&job_path).await {
+                let job = match load_json_from_file::<Job>(&job_path).await {
                     Ok(j) => j,
                     Err(e) => {
-                        error!(
-                            "Corrupt job file {:?}: {} — quarantining",
-                            job_path, e
-                        );
-                        if let Err(qe) = quarantine_move(&self.layout, &job_path).await {
-                            error!("Failed to quarantine {:?}: {}", job_path, qe);
-                        }
+                        error!("Corrupt job file {:?}: {} — quarantining", job_path, e);
+                        try_quarantine(&self.layout, &job_path).await;
                         errors += 1;
                         continue;
                     }
                 };
 
-                if let Some(fid) = filename_id {
-                    if fid != job.job_id {
-                        error!(
-                            "Inconsistent job file {:?}: job_id {} does not match filename {} — quarantining",
-                            job_path, job.job_id, fid
-                        );
-                        if let Err(qe) = quarantine_move(&self.layout, &job_path).await {
-                            error!("Failed to quarantine {:?}: {}", job_path, qe);
-                        }
-                        errors += 1;
-                        continue;
-                    }
+                if filename_id != job.job_id {
+                    error!(
+                        "Inconsistent job file {:?}: job_id {} does not match filename {} — quarantining",
+                        job_path, job.job_id, filename_id
+                    );
+                    try_quarantine(&self.layout, &job_path).await;
+                    errors += 1;
+                    continue;
                 }
 
                 if job.task_id != task_id {
@@ -204,9 +193,7 @@ impl FileSystemJobStore {
                         "Inconsistent job file {:?}: task_id {} does not match directory {} — quarantining",
                         job_path, job.task_id, task_id
                     );
-                    if let Err(qe) = quarantine_move(&self.layout, &job_path).await {
-                        error!("Failed to quarantine {:?}: {}", job_path, qe);
-                    }
+                    try_quarantine(&self.layout, &job_path).await;
                     errors += 1;
                     continue;
                 }
@@ -217,16 +204,6 @@ impl FileSystemJobStore {
         }
 
         (loaded, errors)
-    }
-
-    /// Loads a single job from a JSON file.
-    async fn load_job_from_file(&self, path: &Path) -> JobStoreResult<Job> {
-        let content = tokio::fs::read_to_string(path)
-            .await
-            .map_err(|e| JobStoreError::StorageError(format!("Failed to read job file: {}", e)))?;
-
-        serde_json::from_str(&content)
-            .map_err(|e| JobStoreError::StorageError(format!("Failed to parse job JSON: {}", e)))
     }
 
     /// Saves a job's metadata to the filesystem atomically.
@@ -368,7 +345,7 @@ impl JobStore for FileSystemJobStore {
             .job_file_path(catalog_id, job.task_id, job.job_id);
         match tokio::fs::remove_file(&job_path).await {
             Ok(()) => debug!("Removed job file: {:?}", job_path),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => {}
             Err(e) => {
                 error!("Failed to remove job file {:?}: {}", job_path, e);
                 self.jobs.insert(job_id, job);
@@ -410,7 +387,7 @@ impl JobStore for FileSystemJobStore {
                     .job_file_path(catalog_id, job.task_id, job.job_id);
                 match tokio::fs::remove_file(&job_path).await {
                     Ok(()) => debug!("Removed job file: {:?}", job_path),
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) if e.kind() == ErrorKind::NotFound => {}
                     Err(e) => error!("Failed to remove job file {:?}: {}", job_path, e),
                 }
             }
