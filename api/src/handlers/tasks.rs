@@ -227,6 +227,11 @@ pub async fn delete_task(
         .await
         .map_err(|e| AppError::internal_error(e.to_string()))?;
     state
+        .photo_store
+        .delete_by_task(task_id)
+        .await
+        .map_err(|e| AppError::internal_error(e.to_string()))?;
+    state
         .task_store
         .delete(task_id)
         .await
@@ -944,6 +949,50 @@ mod tests {
         assert_eq!(
             remaining, 0,
             "Jobs should be removed when their task is deleted"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_delete_task_removes_associated_photos() {
+        let ts = create_test_state().await;
+
+        let (_, Json(task)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(CreateTaskRequest {
+                name: "Task".to_string(),
+                context: "task".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let photo1 = Photo::new(task.task_id, None, "img1.jpg".to_string(), 1_000_000);
+        let photo2 = Photo::new(task.task_id, None, "img2.jpg".to_string(), 2_000_000);
+        ts.state.photo_store.create(photo1).await.unwrap();
+        ts.state.photo_store.create(photo2).await.unwrap();
+
+        assert_eq!(
+            ts.state
+                .photo_store
+                .count_by_task(task.task_id)
+                .await
+                .unwrap(),
+            2
+        );
+
+        let result = delete_task(State(ts.state.clone()), AppPath(task.task_id)).await;
+        assert_eq!(result, Ok(StatusCode::NO_CONTENT));
+
+        let remaining = ts
+            .state
+            .photo_store
+            .count_by_task(task.task_id)
+            .await
+            .unwrap();
+        assert_eq!(
+            remaining, 0,
+            "Photos should be removed from memory when their task is deleted"
         );
     }
 
