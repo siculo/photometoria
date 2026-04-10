@@ -35,29 +35,6 @@
 	],
 	"item": [
 		{
-			"name": "Health",
-			"item": [
-				{
-					"name": "Get Version",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/version",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"version"
-							]
-						},
-						"description": "Returns the API version"
-					},
-					"response": []
-				}
-			]
-		},
-		{
 			"name": "Server Info",
 			"item": [
 				{
@@ -236,25 +213,6 @@
 						}
 					]
 				},
-				{
-					"name": "List Models (deprecated)",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/models",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"models"
-							]
-						},
-						"description": "**Deprecated:** use `GET /api/providers/{provider_name}` instead. Scheduled for removal in #32.\n\nReturns models for the default provider. The response format matches `GET /api/providers/{provider_name}`."
-					},
-					"response": []
-				}
 			]
 		},
 		{

@@ -6,17 +6,16 @@
 1. GET  /api/info                          → Server info and capabilities
 2. GET  /api/providers                     → List configured AI providers
 3. GET  /api/providers/{provider_name}     → Provider details and models
-4. GET  /api/models                        → List default provider models
-5. POST /api/catalogs/{catalog_id}/tasks   → Create task (working session)
+4. POST /api/catalogs/{catalog_id}/tasks   → Create task (working session)
    GET  /api/catalogs/{catalog_id}/tasks   → List tasks by catalog
-6. POST /api/tasks/{id}/photos             → Upload photos (multipart)
-7. POST /api/tasks/{id}/jobs               → Start job (choose AI model, optional language)
-8. GET  /api/tasks/{id}/jobs               → List jobs for a task
-9. [TODO #11] SSE streaming                → Monitor progress
-10. POST /api/jobs/{id}/cancel             → Cancel job (optional)
-11. GET /api/jobs/{id}/results             → Retrieve generated metadata
-12. POST /api/jobs/{id}/retry              → Retry failed/unprocessed photos
-13. DELETE /api/tasks/{id}                 → Cleanup
+5. POST /api/tasks/{id}/photos             → Upload photos (multipart)
+6. POST /api/tasks/{id}/jobs               → Start job (choose AI model, optional language)
+7. GET  /api/tasks/{id}/jobs               → List jobs for a task
+8. [TODO #11] SSE streaming                → Monitor progress
+9. POST /api/jobs/{id}/cancel              → Cancel job (optional)
+10. GET /api/jobs/{id}/results             → Retrieve generated metadata
+11. POST /api/jobs/{id}/retry              → Retry failed/unprocessed photos
+12. DELETE /api/tasks/{id}                 → Cleanup
 ```
 
 ---

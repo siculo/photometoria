@@ -90,23 +90,6 @@ pub async fn provider_details(
     Ok(Json(provider_response(&provider, default_language).await))
 }
 
-/// Returns models for the default provider.
-///
-/// Deprecated in favour of [`provider_details`], which accepts an explicit
-/// provider name. Scheduled for removal in #32.
-#[deprecated]
-pub async fn list_default_provider_models(
-    State(state): State<AppState>,
-) -> Result<Json<ProviderDetailsResponse>, AppError> {
-    let provider = state
-        .ai_providers
-        .default_provider()
-        .map_err(|e| AppError::internal_error(e.to_string()))?;
-
-    let default_language = state.config.ai.default_language.clone();
-    Ok(Json(provider_response(&provider, default_language).await))
-}
-
 /// Builds a [`ProviderDetailsResponse`] for the given provider by cross-referencing
 /// configured models against those actually installed on the backend.
 async fn provider_response(

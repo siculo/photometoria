@@ -192,8 +192,7 @@ async fn test_create_job_invalid_photo_id() {
 **Location**: `src/routes/mod.rs`
 
 **Coverage**:
-- ✅ Smoke tests only (e.g., `/version` endpoint works)
-- ✅ Router configuration is valid
+- ✅ Smoke tests only (router configuration is valid)
 - ❌ Do NOT duplicate handler logic tests here
 
 **Rationale**: Handler tests cover business logic more cleanly without HTTP overhead.
