@@ -21,3 +21,6 @@ Cargo.lock
 # OpenCode
 .opencode/config.json
 .opencode/auth.json
+entities.json
+
+mempalace.yaml

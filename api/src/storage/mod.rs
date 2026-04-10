@@ -25,6 +25,7 @@ pub mod filesystem_task_store;
 pub mod job_store;
 pub mod photo_store;
 pub mod task_store;
+mod utils;
 
 // Re-export commonly used types
 pub use filesystem_job_store::FileSystemJobStore;

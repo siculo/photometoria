@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use chrono::Local;
 use tokio::signal;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -49,16 +50,18 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
     }
     let _ = tokio::fs::remove_file(&test_file).await;
 
+    let boot_ts = Local::now().format("%Y%m%d_%H%M%S").to_string();
+
     let task_store: Arc<dyn TaskStore> =
-        Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        Arc::new(FileSystemTaskStore::new_with_boot_ts(storage_path.clone(), boot_ts.clone()).await);
     tracing::info!("Initialized filesystem task store");
 
     let photo_store: Arc<dyn PhotoStore> =
-        Arc::new(FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await);
+        Arc::new(FileSystemPhotoStore::new_with_boot_ts(storage_path.clone(), task_store.clone(), boot_ts.clone()).await);
     tracing::info!("Initialized filesystem photo store");
 
     let job_store: Arc<dyn JobStore> =
-        Arc::new(FileSystemJobStore::new(storage_path, task_store.clone()).await);
+        Arc::new(FileSystemJobStore::new_with_boot_ts(storage_path, task_store.clone(), boot_ts).await);
     tracing::info!("Initialized filesystem job store");
 
     // Initialize AI provider registry

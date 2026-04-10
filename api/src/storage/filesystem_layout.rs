@@ -12,6 +12,7 @@
 //! [`FileSystemPhotoStore`]: crate::storage::FileSystemPhotoStore
 //! [`FileSystemJobStore`]: crate::storage::FileSystemJobStore
 
+use chrono::Local;
 use std::io;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -32,28 +33,53 @@ use uuid::Uuid;
 ///
 /// ```text
 /// {storage_path}/
-/// └── catalogs/
-///     └── {catalog_id}/
-///         ├── catalog.json       # Catalog metadata
-///         └── tasks/
-///             └── {task_id}/
-///                 ├── task.json          # Task metadata
-///                 ├── photos.json        # Photos metadata
-///                 ├── imgs/              # Photo binary data
-///                 │   ├── {photo_id_1}
-///                 │   └── {photo_id_2}
-///                 └── jobs/              # Job metadata
-///                     ├── {job_id_1}.json
-///                     └── {job_id_2}.json
+/// ├── catalogs/
+/// │   └── {catalog_id}/
+/// │       ├── catalog.json       # Catalog metadata
+/// │       └── tasks/
+/// │           └── {task_id}/
+/// │               ├── task.json          # Task metadata
+/// │               ├── photos.json        # Photos metadata
+/// │               ├── imgs/              # Photo binary data
+/// │               │   ├── {photo_id_1}
+/// │               │   └── {photo_id_2}
+/// │               └── jobs/              # Job metadata
+/// │                   ├── {job_id_1}.json
+/// │                   └── {job_id_2}.json
+/// └── quarantine/
+///     └── {boot_ts}/             # One dir per server boot that found anomalies
+///         └── catalogs/          # Mirrors the catalogs/ hierarchy
+///             └── {catalog_id}/
+///                 └── tasks/
+///                     └── {task_id}/     # Quarantined task dir or files
 /// ```
 pub struct FileSystemLayout {
     storage_path: PathBuf,
+    boot_ts: String,
 }
 
 impl FileSystemLayout {
     /// Creates a new layout with the given storage root path.
+    ///
+    /// The boot timestamp is captured at construction time and used to namespace
+    /// any quarantine directories created during this server boot.
     pub fn new(storage_path: PathBuf) -> Self {
-        Self { storage_path }
+        Self::new_with_boot_ts(storage_path, Local::now().format("%Y%m%d_%H%M%S").to_string())
+    }
+
+    /// Creates a new layout with an explicit boot timestamp.
+    ///
+    /// Use this when multiple stores must share the same quarantine directory for
+    /// a single server boot (e.g., all stores initialized in [`startup`]).
+    ///
+    /// [`startup`]: crate::startup
+    pub fn new_with_boot_ts(storage_path: PathBuf, boot_ts: String) -> Self {
+        Self { storage_path, boot_ts }
+    }
+
+    /// Returns the boot timestamp string used to namespace the quarantine directory.
+    pub fn boot_ts(&self) -> &str {
+        &self.boot_ts
     }
 
     // ========================================================================
@@ -219,10 +245,11 @@ impl FileSystemLayout {
         Ok(result)
     }
 
-    /// Scans the filesystem and returns paths to all task.json files within a catalog.
+    /// Scans the filesystem and returns paths to all task directories within a catalog.
     ///
-    /// Used by TaskStore during initialization to load existing tasks.
-    pub async fn scan_task_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
+    /// Returns all subdirectories under `tasks/`, regardless of their contents.
+    /// Used as the base primitive for more specific scan methods.
+    pub async fn scan_task_dirs(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
         let tasks_dir = self.tasks_root(catalog_id);
 
         if !tasks_dir.exists() {
@@ -234,17 +261,36 @@ impl FileSystemLayout {
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            if !path.is_dir() {
-                continue;
-            }
-
-            let task_json = path.join("task.json");
-            if task_json.exists() {
-                result.push(task_json);
+            if path.is_dir() {
+                result.push(path);
             }
         }
 
         Ok(result)
+    }
+
+    /// Scans the filesystem and returns paths to all task.json files within a catalog.
+    ///
+    /// Used by TaskStore during initialization to load existing tasks.
+    pub async fn scan_task_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
+        let dirs = self.scan_task_dirs(catalog_id).await?;
+        Ok(dirs
+            .into_iter()
+            .map(|d| d.join("task.json"))
+            .filter(|p| p.exists())
+            .collect())
+    }
+
+    /// Scans the filesystem and returns paths to all photos.json files within a catalog.
+    ///
+    /// Used by PhotoStore during initialization to load existing photos.
+    pub async fn scan_photos_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
+        let dirs = self.scan_task_dirs(catalog_id).await?;
+        Ok(dirs
+            .into_iter()
+            .map(|d| d.join("photos.json"))
+            .filter(|p| p.exists())
+            .collect())
     }
 
     /// Checks if a photos.json file exists for a given task.
@@ -284,6 +330,31 @@ impl FileSystemLayout {
     }
 
     // ========================================================================
+    // Quarantine Paths
+    // ========================================================================
+
+    /// Returns the quarantine directory for the current server boot.
+    ///
+    /// Example: `{storage_path}/quarantine/20260409_153012/`
+    pub fn quarantine_dir(&self) -> PathBuf {
+        self.storage_path.join("quarantine").join(&self.boot_ts)
+    }
+
+    /// Maps a storage path to its quarantine equivalent for the current boot.
+    ///
+    /// Preserves the path hierarchy relative to the storage root.
+    ///
+    /// Example:
+    /// - original: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/task.json`
+    /// - quarantine: `{storage_path}/quarantine/{boot_ts}/catalogs/{catalog_id}/tasks/{task_id}/task.json`
+    pub fn quarantine_path_for(&self, path: &Path) -> PathBuf {
+        let relative = path
+            .strip_prefix(&self.storage_path)
+            .unwrap_or(path);
+        self.quarantine_dir().join(relative)
+    }
+
+    // ========================================================================
     // Utility Methods
     // ========================================================================
 
@@ -307,6 +378,66 @@ mod tests {
         let storage_path = PathBuf::from("/tmp/storage");
         let layout = FileSystemLayout::new(storage_path.clone());
         assert_eq!(layout.root(), storage_path.as_path());
+        assert!(!layout.boot_ts().is_empty());
+    }
+
+    #[test]
+    fn test_boot_ts_stable() {
+        let layout = FileSystemLayout::new(PathBuf::from("/tmp/storage"));
+        let ts1 = layout.boot_ts().to_string();
+        let ts2 = layout.boot_ts().to_string();
+        assert_eq!(ts1, ts2);
+    }
+
+    #[test]
+    fn test_quarantine_dir() {
+        let storage_path = PathBuf::from("/tmp/storage");
+        let layout = FileSystemLayout::new(storage_path.clone());
+        let expected = storage_path.join("quarantine").join(layout.boot_ts());
+        assert_eq!(layout.quarantine_dir(), expected);
+    }
+
+    #[test]
+    fn test_quarantine_path_for() {
+        let storage_path = PathBuf::from("/tmp/storage");
+        let layout = FileSystemLayout::new(storage_path.clone());
+        let catalog_id = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+
+        let original = storage_path
+            .join("catalogs")
+            .join(catalog_id.to_string())
+            .join("tasks")
+            .join(task_id.to_string())
+            .join("task.json");
+
+        let quarantine = layout.quarantine_path_for(&original);
+
+        let expected = storage_path
+            .join("quarantine")
+            .join(layout.boot_ts())
+            .join("catalogs")
+            .join(catalog_id.to_string())
+            .join("tasks")
+            .join(task_id.to_string())
+            .join("task.json");
+
+        assert_eq!(quarantine, expected);
+    }
+
+    #[test]
+    fn test_quarantine_path_for_preserves_hierarchy() {
+        let storage_path = PathBuf::from("/tmp/storage");
+        let layout = FileSystemLayout::new(storage_path.clone());
+        let catalog_id = Uuid::new_v4();
+        let task_id = Uuid::new_v4();
+        let job_id = Uuid::new_v4();
+
+        let original = layout.job_file_path(catalog_id, task_id, job_id);
+        let quarantine = layout.quarantine_path_for(&original);
+
+        assert!(quarantine.starts_with(layout.quarantine_dir()));
+        assert!(quarantine.ends_with(format!("{}.json", job_id)));
     }
 
     #[test]
@@ -506,6 +637,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_scan_task_dirs_empty() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
+        let catalog_id = Uuid::new_v4();
+
+        let dirs = layout.scan_task_dirs(catalog_id).await.unwrap();
+        assert!(dirs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_scan_task_dirs() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
+        let catalog_id = Uuid::new_v4();
+
+        let task1_id = Uuid::new_v4();
+        let task2_id = Uuid::new_v4();
+
+        layout.ensure_task_dir(catalog_id, task1_id).await.unwrap();
+        layout.ensure_task_dir(catalog_id, task2_id).await.unwrap();
+
+        let dirs = layout.scan_task_dirs(catalog_id).await.unwrap();
+        assert_eq!(dirs.len(), 2);
+
+        for dir in &dirs {
+            assert!(dir.exists());
+            assert!(dir.is_dir());
+        }
+    }
+
+    #[tokio::test]
     async fn test_scan_task_json_files_empty() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
@@ -545,6 +707,46 @@ mod tests {
         for file in &files {
             assert!(file.exists());
             assert!(file.ends_with("task.json"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scan_photos_json_files_empty() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
+        let catalog_id = Uuid::new_v4();
+
+        let files = layout.scan_photos_json_files(catalog_id).await.unwrap();
+        assert!(files.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_scan_photos_json_files() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
+        let catalog_id = Uuid::new_v4();
+
+        let task1_id = Uuid::new_v4();
+        let task2_id = Uuid::new_v4();
+        let task3_id = Uuid::new_v4();
+
+        layout.ensure_task_dir(catalog_id, task1_id).await.unwrap();
+        layout.ensure_task_dir(catalog_id, task2_id).await.unwrap();
+        layout.ensure_task_dir(catalog_id, task3_id).await.unwrap();
+
+        tokio::fs::write(layout.photos_json_path(catalog_id, task1_id), b"[]")
+            .await
+            .unwrap();
+        tokio::fs::write(layout.photos_json_path(catalog_id, task2_id), b"[]")
+            .await
+            .unwrap();
+
+        let files = layout.scan_photos_json_files(catalog_id).await.unwrap();
+        assert_eq!(files.len(), 2);
+
+        for file in &files {
+            assert!(file.exists());
+            assert!(file.ends_with("photos.json"));
         }
     }
 
