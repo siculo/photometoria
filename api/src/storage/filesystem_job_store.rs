@@ -65,7 +65,12 @@ impl FileSystemJobStore {
     /// * `storage_path` - Base path for storing task directories
     /// * `task_store` - Reference to the task store for resolving task-to-catalog relationships
     pub async fn new(storage_path: PathBuf, task_store: Arc<dyn TaskStore>) -> Self {
-        Self::new_with_boot_ts(storage_path, task_store, Local::now().format("%Y%m%d_%H%M%S").to_string()).await
+        Self::new_with_boot_ts(
+            storage_path,
+            task_store,
+            Local::now().format("%Y%m%d_%H%M%S").to_string(),
+        )
+        .await
     }
 
     /// Creates a new filesystem-backed job store with an explicit boot timestamp.
@@ -458,7 +463,6 @@ mod tests {
         ts.task_store.create(task).await.unwrap();
         catalog_id
     }
-
 
     fn create_test_job(task_id: Uuid, model: &str, photo_ids: Vec<Uuid>) -> Job {
         Job::new(task_id, model.to_string(), None, photo_ids)
@@ -970,7 +974,10 @@ mod tests {
         let job = create_test_job(task_id, "qwen3-vl:8b", vec![Uuid::new_v4()]);
         ts.store.create(job.clone()).await.unwrap();
 
-        let job_path = ts.store.layout.job_file_path(catalog_id, task_id, job.job_id);
+        let job_path = ts
+            .store
+            .layout
+            .job_file_path(catalog_id, task_id, job.job_id);
         tokio::fs::remove_file(&job_path).await.unwrap();
         tokio::fs::create_dir(&job_path).await.unwrap();
 
@@ -1070,9 +1077,7 @@ mod tests {
         task_store.create(task).await.unwrap();
         let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
         store.create(job.clone()).await.unwrap();
-        store
-            .layout
-            .job_file_path(catalog_id, task_id, job.job_id)
+        store.layout.job_file_path(catalog_id, task_id, job.job_id)
     }
 
     #[tokio::test]
@@ -1085,7 +1090,9 @@ mod tests {
         let job_id = job.job_id;
 
         let job_file = setup_task_and_job(&storage_path, task_id, catalog_id, &job).await;
-        tokio::fs::write(&job_file, b"not valid json").await.unwrap();
+        tokio::fs::write(&job_file, b"not valid json")
+            .await
+            .unwrap();
 
         let task_store: Arc<dyn TaskStore> =
             Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);

@@ -39,7 +39,10 @@ pub(super) async fn try_scan_task_dirs(
     match layout.scan_task_dirs(catalog_id).await {
         Ok(dirs) => Some(dirs),
         Err(e) => {
-            warn!("Failed to scan task directories for catalog {}: {}", catalog_id, e);
+            warn!(
+                "Failed to scan task directories for catalog {}: {}",
+                catalog_id, e
+            );
             None
         }
     }

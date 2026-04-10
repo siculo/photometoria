@@ -59,7 +59,12 @@ impl FileSystemPhotoStore {
     /// * `storage_path` - Base path for storing photo files
     /// * `task_store` - Reference to the task store for resolving task-to-catalog relationships
     pub async fn new(storage_path: PathBuf, task_store: Arc<dyn TaskStore>) -> Self {
-        Self::new_with_boot_ts(storage_path, task_store, Local::now().format("%Y%m%d_%H%M%S").to_string()).await
+        Self::new_with_boot_ts(
+            storage_path,
+            task_store,
+            Local::now().format("%Y%m%d_%H%M%S").to_string(),
+        )
+        .await
     }
 
     /// Creates a new filesystem-backed photo store with an explicit boot timestamp.
@@ -123,7 +128,10 @@ impl FileSystemPhotoStore {
             errors += n_errors;
         }
 
-        info!("Loaded {} photos from filesystem ({} errors)", loaded, errors);
+        info!(
+            "Loaded {} photos from filesystem ({} errors)",
+            loaded, errors
+        );
     }
 
     /// Loads all photos for a single catalog from the filesystem.
@@ -261,7 +269,10 @@ impl FileSystemPhotoStore {
         })?;
 
         tokio::fs::write(&tmp_path, &content).await.map_err(|e| {
-            error!("Failed to write temporary photos file {:?}: {}", tmp_path, e);
+            error!(
+                "Failed to write temporary photos file {:?}: {}",
+                tmp_path, e
+            );
             PhotoStoreError::StorageError(format!("Failed to write photos file: {}", e))
         })?;
 
@@ -1153,7 +1164,12 @@ mod tests {
     /// Creates the storage structure for a task and writes the given content to photos.json.
     /// Prerequisite: a valid task.json must already exist (created via task_store) so that
     /// the task store does not quarantine the directory on load.
-    async fn write_photos_json(storage_path: &PathBuf, catalog_id: Uuid, task_id: Uuid, content: &[u8]) -> PathBuf {
+    async fn write_photos_json(
+        storage_path: &PathBuf,
+        catalog_id: Uuid,
+        task_id: Uuid,
+        content: &[u8],
+    ) -> PathBuf {
         let photos_json = storage_path
             .join("catalogs")
             .join(catalog_id.to_string())
@@ -1165,7 +1181,10 @@ mod tests {
     }
 
     /// Creates a task on disk and returns its catalog_id, ready for photo tests.
-    async fn setup_task_on_disk(storage_path: &PathBuf, task_id: Uuid) -> (Arc<dyn TaskStore>, Uuid) {
+    async fn setup_task_on_disk(
+        storage_path: &PathBuf,
+        task_id: Uuid,
+    ) -> (Arc<dyn TaskStore>, Uuid) {
         let task_store: Arc<dyn TaskStore> =
             Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
         let catalog_id = Uuid::new_v4();
@@ -1187,7 +1206,8 @@ mod tests {
         let task_id = Uuid::new_v4();
 
         let (task_store, catalog_id) = setup_task_on_disk(&storage_path, task_id).await;
-        let photos_json = write_photos_json(&storage_path, catalog_id, task_id, b"not valid json").await;
+        let photos_json =
+            write_photos_json(&storage_path, catalog_id, task_id, b"not valid json").await;
 
         let store = FileSystemPhotoStore::new(storage_path, task_store).await;
 
@@ -1208,7 +1228,8 @@ mod tests {
             catalog_id,
             task_id,
             b"[{\"invalid\": true}, {\"also\": \"bad\"}]",
-        ).await;
+        )
+        .await;
 
         let store = FileSystemPhotoStore::new(storage_path, task_store).await;
 
@@ -1233,7 +1254,8 @@ mod tests {
             catalog_id,
             task_id,
             &serde_json::to_vec(&mixed).unwrap(),
-        ).await;
+        )
+        .await;
 
         let store = FileSystemPhotoStore::new(storage_path, task_store).await;
 
@@ -1242,8 +1264,7 @@ mod tests {
 
         assert!(photos_json.exists());
         let corrected: Vec<Photo> =
-            serde_json::from_str(&tokio::fs::read_to_string(&photos_json).await.unwrap())
-                .unwrap();
+            serde_json::from_str(&tokio::fs::read_to_string(&photos_json).await.unwrap()).unwrap();
         assert_eq!(corrected.len(), 1);
         assert_eq!(corrected[0].photo_id, good_photo.photo_id);
 
@@ -1274,8 +1295,7 @@ mod tests {
         task_store.create(task).await.unwrap();
 
         {
-            let store =
-                FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await;
+            let store = FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await;
             let photo = create_test_photo(task_id, "valid.jpg", 2000);
             store.create(photo).await.unwrap();
         }

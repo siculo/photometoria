@@ -64,7 +64,10 @@ impl FileSystemLayout {
     /// The boot timestamp is captured at construction time and used to namespace
     /// any quarantine directories created during this server boot.
     pub fn new(storage_path: PathBuf) -> Self {
-        Self::new_with_boot_ts(storage_path, Local::now().format("%Y%m%d_%H%M%S").to_string())
+        Self::new_with_boot_ts(
+            storage_path,
+            Local::now().format("%Y%m%d_%H%M%S").to_string(),
+        )
     }
 
     /// Creates a new layout with an explicit boot timestamp.
@@ -74,7 +77,10 @@ impl FileSystemLayout {
     ///
     /// [`startup`]: crate::startup
     pub fn new_with_boot_ts(storage_path: PathBuf, boot_ts: String) -> Self {
-        Self { storage_path, boot_ts }
+        Self {
+            storage_path,
+            boot_ts,
+        }
     }
 
     /// Returns the boot timestamp string used to namespace the quarantine directory.
@@ -348,9 +354,7 @@ impl FileSystemLayout {
     /// - original: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/task.json`
     /// - quarantine: `{storage_path}/quarantine/{boot_ts}/catalogs/{catalog_id}/tasks/{task_id}/task.json`
     pub fn quarantine_path_for(&self, path: &Path) -> PathBuf {
-        let relative = path
-            .strip_prefix(&self.storage_path)
-            .unwrap_or(path);
+        let relative = path.strip_prefix(&self.storage_path).unwrap_or(path);
         self.quarantine_dir().join(relative)
     }
 

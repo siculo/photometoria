@@ -61,7 +61,11 @@ impl FileSystemTaskStore {
     /// # Arguments
     /// * `storage_path` - Base path for storing task directories
     pub async fn new(storage_path: PathBuf) -> Self {
-        Self::new_with_boot_ts(storage_path, Local::now().format("%Y%m%d_%H%M%S").to_string()).await
+        Self::new_with_boot_ts(
+            storage_path,
+            Local::now().format("%Y%m%d_%H%M%S").to_string(),
+        )
+        .await
     }
 
     /// Creates a new filesystem-backed task store with an explicit boot timestamp.
@@ -102,7 +106,10 @@ impl FileSystemTaskStore {
             errors += n_errors;
         }
 
-        info!("Loaded {} tasks from filesystem ({} errors)", loaded, errors);
+        info!(
+            "Loaded {} tasks from filesystem ({} errors)",
+            loaded, errors
+        );
     }
 
     /// Loads all tasks for a single catalog from the filesystem.
@@ -680,7 +687,10 @@ mod tests {
         let task = create_test_task("original");
         ts.store.create(task.clone()).await.unwrap();
 
-        let task_json = ts.store.layout.task_json_path(task.catalog_id, task.task_id);
+        let task_json = ts
+            .store
+            .layout
+            .task_json_path(task.catalog_id, task.task_id);
         tokio::fs::remove_file(&task_json).await.unwrap();
         tokio::fs::create_dir(&task_json).await.unwrap();
 
@@ -836,9 +846,12 @@ mod tests {
             context: "ctx".to_string(),
             created_at: Utc::now(),
         };
-        tokio::fs::write(task_dir.join("task.json"), serde_json::to_string(&task).unwrap())
-            .await
-            .unwrap();
+        tokio::fs::write(
+            task_dir.join("task.json"),
+            serde_json::to_string(&task).unwrap(),
+        )
+        .await
+        .unwrap();
 
         let store = FileSystemTaskStore::new(storage_path).await;
 
