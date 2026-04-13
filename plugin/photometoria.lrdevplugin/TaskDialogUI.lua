@@ -735,7 +735,10 @@ local function buildTaskSection(f, props, host, tasks)
 						return
 					end
 
-					local contextText = props.contextText
+					local contextText = props.contextText:match('^%s*(.-)%s*$')
+					if contextText == '' then
+						return
+					end
 
 					LrTasks.startAsyncTask(function()
 						local ok, data = ServerConnection.updateTask(host, task.task_id, trimmedName, contextText)
@@ -745,6 +748,7 @@ local function buildTaskSection(f, props, host, tasks)
 							task.context = contextText
 							props.nameText = trimmedName
 							props.nameSavedText = trimmedName
+							props.contextText = contextText
 							props.contextSavedText = contextText
 							props.taskModified = false
 							props.taskPopupItems = buildTaskPopupItems(tasks)

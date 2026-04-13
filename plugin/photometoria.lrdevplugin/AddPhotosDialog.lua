@@ -64,6 +64,7 @@ local function updateConfirmEnabled(props)
 
 	if props.destination == 'new' then
 		props.confirmEnabled = (props.taskName ~= nil and props.taskName ~= '')
+			and (props.taskContext ~= nil and props.taskContext ~= '')
 	else
 		props.confirmEnabled = (#props.existingTaskItems > 0)
 	end
@@ -345,6 +346,10 @@ LrTasks.startAsyncTask(function()
 		end)
 
 		props:addObserver('taskName', function(propTable)
+			updateConfirmEnabled(propTable)
+		end)
+
+		props:addObserver('taskContext', function(propTable)
 			updateConfirmEnabled(propTable)
 		end)
 
