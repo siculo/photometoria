@@ -522,7 +522,9 @@ Fields `started_at` and `completed_at` are omitted until the job reaches the cor
 
 **Errors:**
 
+- `400` - Task has no photos to process (`no_photos`)
 - `400` - One or more `photo_ids` do not belong to the task (`invalid_parameter`)
+- `400` - Specified model is not configured (`invalid_model`)
 - `404` - Task not found
 
 ### POST /api/jobs/{job_id}/cancel

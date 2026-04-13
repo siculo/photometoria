@@ -36,6 +36,12 @@ pub async fn create_job(
     match state.photo_store.list_by_task(task_id).await {
         Ok(photos) => {
             let photo_ids = job_photo_ids(task_id, photos, request.photo_ids)?;
+            if photo_ids.is_empty() {
+                return Err(AppError::bad_request(
+                    "no_photos",
+                    "Task must have at least one photo to create a job",
+                ));
+            }
             let language = request
                 .language
                 .or_else(|| state.config.ai.default_language.clone());
@@ -487,22 +493,38 @@ mod tests {
 
         let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
-        // Should succeed but with 0 photos
-        assert!(result.is_ok());
-        let (status, Json(job_response)) = result.unwrap();
-        assert_eq!(status, StatusCode::CREATED);
-        assert_eq!(job_response.task_id, task_id);
-        assert_eq!(job_response.photo_count, 0);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.body.error, "no_photos");
+    }
 
-        // Verify the job has no photos
-        let stored_job = ts
-            .state
-            .job_store
-            .get(job_response.job_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(stored_job.photo_ids.is_empty());
+    #[tokio::test]
+    async fn test_create_job_explicit_empty_photo_ids() {
+        let ts = create_test_state().await;
+
+        let task = Task::new(
+            test_catalog_id(),
+            "Task with photos".to_string(),
+            "task with photos".to_string(),
+        );
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        // Explicitly pass an empty photo_ids list
+        let request = CreateJobRequest {
+            model: "qwen3-vl:8b".to_string(),
+            language: None,
+            photo_ids: Some(vec![]),
+        };
+
+        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.body.error, "no_photos");
     }
 
     // ========================================================================

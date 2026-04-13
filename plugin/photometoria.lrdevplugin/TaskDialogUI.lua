@@ -266,6 +266,7 @@ local function initProperties(props, tasks)
 
 	props.taskSelected = (#tasks > 0)
 	props.noTasksVisible = (#tasks == 0)
+	props.newJobEnabled = false
 
 	props.taskSummary = ''
 	props.deleteEnabled = (#tasks > 0)
@@ -309,6 +310,8 @@ local function onTaskSelected(props, tasks, index)
 	local photoCount = task.photo_count or 0
 	local storageUsed = task.storage_used or 0
 	local jobCount = task.job_count or 0
+
+	props.newJobEnabled = (photoCount > 0)
 
 	local createdAt = formatDateTime(task.created_at)
 
@@ -550,6 +553,7 @@ local function buildTaskSelectorRow(f, props, host, tasks)
 						else
 							props.selectedTask = nil
 							props.deleteEnabled = false
+							props.newJobEnabled = false
 							clearJobDetail(props)
 							props.taskSummary = ''
 							props.nameText = ''
@@ -1119,7 +1123,7 @@ local function buildJobsSection(f, props, host, tasks)
 
 				f:push_button {
 					title = LOC "$$$/Photometoria/Button/NewJob=+ Start New Job",
-					enabled = bind 'taskSelected',
+					enabled = bind 'newJobEnabled',
 					fill_horizontal = 1,
 					action = function()
 						local task = tasks[props.selectedTask]
