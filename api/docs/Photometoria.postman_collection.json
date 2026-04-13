@@ -212,7 +212,7 @@
 							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Provider 'nonexistent' not found\"\n}"
 						}
 					]
-				},
+				}
 			]
 		},
 		{
