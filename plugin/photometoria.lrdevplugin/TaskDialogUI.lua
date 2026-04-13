@@ -719,6 +719,19 @@ local function buildTaskSection(f, props, host, tasks)
 		},
 
 		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = 80 },
+
+			f:static_text {
+				title = bind 'contextCounter',
+				width_in_chars = 10,
+				font = '<system/small>',
+				alignment = 'right',
+			},
+		},
+
+		f:row {
 			spacing = f:control_spacing(),
 
 			f:push_button {
@@ -748,6 +761,17 @@ local function buildTaskSection(f, props, host, tasks)
 							LrDialogs.message(
 								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
 								LOC "$$$/Photometoria/Error/EmptyContext=The context cannot be empty.",
+								'warning'
+							)
+						end)
+						return
+					end
+
+					if #contextText > props.maxContextLength then
+						LrTasks.startAsyncTask(function()
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC "$$$/Photometoria/Error/ContextTooLong=The context exceeds the maximum allowed length.",
 								'warning'
 							)
 						end)
@@ -1173,7 +1197,8 @@ end
 --- Shows the task management dialog. Must be called from within an async task.
 --- @param host string Server host:port
 --- @param tasks table Array of TaskSummary from the server
-function TaskDialogUI.showDialog(host, tasks)
+--- @param maxContextLength number Maximum allowed context length in characters
+function TaskDialogUI.showDialog(host, tasks, maxContextLength)
 	prefetchAllJobs(host, tasks)
 	prefetchProviders(host)
 
@@ -1182,6 +1207,8 @@ function TaskDialogUI.showDialog(host, tasks)
 
 		local props = LrBinding.makePropertyTable(context)
 		initProperties(props, tasks)
+		props.maxContextLength = maxContextLength
+		props.contextCounter = ''
 
 		props:addObserver('selectedTask', function(propTable, key, value)
 			if not value then
@@ -1215,6 +1242,7 @@ function TaskDialogUI.showDialog(host, tasks)
 		props:addObserver('contextText', function(propTable, key, value)
 			propTable.taskModified = (value ~= propTable.contextSavedText)
 				or (propTable.nameText ~= propTable.nameSavedText)
+			propTable.contextCounter = string.format('%d/%d', #(value or ''), propTable.maxContextLength)
 		end)
 
 		if props.selectedTask then

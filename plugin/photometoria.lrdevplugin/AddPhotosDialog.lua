@@ -63,8 +63,10 @@ local function updateConfirmEnabled(props)
 	end
 
 	if props.destination == 'new' then
-		props.confirmEnabled = (props.taskName ~= nil and props.taskName ~= '')
-			and (props.taskContext ~= nil and props.taskContext ~= '')
+		local nameOk = (props.taskName ~= nil and props.taskName ~= '')
+		local contextOk = (props.taskContext ~= nil and props.taskContext ~= '')
+		local withinLimit = #(props.taskContext or '') <= props.maxContextLength
+		props.confirmEnabled = nameOk and contextOk and withinLimit
 	else
 		props.confirmEnabled = (#props.existingTaskItems > 0)
 	end
@@ -93,8 +95,10 @@ local function initProperties(props, validation, serverData, tasks, prefs)
 	props.newTaskVisible = not hasTasks
 	props.existingTaskVisible = hasTasks
 
+	props.maxContextLength = serverData.maxContextLength
 	props.taskName = ''
 	props.taskContext = ''
+	props.contextCounter = '0/' .. serverData.maxContextLength
 
 	props.existingTaskItems = buildTaskPopupItems(tasks)
 	props.existingTask = TaskUtils.findTaskIndex(tasks, prefs.lastActiveTaskId) or 1
@@ -235,6 +239,14 @@ local function buildDestinationSection(f, props)
 				font = '<system/small>',
 				enabled = bind 'newTaskVisible',
 			},
+
+			f:static_text {
+				title = bind 'contextCounter',
+				width_in_chars = 10,
+				font = '<system/small>',
+				alignment = 'right',
+				enabled = bind 'newTaskVisible',
+			},
 		},
 
 	}
@@ -351,7 +363,8 @@ LrTasks.startAsyncTask(function()
 			updateConfirmEnabled(propTable)
 		end)
 
-		props:addObserver('taskContext', function(propTable)
+		props:addObserver('taskContext', function(propTable, _, value)
+			propTable.contextCounter = string.format('%d/%d', #(value or ''), propTable.maxContextLength)
 			updateConfirmEnabled(propTable)
 		end)
 
@@ -444,7 +457,7 @@ LrTasks.startAsyncTask(function()
 			if action == 'ok' then
 				local refreshOk, refreshedTasks = ServerConnection.listTasks(host, catalogId)
 				if refreshOk then
-					TaskDialogUI.showDialog(host, refreshedTasks)
+					TaskDialogUI.showDialog(host, refreshedTasks, data.maxContextLength)
 				end
 			end
 		end

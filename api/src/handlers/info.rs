@@ -45,6 +45,7 @@ pub async fn info(State(state): State<AppState>) -> Result<Json<InfoResult>, App
         limits: LimitsInfo {
             max_photos_per_request: state.config.upload.max_photos_per_request,
             max_photo_size_bytes: state.config.upload.max_photo_size.0,
+            max_context_length: state.config.task.max_context_length,
             max_concurrent_jobs: None,
         },
     };
@@ -98,6 +99,10 @@ mod tests {
         assert_eq!(
             info_result.limits.max_photo_size_bytes,
             ts.state.config.upload.max_photo_size.0
+        );
+        assert_eq!(
+            info_result.limits.max_context_length,
+            ts.state.config.task.max_context_length
         );
         assert_eq!(info_result.limits.max_concurrent_jobs, None);
     }

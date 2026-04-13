@@ -94,6 +94,7 @@ Returns general server information: version, storage usage, available AI provide
   "limits": {
     "max_photos_per_request": 100,
     "max_photo_size_bytes": 20971520,
+    "max_context_length": 2000,
     "max_concurrent_jobs": null
   }
 }
@@ -108,6 +109,7 @@ Returns general server information: version, storage usage, available AI provide
 - `running_jobs_count` — number of jobs in `queued` or `processing` state
 - `max_photos_per_request` — maximum number of photos allowed in a single upload request
 - `max_photo_size_bytes` — maximum size in bytes for a single photo file
+- `max_context_length` — maximum allowed length of a task context in characters
 - `max_concurrent_jobs` — maximum concurrent jobs, or `null` if not enforced
 
 ## Catalog Endpoints
@@ -769,6 +771,7 @@ All errors follow a consistent JSON format:
 - `job_not_found` (404) - Specified job does not exist
 - `photo_not_found` (404) - Specified photo does not exist
 - `invalid_model` (400) - Model not in supported/available list
+- `context_too_long` (400) - Task context exceeds `max_context_length`
 - `invalid_parameter` (400) - One or more photo IDs not found in the task
 - `file_too_large` (400) - Uploaded file exceeds max_photo_size
 - `too_many_files` (400) - Upload exceeds max_photos_per_request

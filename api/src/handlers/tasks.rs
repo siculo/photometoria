@@ -31,13 +31,19 @@ fn validate_task_name(name: &str) -> Result<String, AppError> {
     Ok(trimmed)
 }
 
-/// Validates and trims a task context, returning an error if empty.
-fn validate_task_context(context: &str) -> Result<String, AppError> {
+/// Validates and trims a task context, returning an error if empty or too long.
+fn validate_task_context(context: &str, max_length: usize) -> Result<String, AppError> {
     let trimmed = context.trim().to_string();
     if trimmed.is_empty() {
         return Err(AppError::bad_request(
             "invalid_context",
             "Task context must not be empty",
+        ));
+    }
+    if trimmed.len() > max_length {
+        return Err(AppError::bad_request(
+            "context_too_long",
+            &format!("Task context must not exceed {max_length} characters"),
         ));
     }
     Ok(trimmed)
@@ -52,7 +58,7 @@ pub async fn create_task(
     AppJson(request): AppJson<CreateTaskRequest>,
 ) -> Result<(StatusCode, Json<TaskResponse>), AppError> {
     let name = validate_task_name(&request.name)?;
-    let context = validate_task_context(&request.context)?;
+    let context = validate_task_context(&request.context, state.config.task.max_context_length)?;
 
     if state
         .task_store
@@ -193,7 +199,7 @@ pub async fn update_task(
     let task = get_existing_task(&state.task_store, task_id).await?;
 
     let name = validate_task_name(&request.name)?;
-    let context = validate_task_context(&request.context)?;
+    let context = validate_task_context(&request.context, state.config.task.max_context_length)?;
 
     if let Some(existing) = state
         .task_store
@@ -490,6 +496,55 @@ mod tests {
         let err = result.unwrap_err();
         assert_eq!(err.status, StatusCode::CONFLICT);
         assert_eq!(err.body.error, "name_taken");
+    }
+
+    #[tokio::test]
+    async fn test_create_task_context_too_long_rejected() {
+        let ts = create_test_state().await;
+        let long_context = "a".repeat(ts.state.config.task.max_context_length + 1);
+        let request = CreateTaskRequest {
+            name: "My Task".to_string(),
+            context: long_context,
+        };
+
+        let result = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "context_too_long");
+    }
+
+    #[tokio::test]
+    async fn test_update_task_context_too_long_rejected() {
+        let ts = create_test_state().await;
+        let (_, Json(created)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(CreateTaskRequest {
+                name: "My Task".to_string(),
+                context: "original context".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let long_context = "a".repeat(ts.state.config.task.max_context_length + 1);
+        let result = update_task(
+            State(ts.state.clone()),
+            AppPath(created.task_id),
+            AppJson(UpdateTaskRequest {
+                name: "My Task".to_string(),
+                context: long_context,
+            }),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "context_too_long");
     }
 
     #[tokio::test]
