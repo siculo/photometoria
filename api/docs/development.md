@@ -308,6 +308,12 @@ api/tests/
 
 All endpoints can be tested using curl. Below are examples for common workflows.
 
+**0. List all catalogs:**
+
+```bash
+curl http://localhost:3000/api/catalogs
+```
+
 **1. Create a task:**
 
 ```bash

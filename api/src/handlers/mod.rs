@@ -4,6 +4,7 @@
 //! HTTP request handlers
 
 pub mod app_error;
+pub mod catalogs;
 pub mod jobs;
 pub mod photos;
 pub mod providers;
