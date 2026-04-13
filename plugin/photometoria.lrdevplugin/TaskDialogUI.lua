@@ -713,7 +713,7 @@ local function buildTaskSection(f, props, host, tasks)
 				value = bind 'contextText',
 				enabled = bind 'taskSelected',
 				fill_horizontal = 1,
-				height_in_lines = 4,
+				height_in_lines = 6,
 				immediate = true,
 			},
 		},
@@ -728,6 +728,16 @@ local function buildTaskSection(f, props, host, tasks)
 				width_in_chars = 10,
 				font = '<system/small>',
 				alignment = 'right',
+				visible = bind 'contextCounterOk',
+			},
+
+			f:static_text {
+				title = bind 'contextCounter',
+				width_in_chars = 10,
+				font = '<system/small>',
+				alignment = 'right',
+				text_color = LrColor(0.85, 0, 0),
+				visible = bind 'contextCounterError',
 			},
 		},
 
@@ -1209,6 +1219,8 @@ function TaskDialogUI.showDialog(host, tasks, maxContextLength)
 		initProperties(props, tasks)
 		props.maxContextLength = maxContextLength
 		props.contextCounter = ''
+		props.contextCounterOk = true
+		props.contextCounterError = false
 
 		props:addObserver('selectedTask', function(propTable, key, value)
 			if not value then
@@ -1242,7 +1254,10 @@ function TaskDialogUI.showDialog(host, tasks, maxContextLength)
 		props:addObserver('contextText', function(propTable, key, value)
 			propTable.taskModified = (value ~= propTable.contextSavedText)
 				or (propTable.nameText ~= propTable.nameSavedText)
-			propTable.contextCounter = string.format('%d/%d', #(value or ''), propTable.maxContextLength)
+			local len = #(value or '')
+			propTable.contextCounter = string.format('%d/%d', len, propTable.maxContextLength)
+			propTable.contextCounterError = (len == 0) or (len > propTable.maxContextLength)
+			propTable.contextCounterOk = not propTable.contextCounterError
 		end)
 
 		if props.selectedTask then

@@ -2,6 +2,7 @@
 -- SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
 local LrFunctionContext = import 'LrFunctionContext'
+local LrColor = import 'LrColor'
 local LrDialogs = import 'LrDialogs'
 local LrView = import 'LrView'
 local LrBinding = import 'LrBinding'
@@ -99,6 +100,8 @@ local function initProperties(props, validation, serverData, tasks, prefs)
 	props.taskName = ''
 	props.taskContext = ''
 	props.contextCounter = '0/' .. serverData.maxContextLength
+	props.contextCounterOk = false
+	props.contextCounterError = true
 
 	props.existingTaskItems = buildTaskPopupItems(tasks)
 	props.existingTask = TaskUtils.findTaskIndex(tasks, prefs.lastActiveTaskId) or 1
@@ -223,7 +226,7 @@ local function buildDestinationSection(f, props)
 				value = bind 'taskContext',
 				enabled = bind 'newTaskVisible',
 				fill_horizontal = 1,
-				height_in_lines = 4,
+				height_in_lines = 6,
 				immediate = true,
 			},
 		},
@@ -246,6 +249,17 @@ local function buildDestinationSection(f, props)
 				font = '<system/small>',
 				alignment = 'right',
 				enabled = bind 'newTaskVisible',
+				visible = bind 'contextCounterOk',
+			},
+
+			f:static_text {
+				title = bind 'contextCounter',
+				width_in_chars = 10,
+				font = '<system/small>',
+				alignment = 'right',
+				text_color = LrColor(0.85, 0, 0),
+				enabled = bind 'newTaskVisible',
+				visible = bind 'contextCounterError',
 			},
 		},
 
@@ -364,7 +378,10 @@ LrTasks.startAsyncTask(function()
 		end)
 
 		props:addObserver('taskContext', function(propTable, _, value)
-			propTable.contextCounter = string.format('%d/%d', #(value or ''), propTable.maxContextLength)
+			local len = #(value or '')
+			propTable.contextCounter = string.format('%d/%d', len, propTable.maxContextLength)
+			propTable.contextCounterError = (len == 0) or (len > propTable.maxContextLength)
+			propTable.contextCounterOk = not propTable.contextCounterError
 			updateConfirmEnabled(propTable)
 		end)
 
