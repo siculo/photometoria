@@ -732,11 +732,25 @@ local function buildTaskSection(f, props, host, tasks)
 
 					local trimmedName = props.nameText:match('^%s*(.-)%s*$')
 					if trimmedName == '' then
+						LrTasks.startAsyncTask(function()
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC "$$$/Photometoria/Error/EmptyName=The task name cannot be empty.",
+								'warning'
+							)
+						end)
 						return
 					end
 
 					local contextText = props.contextText:match('^%s*(.-)%s*$')
 					if contextText == '' then
+						LrTasks.startAsyncTask(function()
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC "$$$/Photometoria/Error/EmptyContext=The context cannot be empty.",
+								'warning'
+							)
+						end)
 						return
 					end
 

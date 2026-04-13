@@ -162,6 +162,7 @@
 "$$$/Photometoria/Error/DuplicateName=Esiste già un task con questo nome. Scegliere un nome diverso."
 "$$$/Photometoria/Error/TaskNotFound=Task non trovato sul server."
 "$$$/Photometoria/Error/EmptyName=Il nome del task non può essere vuoto."
+"$$$/Photometoria/Error/EmptyContext=Il contesto non può essere vuoto."
 
 "$$$/Photometoria/ApplyTags/ErrorTitle=Applica tag"
 "$$$/Photometoria/ApplyTags/FetchError=Impossibile recuperare i risultati del job."

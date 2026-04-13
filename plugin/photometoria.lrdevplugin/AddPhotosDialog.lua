@@ -220,6 +220,7 @@ local function buildDestinationSection(f, props)
 				enabled = bind 'newTaskVisible',
 				fill_horizontal = 1,
 				height_in_lines = 4,
+				immediate = true,
 			},
 		},
 
@@ -235,6 +236,7 @@ local function buildDestinationSection(f, props)
 				enabled = bind 'newTaskVisible',
 			},
 		},
+
 	}
 end
 
