@@ -87,6 +87,43 @@
 			]
 		},
 		{
+			"name": "Catalogs",
+			"item": [
+				{
+					"name": "List Catalogs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/catalogs",
+							"host": ["{{base_url}}"],
+							"path": ["api", "catalogs"]
+						},
+						"description": "Lists all catalogs that have at least one task, sorted by earliest task creation date."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/catalogs",
+									"host": ["{{base_url}}"],
+									"path": ["api", "catalogs"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [{ "key": "Content-Type", "value": "application/json" }],
+							"body": "[\n  {\n    \"catalog_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"task_count\": 5,\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n  }\n]"
+						}
+					]
+				}
+			]
+		},
+		{
 			"name": "Providers",
 			"item": [
 				{

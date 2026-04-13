@@ -4,6 +4,8 @@
 local LrView = import 'LrView'
 local LrColor = import 'LrColor'
 local LrPrefs = import 'LrPrefs'
+local LrApplication = import 'LrApplication'
+local LrTasks = import 'LrTasks'
 
 local ServerConnection = require 'ServerConnection'
 
@@ -66,6 +68,24 @@ local function sectionsForTopOfDialog(f, propertyTable)
 	propertyTable.statusLabel = ''
 	propertyTable.statusText = ''
 	propertyTable.statusMessage = ''
+
+	propertyTable.catalogId = LOC "$$$/Photometoria/Detail/CatalogIdLoading=..."
+
+	local realCatalogId = nil
+
+	propertyTable:addObserver('catalogId', function(props, key, value)
+		if realCatalogId ~= nil and value ~= realCatalogId then
+			props.catalogId = realCatalogId
+		end
+	end)
+
+	LrTasks.startAsyncTask(function()
+		local catalog = LrApplication.activeCatalog()
+		local id = catalog:getPropertyForPlugin(_PLUGIN, 'catalogId')
+		realCatalogId = id
+		propertyTable.catalogId = id
+			or LOC "$$$/Photometoria/Detail/CatalogIdNotAssigned=(non ancora assegnato)"
+	end)
 
 	hideDetails(propertyTable)
 
@@ -303,6 +323,23 @@ local function sectionsForTopOfDialog(f, propertyTable)
 					},
 					f:static_text {
 						title = bind 'detailJobsValue',
+						fill_horizontal = 1,
+					},
+				},
+
+				f:spacer { height = 10 },
+				f:separator { fill_horizontal = 1 },
+				f:spacer { height = 8 },
+
+				f:row {
+					f:static_text {
+						title = LOC "$$$/Photometoria/Detail/CatalogId=Catalog ID:",
+						alignment = 'right',
+						width = LABEL_WIDTH,
+					},
+					f:edit_field {
+						value = bind 'catalogId',
+						font = '<system/small>',
 						fill_horizontal = 1,
 					},
 				},

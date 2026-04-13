@@ -206,6 +206,25 @@ A reusable progress bar is implemented in `TaskDialog.lua` using:
 - Capture property values as locals **before** entering `startAsyncTask` to
   avoid race conditions if the user edits fields while the request is in flight.
 
+**`sectionsForTopOfDialog` cannot call async SDK functions directly:**
+
+- The Plugin Manager callback `sectionsForTopOfDialog(f, propertyTable)` runs in
+  the main Lightroom thread — **not** inside an `LrTasks.startAsyncTask`.
+- Calling `LrApplication.activeCatalog():getPropertyForPlugin(...)` or any other
+  catalog/I/O SDK function here crashes with:
+  `"We can only wait from within a task"`
+- **Workaround**: set a placeholder value on the property table, then start an
+  `LrTasks.startAsyncTask` to perform the SDK call and update the property.
+  LrView bindings will automatically reflect the updated value in the UI.
+  ```lua
+  propertyTable.catalogId = '...'
+  LrTasks.startAsyncTask(function()
+      local catalog = LrApplication.activeCatalog()
+      propertyTable.catalogId = catalog:getPropertyForPlugin(_PLUGIN, 'catalogId')
+          or '(not yet assigned)'
+  end)
+  ```
+
 **`LrLibraryMenuItems` cannot be dynamically enabled/disabled:**
 
 - `Info.lua` is a static table evaluated once at plugin load.

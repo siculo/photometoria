@@ -25,6 +25,9 @@
 "$$$/Photometoria/Detail/ServerVersion=Versione server:"
 "$$$/Photometoria/Detail/ActiveTasks=Task attivi:"
 "$$$/Photometoria/Detail/QueuedJobs=Job in coda:"
+"$$$/Photometoria/Detail/CatalogId=ID catalogo:"
+"$$$/Photometoria/Detail/CatalogIdNotAssigned=(non ancora assegnato)"
+"$$$/Photometoria/Detail/CatalogIdLoading=..."
 
 "$$$/Photometoria/Menu/AddPhotos=Aggiungi foto"
 "$$$/Photometoria/Menu/Tasks=Gestisci Task"

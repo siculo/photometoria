@@ -4,6 +4,7 @@
 
 ```
 1. GET  /api/info                          → Server info and capabilities
+1b. GET /api/catalogs                      → List all catalogs with task counts
 2. GET  /api/providers                     → List configured AI providers
 3. GET  /api/providers/{provider_name}     → Provider details and models
 4. POST /api/catalogs/{catalog_id}/tasks   → Create task (working session)
