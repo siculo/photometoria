@@ -336,6 +336,120 @@
 								}
 							],
 							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
+						},
+						{
+							"name": "Empty Name",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"\",\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"catalogs",
+										"{{catalog_id}}",
+										"tasks"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"empty_name\",\n    \"message\": \"Task name cannot be empty\"\n}"
+						},
+						{
+							"name": "Empty Context",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"catalogs",
+										"{{catalog_id}}",
+										"tasks"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"empty_context\",\n    \"message\": \"Task context cannot be empty\"\n}"
+						},
+						{
+							"name": "Context Too Long",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"[a string exceeding the max_context_length limit configured on the server]\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"catalogs",
+										"{{catalog_id}}",
+										"tasks"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"context_too_long\",\n    \"message\": \"Task context exceeds maximum length of 2000 characters\"\n}"
 						}
 					]
 				},
@@ -558,6 +672,117 @@
 							"_postman_previewlanguage": "text",
 							"header": [],
 							"body": ""
+						},
+						{
+							"name": "Empty Name",
+							"originalRequest": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"\",\n    \"context\": \"updated context\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"empty_name\",\n    \"message\": \"Task name cannot be empty\"\n}"
+						},
+						{
+							"name": "Empty Context",
+							"originalRequest": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"empty_context\",\n    \"message\": \"Task context cannot be empty\"\n}"
+						},
+						{
+							"name": "Context Too Long",
+							"originalRequest": {
+								"method": "PATCH",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"[a string exceeding the max_context_length limit configured on the server]\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"context_too_long\",\n    \"message\": \"Task context exceeds maximum length of 2000 characters\"\n}"
 						}
 					]
 				},
@@ -1018,6 +1243,82 @@
 								}
 							],
 							"body": "{\n    \"error\": \"invalid_parameter\",\n    \"message\": \"photo with photo_id '00000000-0000-0000-0000-000000000000' does not exists in task '550e8400-e29b-41d4-a716-446655440000'\"\n}"
+						},
+						{
+							"name": "No Photos",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}",
+										"jobs"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"no_photos\",\n    \"message\": \"Task must have at least one photo to create a job\"\n}"
+						},
+						{
+							"name": "Invalid Model",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"model\": \"nonexistent-model\",\n    \"photo_ids\": null\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"tasks",
+										"{{task_id}}",
+										"jobs"
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"body": "{\n    \"error\": \"invalid_model\",\n    \"message\": \"Model 'nonexistent-model' is not configured\"\n}"
 						}
 					]
 				},
