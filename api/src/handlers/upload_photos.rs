@@ -259,6 +259,9 @@ async fn process_field(
     }
 }
 
+/// MIME types accepted for photo uploads, validated via magic bytes.
+pub const ALLOWED_MIME_TYPES: &[&str] = &["image/jpeg", "image/png"];
+
 /// Validate photo data against configuration limits.
 /// Returns None if valid, Some(reason) if invalid.
 fn validate_photo(
@@ -271,7 +274,7 @@ fn validate_photo(
 
     // Check format using magic bytes
     let is_supported = infer::get(data)
-        .map(|k| matches!(k.mime_type(), "image/jpeg" | "image/png"))
+        .map(|k| ALLOWED_MIME_TYPES.contains(&k.mime_type()))
         .unwrap_or(false);
     if !is_supported {
         return Some("invalid_format".to_string());
