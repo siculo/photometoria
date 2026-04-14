@@ -1,2240 +1,2360 @@
 {
-	"info": {
-		"_postman_id": "photometoria-api-collection",
-		"name": "Photometoria API",
-		"description": "Collection for testing Photometoria REST API endpoints",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"variable": [
-		{
-			"key": "base_url",
-			"value": "http://localhost:3000",
-			"type": "string"
-		},
-		{
-			"key": "catalog_id",
-			"value": "",
-			"type": "string",
-			"description": "UUID identifying the Lightroom catalog"
-		},
-		{
-			"key": "task_id",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "photo_id",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "job_id",
-			"value": "",
-			"type": "string"
-		}
-	],
-	"item": [
-		{
-			"name": "Server Info",
-			"item": [
-				{
-					"name": "Get Server Info",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/info",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"info"
-							]
-						},
-						"description": "Returns general server information including version, storage usage, available AI providers, and current activity counts."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/info",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"info"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"general\": {\n        \"version\": \"0.1.0\"\n    },\n    \"server\": {\n        \"allocated_space_bytes\": 107374182400,\n        \"used_space_bytes\": 25243074560,\n        \"available_providers\": [\"ollama\"],\n        \"default_provider\": \"ollama\",\n        \"active_tasks_count\": 3,\n        \"running_jobs_count\": 1\n    }\n}"
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Catalogs",
-			"item": [
-				{
-					"name": "List Catalogs",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/catalogs",
-							"host": ["{{base_url}}"],
-							"path": ["api", "catalogs"]
-						},
-						"description": "Lists all catalogs that have at least one task, sorted by earliest task creation date."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/catalogs",
-									"host": ["{{base_url}}"],
-									"path": ["api", "catalogs"]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [{ "key": "Content-Type", "value": "application/json" }],
-							"body": "[\n  {\n    \"catalog_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"task_count\": 5,\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n  }\n]"
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Providers",
-			"item": [
-				{
-					"name": "List Providers",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/providers",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"providers"
-							]
-						},
-						"description": "Returns the list of registered AI providers."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/providers",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"providers"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"providers\": [\n        {\n            \"name\": \"ollama\"\n        }\n    ],\n    \"default\": \"ollama\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Get Provider Details",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/providers/ollama",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"providers",
-								"ollama"
-							]
-						},
-						"description": "Returns details for a specific provider, including its configured models and their current availability.\n\nReplace `ollama` in the URL with the desired provider name from `GET /api/providers`.\n\n- `default_language`: configured default language for tag generation (omitted if not set)\n- `supported_languages`: per-model list of supported languages (omitted if empty)"
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/providers/ollama",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"providers",
-										"ollama"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"name\": \"ollama\",\n    \"default_language\": \"English\",\n    \"models\": [\n        {\n            \"name\": \"qwen3-vl\",\n            \"description\": \"Best quality, slower processing\",\n            \"available\": true,\n            \"supported_languages\": [\"English\", \"Italian\", \"French\"]\n        },\n        {\n            \"name\": \"llava\",\n            \"description\": \"Faster, good for testing\",\n            \"available\": true\n        }\n    ]\n}"
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/providers/nonexistent",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"providers",
-										"nonexistent"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Provider 'nonexistent' not found\"\n}"
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Tasks",
-			"item": [
-				{
-					"name": "Create Task",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"if (pm.response.code === 201) {",
-									"    var jsonData = pm.response.json();",
-									"    pm.collectionVariables.set('task_id', jsonData.task_id);",
-									"    console.log('Task ID saved:', jsonData.task_id);",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"catalogs",
-								"{{catalog_id}}",
-								"tasks"
-							]
-						},
-						"description": "Creates a new task with the specified context.\n\nThe task_id is automatically saved to a collection variable for subsequent requests."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"catalogs",
-										"{{catalog_id}}",
-										"tasks"
-									]
-								}
-							},
-							"status": "Created",
-							"code": 201,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
-						},
-						{
-							"name": "Empty Name",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"\",\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"catalogs",
-										"{{catalog_id}}",
-										"tasks"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"empty_name\",\n    \"message\": \"Task name cannot be empty\"\n}"
-						},
-						{
-							"name": "Empty Context",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"catalogs",
-										"{{catalog_id}}",
-										"tasks"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"empty_context\",\n    \"message\": \"Task context cannot be empty\"\n}"
-						},
-						{
-							"name": "Context Too Long",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"[a string exceeding the max_context_length limit configured on the server]\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"catalogs",
-										"{{catalog_id}}",
-										"tasks"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"context_too_long\",\n    \"message\": \"Task context exceeds maximum length of 2000 characters\"\n}"
-						}
-					]
-				},
-				{
-					"name": "List Tasks",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"catalogs",
-								"{{catalog_id}}",
-								"tasks"
-							]
-						},
-						"description": "Returns the list of all tasks with summary information."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"catalogs",
-										"{{catalog_id}}",
-										"tasks"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "[\n    {\n        \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n        \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"name\": \"SF Vacation\",\n        \"context\": \"vacation in San Francisco\",\n        \"photo_count\": 0,\n        \"storage_used\": 0,\n        \"created_at\": \"2024-01-15T10:30:00Z\",\n        \"job_count\": 0\n    }\n]"
-						}
-					]
-				},
-				{
-					"name": "Get Task by ID",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/tasks/{{task_id}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"tasks",
-								"{{task_id}}"
-							]
-						},
-						"description": "Returns the details of a specific task.\n\nUses the task_id saved from creation or replace it manually."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco\",\n    \"created_at\": \"2024-01-15T10:30:00Z\",\n    \"photo_count\": 0,\n    \"storage_used\": 0,\n    \"job_count\": 0\n}"
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"nonexistent"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "text",
-							"header": [],
-							"body": ""
-						}
-					]
-				},
-				{
-					"name": "Update Task",
-					"request": {
-						"method": "PATCH",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/api/tasks/{{task_id}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"tasks",
-								"{{task_id}}"
-							]
-						},
-						"description": "Updates the context of an existing task.\n\nUses the task_id saved from creation or replace it manually."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"nonexistent"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "text",
-							"header": [],
-							"body": ""
-						},
-						{
-							"name": "Empty Name",
-							"originalRequest": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"\",\n    \"context\": \"updated context\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"empty_name\",\n    \"message\": \"Task name cannot be empty\"\n}"
-						},
-						{
-							"name": "Empty Context",
-							"originalRequest": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"empty_context\",\n    \"message\": \"Task context cannot be empty\"\n}"
-						},
-						{
-							"name": "Context Too Long",
-							"originalRequest": {
-								"method": "PATCH",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"[a string exceeding the max_context_length limit configured on the server]\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"context_too_long\",\n    \"message\": \"Task context exceeds maximum length of 2000 characters\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Delete Task",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/tasks/{{task_id}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"tasks",
-								"{{task_id}}"
-							]
-						},
-						"description": "Deletes a task and all associated data (photos, jobs).\n\nReturns `409 Conflict` if the task has any active (queued or processing) jobs. Cancel or wait for all jobs to finish before deleting the task.\n\nUses the task_id saved from creation or replace it manually."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}"
-									]
-								}
-							},
-							"status": "No Content",
-							"code": 204,
-							"_postman_previewlanguage": "text",
-							"header": [],
-							"body": ""
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"nonexistent"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "text",
-							"header": [],
-							"body": ""
-						},
-						{
-							"name": "Active Job",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}"
-									]
-								}
-							},
-							"status": "Conflict",
-							"code": 409,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"job_active\",\n    \"message\": \"Cannot delete: task '550e8400-e29b-41d4-a716-446655440000' has active jobs\"\n}"
-						}
-					]
-				},
-				{
-					"name": "List Task Photos",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"tasks",
-								"{{task_id}}",
-								"photos"
-							],
-							"query": [
-								{
-									"key": "client_id",
-									"value": "",
-									"description": "Filter photos by client_id value (exact match)",
-									"disabled": true
-								}
-							]
-						},
-						"description": "Returns the list of photo IDs belonging to a task.\n\nOptional query parameter:\n- client_id: filter photos by client_id value (exact match)\n\nUses the task_id saved from creation or replace it manually."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}",
-										"photos"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"photos\": [\n        {\n            \"photo_id\": \"f0e1d2c3-b4a5-6789-0fed-cba987654321\",\n            \"client_id\": \"lr:123456\",\n            \"filename\": \"IMG_1234.jpg\",\n            \"size_bytes\": 4200000\n        },\n        {\n            \"photo_id\": \"a9b8c7d6-e5f4-3210-9876-543210fedcba\",\n            \"client_id\": \"lr:789012\",\n            \"filename\": \"IMG_5678.jpg\",\n            \"size_bytes\": 3100000\n        }\n    ],\n    \"count\": 2\n}"
-						},
-						{
-							"name": "Task Not Found",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent/photos",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"nonexistent",
-										"photos"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Task with id 'nonexistent' not found\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Upload Photos",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "formdata",
-							"formdata": [
-								{
-									"key": "client_ids",
-									"type": "text",
-									"value": "[\"/path/to/photo1.jpg\", \"/path/to/photo2.jpg\"]",
-									"description": "JSON array of client identifiers, one per file (optional). Opaque strings supplied by the client for reconciliation. If omitted, all photos get client_id = null."
-								},
-								{
-									"key": "files",
-									"type": "file",
-									"src": [],
-									"description": "Select one or more image files (JPEG or PNG)"
-								}
-							]
-						},
-						"url": {
-							"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"tasks",
-								"{{task_id}}",
-								"photos"
-							]
-						},
-						"description": "Uploads one or more photos to a task.\n\nFields:\n- client_ids: JSON array of identifiers (optional, e.g., local file paths)\n- files: The actual image files\n\nWhen client_ids is provided, the array must have the same length as the number of files. When omitted, all photos get client_id = null.\n\nSupported formats: JPEG, PNG.\nReturns 201 if at least one photo was uploaded, 200 otherwise."
-					},
-					"response": [
-						{
-							"name": "Success (partial)",
-							"originalRequest": {
-								"method": "POST",
-								"header": [],
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "files",
-											"type": "file",
-											"src": []
-										}
-									]
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}",
-										"photos"
-									]
-								}
-							},
-							"status": "Created",
-							"code": 201,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"uploaded\": [\n        {\n            \"client_id\": \"/Users/photos/IMG_001.jpg\",\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440001\",\n            \"filename\": \"IMG_001.jpg\",\n            \"size_bytes\": 4200000\n        },\n        {\n            \"client_id\": \"/Users/photos/IMG_002.jpg\",\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"filename\": \"IMG_002.jpg\",\n            \"size_bytes\": 3800000\n        }\n    ],\n    \"failed\": [\n        {\n            \"client_id\": \"/Users/photos/document.pdf\",\n            \"filename\": \"document.pdf\",\n            \"reason\": \"invalid_format\"\n        }\n    ],\n    \"uploaded_size_bytes\": 8000000\n}"
-						},
-						{
-							"name": "Task Not Found",
-							"originalRequest": {
-								"method": "POST",
-								"header": [],
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "files",
-											"type": "file",
-											"src": []
-										}
-									]
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent/photos",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"nonexistent",
-										"photos"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "text",
-							"header": [],
-							"body": ""
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Jobs",
-			"item": [
-				{
-					"name": "Create Job",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"if (pm.response.code === 201) {",
-									"    var jsonData = pm.response.json();",
-									"    pm.collectionVariables.set('job_id', jsonData.job_id);",
-									"    console.log('Job ID saved:', jsonData.job_id);",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"tasks",
-								"{{task_id}}",
-								"jobs"
-							]
-						},
-						"description": "Creates a new job to process photos with the specified AI model.\n\n- `model`: AI model to use (e.g. `qwen3-vl`, `llava`)\n- `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task\n- `language`: language for generated tags (optional). Falls back to server-side `default_language` config, then to English\n\nThe job is created in `queued` status. The `job_id` is saved automatically for subsequent requests."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}",
-										"jobs"
-									]
-								}
-							},
-							"status": "Created",
-							"code": 201,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"Italian\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
-						},
-						{
-							"name": "Task Not Found",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent/jobs",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"nonexistent",
-										"jobs"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Task with id 'nonexistent' not found\"\n}"
-						},
-						{
-							"name": "Invalid Photo ID",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": [\"00000000-0000-0000-0000-000000000000\"]\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}",
-										"jobs"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"invalid_parameter\",\n    \"message\": \"photo with photo_id '00000000-0000-0000-0000-000000000000' does not exists in task '550e8400-e29b-41d4-a716-446655440000'\"\n}"
-						},
-						{
-							"name": "No Photos",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}",
-										"jobs"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"no_photos\",\n    \"message\": \"Task must have at least one photo to create a job\"\n}"
-						},
-						{
-							"name": "Invalid Model",
-							"originalRequest": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"model\": \"nonexistent-model\",\n    \"photo_ids\": null\n}"
-								},
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}",
-										"jobs"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"invalid_model\",\n    \"message\": \"Model 'nonexistent-model' is not configured\"\n}"
-						}
-					]
-				},
-				{
-					"name": "List Task Jobs",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"tasks",
-								"{{task_id}}",
-								"jobs"
-							]
-						},
-						"description": "Returns a summary list of all jobs belonging to a specific task."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"{{task_id}}",
-										"jobs"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen3-vl\",\n        \"language\": \"English\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    }\n]"
-						},
-						{
-							"name": "Task Not Found",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/tasks/nonexistent/jobs",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"tasks",
-										"nonexistent",
-										"jobs"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Task with id 'nonexistent' not found\"\n}"
-						}
-					]
-				},
-				{
-					"name": "List Jobs",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/jobs",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"jobs"
-							]
-						},
-						"description": "Returns a summary list of all jobs across all tasks."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen3-vl\",\n        \"language\": \"English\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    },\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440011\",\n        \"status\": \"queued\",\n        \"model\": \"llava\",\n        \"language\": \"Italian\",\n        \"photo_count\": 5,\n        \"queued_photo_count\": 5,\n        \"processed_photo_count\": 0,\n        \"created_at\": \"2024-01-15T11:00:00Z\"\n    }\n]"
-						}
-					]
-				},
-				{
-					"name": "Get Job by ID",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"jobs",
-								"{{job_id}}"
-							]
-						},
-						"description": "Returns detailed information about a specific job, including progress when in `processing` status.\n\n- `started_at` is set as soon as a worker picks up the first photo (before AI analysis begins); omitted while `queued`\n- `completed_at` is set when the job reaches a terminal state; omitted until then\n- `progress` is only present when `status` is `processing`; `current_photo_id` within `progress` may be omitted between photos"
-					},
-					"response": [
-						{
-							"name": "Success (queued)",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
-						},
-						{
-							"name": "Success (processing with progress)",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"processing\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"progress\": {\n        \"completed\": 5,\n        \"failed\": 1,\n        \"remaining\": 9,\n        \"current_photo_id\": \"550e8400-e29b-41d4-a716-446655440003\"\n    }\n}"
-						},
-						{
-							"name": "Success (completed)",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"completed\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:45:00Z\"\n}"
-						},
-						{
-							"name": "Success (cancelled)",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:40:00Z\"\n}"
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"nonexistent"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Get Job Results",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}/results",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"jobs",
-								"{{job_id}}",
-								"results"
-							]
-						},
-						"description": "Returns the AI analysis results for all processed photos in a job.\n\nAvailable for jobs in any status; results accumulate as photos are processed."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/results",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}",
-										"results"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"results\": [\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"client_id\": \"/Users/photos/IMG_001.jpg\",\n            \"status\": \"completed\",\n            \"tags\": \"landscape, mountain, sunset, golden hour, nature\",\n            \"processed_at\": \"2024-01-15T10:36:00Z\"\n        },\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440003\",\n            \"client_id\": \"/Users/photos/IMG_002.jpg\",\n            \"status\": \"failed\",\n            \"error\": \"Model timeout\",\n            \"processed_at\": \"2024-01-15T10:37:00Z\"\n        }\n    ],\n    \"summary\": {\n        \"total\": 15,\n        \"completed\": 12,\n        \"failed\": 3\n    }\n}"
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent/results",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"nonexistent",
-										"results"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Cancel Job",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"jobs",
-								"{{job_id}}",
-								"cancel"
-							]
-						},
-						"description": "Cancels an active job. Removes any pending photos from the worker buffer and marks the job as `cancelled`.\n\nPhotos already being processed by a worker are allowed to finish, but their results will not be saved.\n\nReturns `409 Conflict` if the job has already reached a terminal state (completed, failed, or cancelled)."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "POST",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}",
-										"cancel"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"Italian\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
-						},
-						{
-							"name": "Already Finished",
-							"originalRequest": {
-								"method": "POST",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}",
-										"cancel"
-									]
-								}
-							},
-							"status": "Conflict",
-							"code": 409,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"job_already_finished\",\n    \"message\": \"Cannot cancel job '550e8400-e29b-41d4-a716-446655440010': it has already finished with status 'completed'\"\n}"
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "POST",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent/cancel",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"nonexistent",
-										"cancel"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Retry Job",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"if (pm.response.code === 201) {",
-									"    var jsonData = pm.response.json();",
-									"    pm.collectionVariables.set('job_id', jsonData.job_id);",
-									"    console.log('New Job ID saved:', jsonData.job_id);",
-									"}"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"jobs",
-								"{{job_id}}",
-								"retry"
-							]
-						},
-						"description": "Creates a new job to retry failed and unprocessed photos from a finished job (including photos cancelled before processing).\n\nReturns `409 Conflict` if the job is still processing, or `400 Bad Request` if there are no failed or unprocessed photos to retry.\n\nThe new `job_id` is saved automatically."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "POST",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}",
-										"retry"
-									]
-								}
-							},
-							"status": "Created",
-							"code": 201,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440020\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"Italian\",\n    \"photo_count\": 3,\n    \"created_at\": \"2024-01-15T11:00:00Z\",\n    \"parent_job_id\": \"550e8400-e29b-41d4-a716-446655440010\"\n}"
-						},
-						{
-							"name": "Job Still Processing",
-							"originalRequest": {
-								"method": "POST",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}",
-										"retry"
-									]
-								}
-							},
-							"status": "Conflict",
-							"code": 409,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"job_in_progress\",\n    \"message\": \"Cannot retry job '550e8400-e29b-41d4-a716-446655440010' while it is still processing\"\n}"
-						},
-						{
-							"name": "No Failed Photos",
-							"originalRequest": {
-								"method": "POST",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}",
-										"retry"
-									]
-								}
-							},
-							"status": "Bad Request",
-							"code": 400,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"no_failed_photos\",\n    \"message\": \"Job '550e8400-e29b-41d4-a716-446655440010' has no failed or unprocessed photos to retry\"\n}"
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "POST",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent/retry",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"nonexistent",
-										"retry"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Delete Job",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/jobs/{{job_id}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"jobs",
-								"{{job_id}}"
-							]
-						},
-						"description": "Deletes a job and all its results. The job must be in a terminal state (`completed`, `failed`, or `cancelled`).\n\nReturns `409 Conflict` if the job is still active (queued or processing)."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}"
-									]
-								}
-							},
-							"status": "No Content",
-							"code": 204,
-							"_postman_previewlanguage": "text",
-							"header": [],
-							"body": ""
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/nonexistent",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"nonexistent"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
-						},
-						{
-							"name": "Job Still Active",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/jobs/{{job_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"jobs",
-										"{{job_id}}"
-									]
-								}
-							},
-							"status": "Conflict",
-							"code": 409,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"job_not_finished\",\n    \"message\": \"Cannot delete job '550e8400-e29b-41d4-a716-446655440010': it is still active\"\n}"
-						}
-					]
-				}
-			]
-		},
-		{
-			"name": "Photos",
-			"item": [
-				{
-					"name": "Get Photo by ID",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/photos/{{photo_id}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"photos",
-								"{{photo_id}}"
-							]
-						},
-						"description": "Returns detailed information about a specific photo.\n\nNote: You need to set the photo_id variable manually or capture it from an upload response."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/photos/{{photo_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"photos",
-										"{{photo_id}}"
-									]
-								}
-							},
-							"status": "OK",
-							"code": 200,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"photo_id\": \"f0e1d2c3-b4a5-6789-0fed-cba987654321\",\n    \"task_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"client_id\": \"/Users/photos/IMG_1234.jpg\",\n    \"filename\": \"IMG_1234.jpg\",\n    \"size_bytes\": 4200000,\n    \"uploaded_at\": \"2024-01-15T10:32:00Z\"\n}"
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/photos/nonexistent",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"photos",
-										"nonexistent"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Photo with id nonexistent not found\"\n}"
-						}
-					]
-				},
-				{
-					"name": "Delete Photo",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/api/photos/{{photo_id}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"photos",
-								"{{photo_id}}"
-							]
-						},
-						"description": "Deletes a specific photo.\n\nReturns `409 Conflict` if the photo's task has any active (queued or processing) jobs.\n\nNote: You need to set the photo_id variable manually or capture it from an upload response."
-					},
-					"response": [
-						{
-							"name": "Success",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/photos/{{photo_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"photos",
-										"{{photo_id}}"
-									]
-								}
-							},
-							"status": "No Content",
-							"code": 204,
-							"_postman_previewlanguage": "text",
-							"header": [],
-							"body": ""
-						},
-						{
-							"name": "Not Found",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/photos/nonexistent",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"photos",
-										"nonexistent"
-									]
-								}
-							},
-							"status": "Not Found",
-							"code": 404,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Photo with id nonexistent not found\"\n}"
-						},
-						{
-							"name": "Active Job",
-							"originalRequest": {
-								"method": "DELETE",
-								"header": [],
-								"url": {
-									"raw": "{{base_url}}/api/photos/{{photo_id}}",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"api",
-										"photos",
-										"{{photo_id}}"
-									]
-								}
-							},
-							"status": "Conflict",
-							"code": 409,
-							"_postman_previewlanguage": "json",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"body": "{\n    \"error\": \"job_active\",\n    \"message\": \"Cannot delete: task '550e8400-e29b-41d4-a716-446655440000' has active jobs\"\n}"
-						}
-					]
-				}
-			]
-		}
-	]
+    "info": {
+        "_postman_id": "photometoria-api-collection",
+        "name": "Photometoria API",
+        "description": "Collection for testing Photometoria REST API endpoints",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3000",
+            "type": "string"
+        },
+        {
+            "key": "catalog_id",
+            "value": "",
+            "type": "string",
+            "description": "UUID identifying the Lightroom catalog"
+        },
+        {
+            "key": "task_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "photo_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "job_id",
+            "value": "",
+            "type": "string"
+        }
+    ],
+    "item": [
+        {
+            "name": "Server Info",
+            "item": [
+                {
+                    "name": "Get Server Info",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/info",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "info"
+                            ]
+                        },
+                        "description": "Returns general server information including version, storage usage, available AI providers, and current activity counts."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/info",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "info"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"general\": {\n        \"version\": \"0.3.0\"\n    },\n    \"server\": {\n        \"allocated_space_bytes\": 107374182400,\n        \"used_space_bytes\": 25243074560,\n        \"available_space_bytes\": 82131107840,\n        \"available_providers\": [\n            \"ollama\"\n        ],\n        \"default_provider\": \"ollama\",\n        \"active_tasks_count\": 3,\n        \"running_jobs_count\": 1\n    },\n    \"limits\": {\n        \"max_photos_per_request\": 100,\n        \"max_photo_size_bytes\": 20971520,\n        \"max_context_length\": 2000,\n        \"max_concurrent_jobs\": null,\n        \"allowed_photo_types\": [\n            \"image/jpeg\",\n            \"image/png\"\n        ]\n    }\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Catalogs",
+            "item": [
+                {
+                    "name": "List Catalogs",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/catalogs",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "catalogs"
+                            ]
+                        },
+                        "description": "Lists all catalogs that have at least one task, sorted by earliest task creation date."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/catalogs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "catalogs"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "[\n  {\n    \"catalog_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"task_count\": 5,\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n  }\n]"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Providers",
+            "item": [
+                {
+                    "name": "List Providers",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/providers",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "providers"
+                            ]
+                        },
+                        "description": "Returns the list of registered AI providers."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/providers",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "providers"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"providers\": [\n        {\n            \"name\": \"ollama\"\n        }\n    ],\n    \"default\": \"ollama\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Provider Details",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/providers/ollama",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "providers",
+                                "ollama"
+                            ]
+                        },
+                        "description": "Returns details for a specific provider, including its configured models and their current availability.\n\nReplace `ollama` in the URL with the desired provider name from `GET /api/providers`.\n\n- `default_language`: configured default language for tag generation (omitted if not set)\n- `supported_languages`: per-model list of supported languages (omitted if empty)"
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/providers/ollama",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "providers",
+                                        "ollama"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"name\": \"ollama\",\n    \"default_language\": \"English\",\n    \"models\": [\n        {\n            \"name\": \"qwen3-vl\",\n            \"description\": \"Best quality, slower processing\",\n            \"available\": true,\n            \"supported_languages\": [\"English\", \"Italian\", \"French\"]\n        },\n        {\n            \"name\": \"llava\",\n            \"description\": \"Faster, good for testing\",\n            \"available\": true\n        }\n    ]\n}"
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/providers/nonexistent",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "providers",
+                                        "nonexistent"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Provider 'nonexistent' not found\"\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Tasks",
+            "item": [
+                {
+                    "name": "Create Task",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.collectionVariables.set('task_id', jsonData.task_id);",
+                                    "    console.log('Task ID saved:', jsonData.task_id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "catalogs",
+                                "{{catalog_id}}",
+                                "tasks"
+                            ]
+                        },
+                        "description": "Creates a new task with the specified context.\n\nThe task_id is automatically saved to a collection variable for subsequent requests."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "catalogs",
+                                        "{{catalog_id}}",
+                                        "tasks"
+                                    ]
+                                }
+                            },
+                            "status": "Created",
+                            "code": 201,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco, summer 2024\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
+                        },
+                        {
+                            "name": "Empty Name",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"name\": \"\",\n    \"context\": \"vacation in San Francisco, summer 2024\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "catalogs",
+                                        "{{catalog_id}}",
+                                        "tasks"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"invalid_name\",\n    \"message\": \"Task name must not be empty\"\n}"
+                        },
+                        {
+                            "name": "Empty Context",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "catalogs",
+                                        "{{catalog_id}}",
+                                        "tasks"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"invalid_context\",\n    \"message\": \"Task context must not be empty\"\n}"
+                        },
+                        {
+                            "name": "Context Too Long",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"[a string exceeding the max_context_length limit configured on the server]\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "catalogs",
+                                        "{{catalog_id}}",
+                                        "tasks"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"context_too_long\",\n    \"message\": \"Task context exceeds maximum length of 2000 characters\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "List Tasks",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "catalogs",
+                                "{{catalog_id}}",
+                                "tasks"
+                            ]
+                        },
+                        "description": "Returns the list of all tasks with summary information."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/catalogs/{{catalog_id}}/tasks",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "catalogs",
+                                        "{{catalog_id}}",
+                                        "tasks"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "[\n    {\n        \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n        \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n        \"name\": \"SF Vacation\",\n        \"context\": \"vacation in San Francisco\",\n        \"photo_count\": 0,\n        \"storage_used\": 0,\n        \"created_at\": \"2024-01-15T10:30:00Z\",\n        \"job_count\": 0\n    }\n]"
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Task by ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tasks",
+                                "{{task_id}}"
+                            ]
+                        },
+                        "description": "Returns the details of a specific task.\n\nUses the task_id saved from creation or replace it manually."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"vacation in San Francisco\",\n    \"created_at\": \"2024-01-15T10:30:00Z\",\n    \"photo_count\": 0,\n    \"storage_used\": 0,\n    \"job_count\": 0\n}"
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/nonexistent",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "nonexistent"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "text",
+                            "header": [],
+                            "body": ""
+                        },
+                        {
+                            "name": "Invalid UUID",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/not-a-uuid",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "not-a-uuid"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"invalid_uuid\",\n    \"message\": \"Invalid UUID format in path parameter\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Update Task",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tasks",
+                                "{{task_id}}"
+                            ]
+                        },
+                        "description": "Updates the context of an existing task.\n\nUses the task_id saved from creation or replace it manually."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"catalog_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context - trip to Golden Gate Bridge\",\n    \"created_at\": \"2024-01-15T10:30:00Z\"\n}"
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"updated context\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/nonexistent",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "nonexistent"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "text",
+                            "header": [],
+                            "body": ""
+                        },
+                        {
+                            "name": "Empty Name",
+                            "originalRequest": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"name\": \"\",\n    \"context\": \"updated context\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"invalid_name\",\n    \"message\": \"Task name must not be empty\"\n}"
+                        },
+                        {
+                            "name": "Empty Context",
+                            "originalRequest": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"invalid_context\",\n    \"message\": \"Task context must not be empty\"\n}"
+                        },
+                        {
+                            "name": "Context Too Long",
+                            "originalRequest": {
+                                "method": "PATCH",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"name\": \"SF Vacation\",\n    \"context\": \"[a string exceeding the max_context_length limit configured on the server]\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"context_too_long\",\n    \"message\": \"Task context exceeds maximum length of 2000 characters\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Delete Task",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tasks",
+                                "{{task_id}}"
+                            ]
+                        },
+                        "description": "Deletes a task and all associated data (photos, jobs).\n\nReturns `409 Conflict` if the task has any active (queued or processing) jobs. Cancel or wait for all jobs to finish before deleting the task.\n\nUses the task_id saved from creation or replace it manually."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "No Content",
+                            "code": 204,
+                            "_postman_previewlanguage": "text",
+                            "header": [],
+                            "body": ""
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/nonexistent",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "nonexistent"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "text",
+                            "header": [],
+                            "body": ""
+                        },
+                        {
+                            "name": "Active Job",
+                            "originalRequest": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "Conflict",
+                            "code": 409,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"job_active\",\n    \"message\": \"Cannot delete: task '550e8400-e29b-41d4-a716-446655440000' has active jobs\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "List Task Photos",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tasks",
+                                "{{task_id}}",
+                                "photos"
+                            ],
+                            "query": [
+                                {
+                                    "key": "client_id",
+                                    "value": "",
+                                    "description": "Filter photos by client_id value (exact match)",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "Returns the list of photo IDs belonging to a task.\n\nOptional query parameter:\n- client_id: filter photos by client_id value (exact match)\n\nUses the task_id saved from creation or replace it manually."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}",
+                                        "photos"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"photos\": [\n        {\n            \"photo_id\": \"f0e1d2c3-b4a5-6789-0fed-cba987654321\",\n            \"client_id\": \"lr:123456\",\n            \"filename\": \"IMG_1234.jpg\",\n            \"size_bytes\": 4200000\n        },\n        {\n            \"photo_id\": \"a9b8c7d6-e5f4-3210-9876-543210fedcba\",\n            \"client_id\": \"lr:789012\",\n            \"filename\": \"IMG_5678.jpg\",\n            \"size_bytes\": 3100000\n        }\n    ],\n    \"count\": 2\n}"
+                        },
+                        {
+                            "name": "Task Not Found",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/nonexistent/photos",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "nonexistent",
+                                        "photos"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Task with id 'nonexistent' not found\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Upload Photos",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "formdata",
+                            "formdata": [
+                                {
+                                    "key": "client_ids",
+                                    "type": "text",
+                                    "value": "[\"/path/to/photo1.jpg\", \"/path/to/photo2.jpg\"]",
+                                    "description": "JSON array of client identifiers, one per file (optional). Opaque strings supplied by the client for reconciliation. If omitted, all photos get client_id = null."
+                                },
+                                {
+                                    "key": "files",
+                                    "type": "file",
+                                    "src": [],
+                                    "description": "Select one or more image files (JPEG or PNG)"
+                                }
+                            ]
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tasks",
+                                "{{task_id}}",
+                                "photos"
+                            ]
+                        },
+                        "description": "Uploads one or more photos to a task.\n\nFields:\n- client_ids: JSON array of identifiers (optional, e.g., local file paths)\n- files: The actual image files\n\nWhen client_ids is provided, the array must have the same length as the number of files. When omitted, all photos get client_id = null.\n\nSupported formats: JPEG, PNG.\nReturns 201 if at least one photo was uploaded, 200 otherwise."
+                    },
+                    "response": [
+                        {
+                            "name": "Success (partial)",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "body": {
+                                    "mode": "formdata",
+                                    "formdata": [
+                                        {
+                                            "key": "files",
+                                            "type": "file",
+                                            "src": []
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}",
+                                        "photos"
+                                    ]
+                                }
+                            },
+                            "status": "Created",
+                            "code": 201,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"uploaded\": [\n        {\n            \"client_id\": \"/Users/photos/IMG_001.jpg\",\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440001\",\n            \"filename\": \"IMG_001.jpg\",\n            \"size_bytes\": 4200000\n        },\n        {\n            \"client_id\": \"/Users/photos/IMG_002.jpg\",\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"filename\": \"IMG_002.jpg\",\n            \"size_bytes\": 3800000\n        }\n    ],\n    \"failed\": [\n        {\n            \"client_id\": \"/Users/photos/document.pdf\",\n            \"filename\": \"document.pdf\",\n            \"reason\": \"invalid_format\"\n        }\n    ],\n    \"uploaded_size_bytes\": 8000000\n}"
+                        },
+                        {
+                            "name": "Storage Full",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "body": {
+                                    "mode": "formdata",
+                                    "formdata": [
+                                        {
+                                            "key": "files",
+                                            "type": "file",
+                                            "src": []
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}/photos",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}",
+                                        "photos"
+                                    ]
+                                }
+                            },
+                            "status": "Created",
+                            "code": 201,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"uploaded\": [\n        {\n            \"client_id\": \"/Users/photos/IMG_001.jpg\",\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440001\",\n            \"filename\": \"IMG_001.jpg\",\n            \"size_bytes\": 4200000\n        }\n    ],\n    \"failed\": [\n        {\n            \"client_id\": \"/Users/photos/IMG_002.jpg\",\n            \"filename\": \"IMG_002.jpg\",\n            \"reason\": \"storage_full\"\n        },\n        {\n            \"client_id\": \"/Users/photos/IMG_003.jpg\",\n            \"filename\": \"IMG_003.jpg\",\n            \"reason\": \"storage_full\"\n        }\n    ],\n    \"uploaded_size_bytes\": 4200000\n}"
+                        },
+                        {
+                            "name": "Task Not Found",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "body": {
+                                    "mode": "formdata",
+                                    "formdata": [
+                                        {
+                                            "key": "files",
+                                            "type": "file",
+                                            "src": []
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/nonexistent/photos",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "nonexistent",
+                                        "photos"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "text",
+                            "header": [],
+                            "body": ""
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Jobs",
+            "item": [
+                {
+                    "name": "Create Job",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.collectionVariables.set('job_id', jsonData.job_id);",
+                                    "    console.log('Job ID saved:', jsonData.job_id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tasks",
+                                "{{task_id}}",
+                                "jobs"
+                            ]
+                        },
+                        "description": "Creates a new job to process photos with the specified AI model.\n\n- `model`: AI model to use (e.g. `qwen3-vl`, `llava`)\n- `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task\n- `language`: language for generated tags (optional). Falls back to server-side `default_language` config, then to English\n\nThe job is created in `queued` status. The `job_id` is saved automatically for subsequent requests."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}",
+                                        "jobs"
+                                    ]
+                                }
+                            },
+                            "status": "Created",
+                            "code": 201,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"Italian\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
+                        },
+                        {
+                            "name": "Task Not Found",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/nonexistent/jobs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "nonexistent",
+                                        "jobs"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Task with id 'nonexistent' not found\"\n}"
+                        },
+                        {
+                            "name": "Invalid Photo ID",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": [\"00000000-0000-0000-0000-000000000000\"]\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}",
+                                        "jobs"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"invalid_parameter\",\n    \"message\": \"photo with photo_id '00000000-0000-0000-0000-000000000000' does not exists in task '550e8400-e29b-41d4-a716-446655440000'\"\n}"
+                        },
+                        {
+                            "name": "No Photos",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}",
+                                        "jobs"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"no_photos\",\n    \"message\": \"Task must have at least one photo to create a job\"\n}"
+                        },
+                        {
+                            "name": "Invalid Model",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"model\": \"nonexistent-model\",\n    \"photo_ids\": null\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}",
+                                        "jobs"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"invalid_model\",\n    \"message\": \"Model 'nonexistent-model' is not configured\"\n}"
+                        },
+                        {
+                            "name": "Model Not Available",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"model\": \"qwen3-vl:8b\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}",
+                                        "jobs"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"model_not_available\",\n    \"message\": \"Model 'qwen3-vl:8b' is not available in the AI provider\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "List Task Jobs",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "tasks",
+                                "{{task_id}}",
+                                "jobs"
+                            ]
+                        },
+                        "description": "Returns a summary list of all jobs belonging to a specific task."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "{{task_id}}",
+                                        "jobs"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen3-vl\",\n        \"language\": \"English\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    }\n]"
+                        },
+                        {
+                            "name": "Task Not Found",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/tasks/nonexistent/jobs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "tasks",
+                                        "nonexistent",
+                                        "jobs"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Task with id 'nonexistent' not found\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "List Jobs",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/jobs",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "jobs"
+                            ]
+                        },
+                        "description": "Returns a summary list of all jobs across all tasks."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "[\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n        \"status\": \"completed\",\n        \"model\": \"qwen3-vl\",\n        \"language\": \"English\",\n        \"photo_count\": 15,\n        \"queued_photo_count\": 0,\n        \"processed_photo_count\": 15,\n        \"created_at\": \"2024-01-15T10:35:00Z\",\n        \"completed_at\": \"2024-01-15T10:45:00Z\"\n    },\n    {\n        \"job_id\": \"550e8400-e29b-41d4-a716-446655440011\",\n        \"status\": \"queued\",\n        \"model\": \"llava\",\n        \"language\": \"Italian\",\n        \"photo_count\": 5,\n        \"queued_photo_count\": 5,\n        \"processed_photo_count\": 0,\n        \"created_at\": \"2024-01-15T11:00:00Z\"\n    }\n]"
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Job by ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/jobs/{{job_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "jobs",
+                                "{{job_id}}"
+                            ]
+                        },
+                        "description": "Returns detailed information about a specific job, including progress when in `processing` status.\n\n- `started_at` is set as soon as a worker picks up the first photo (before AI analysis begins); omitted while `queued`\n- `completed_at` is set when the job reaches a terminal state; omitted until then\n- `progress` is only present when `status` is `processing`; `current_photo_id` within `progress` may be omitted between photos"
+                    },
+                    "response": [
+                        {
+                            "name": "Success (queued)",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
+                        },
+                        {
+                            "name": "Success (processing with progress)",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"processing\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"progress\": {\n        \"completed\": 5,\n        \"failed\": 1,\n        \"remaining\": 9,\n        \"current_photo_id\": \"550e8400-e29b-41d4-a716-446655440003\"\n    }\n}"
+                        },
+                        {
+                            "name": "Success (completed)",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"completed\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:45:00Z\"\n}"
+                        },
+                        {
+                            "name": "Success (cancelled)",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"English\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\",\n    \"started_at\": \"2024-01-15T10:35:10Z\",\n    \"completed_at\": \"2024-01-15T10:40:00Z\"\n}"
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/nonexistent",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "nonexistent"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Job Results",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/jobs/{{job_id}}/results",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "jobs",
+                                "{{job_id}}",
+                                "results"
+                            ]
+                        },
+                        "description": "Returns the AI analysis results for all processed photos in a job.\n\nAvailable for jobs in any status; results accumulate as photos are processed."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}/results",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}",
+                                        "results"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"results\": [\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"client_id\": \"/Users/photos/IMG_001.jpg\",\n            \"status\": \"completed\",\n            \"tags\": \"landscape, mountain, sunset, golden hour, nature\",\n            \"processed_at\": \"2024-01-15T10:36:00Z\"\n        },\n        {\n            \"photo_id\": \"550e8400-e29b-41d4-a716-446655440003\",\n            \"client_id\": \"/Users/photos/IMG_002.jpg\",\n            \"status\": \"failed\",\n            \"error\": \"Model timeout\",\n            \"processed_at\": \"2024-01-15T10:37:00Z\"\n        }\n    ],\n    \"summary\": {\n        \"total\": 15,\n        \"completed\": 12,\n        \"failed\": 3\n    }\n}"
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/nonexistent/results",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "nonexistent",
+                                        "results"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Cancel Job",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "jobs",
+                                "{{job_id}}",
+                                "cancel"
+                            ]
+                        },
+                        "description": "Cancels an active job. Removes any pending photos from the worker buffer and marks the job as `cancelled`.\n\nPhotos already being processed by a worker are allowed to finish, but their results will not be saved.\n\nReturns `409 Conflict` if the job has already reached a terminal state (completed, failed, or cancelled)."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}",
+                                        "cancel"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440010\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"cancelled\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"Italian\",\n    \"photo_count\": 15,\n    \"created_at\": \"2024-01-15T10:35:00Z\"\n}"
+                        },
+                        {
+                            "name": "Already Finished",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}/cancel",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}",
+                                        "cancel"
+                                    ]
+                                }
+                            },
+                            "status": "Conflict",
+                            "code": 409,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"job_already_finished\",\n    \"message\": \"Cannot cancel job '550e8400-e29b-41d4-a716-446655440010': it has already finished with status 'completed'\"\n}"
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/nonexistent/cancel",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "nonexistent",
+                                        "cancel"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Retry Job",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.collectionVariables.set('job_id', jsonData.job_id);",
+                                    "    console.log('New Job ID saved:', jsonData.job_id);",
+                                    "}"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "jobs",
+                                "{{job_id}}",
+                                "retry"
+                            ]
+                        },
+                        "description": "Creates a new job to retry failed and unprocessed photos from a finished job (including photos cancelled before processing).\n\nReturns `409 Conflict` if the job is still processing, or `400 Bad Request` if there are no failed or unprocessed photos to retry.\n\nThe new `job_id` is saved automatically."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}",
+                                        "retry"
+                                    ]
+                                }
+                            },
+                            "status": "Created",
+                            "code": 201,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"job_id\": \"550e8400-e29b-41d4-a716-446655440020\",\n    \"task_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"status\": \"queued\",\n    \"model\": \"qwen3-vl\",\n    \"language\": \"Italian\",\n    \"photo_count\": 3,\n    \"created_at\": \"2024-01-15T11:00:00Z\",\n    \"parent_job_id\": \"550e8400-e29b-41d4-a716-446655440010\"\n}"
+                        },
+                        {
+                            "name": "Job Still Processing",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}",
+                                        "retry"
+                                    ]
+                                }
+                            },
+                            "status": "Conflict",
+                            "code": 409,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"job_in_progress\",\n    \"message\": \"Cannot retry job '550e8400-e29b-41d4-a716-446655440010' while it is still processing\"\n}"
+                        },
+                        {
+                            "name": "No Failed Photos",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}/retry",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}",
+                                        "retry"
+                                    ]
+                                }
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"no_failed_photos\",\n    \"message\": \"Job '550e8400-e29b-41d4-a716-446655440010' has no failed or unprocessed photos to retry\"\n}"
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/nonexistent/retry",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "nonexistent",
+                                        "retry"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Delete Job",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/jobs/{{job_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "jobs",
+                                "{{job_id}}"
+                            ]
+                        },
+                        "description": "Deletes a job and all its results. The job must be in a terminal state (`completed`, `failed`, or `cancelled`).\n\nReturns `409 Conflict` if the job is still active (queued or processing)."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "No Content",
+                            "code": 204,
+                            "_postman_previewlanguage": "text",
+                            "header": [],
+                            "body": ""
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/nonexistent",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "nonexistent"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Job with id 'nonexistent' not found\"\n}"
+                        },
+                        {
+                            "name": "Job Still Active",
+                            "originalRequest": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/jobs/{{job_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "jobs",
+                                        "{{job_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "Conflict",
+                            "code": 409,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"job_not_finished\",\n    \"message\": \"Cannot delete job '550e8400-e29b-41d4-a716-446655440010': it is still active\"\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Photos",
+            "item": [
+                {
+                    "name": "Get Photo by ID",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/photos/{{photo_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "photos",
+                                "{{photo_id}}"
+                            ]
+                        },
+                        "description": "Returns detailed information about a specific photo.\n\nNote: You need to set the photo_id variable manually or capture it from an upload response."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/photos/{{photo_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "photos",
+                                        "{{photo_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"photo_id\": \"f0e1d2c3-b4a5-6789-0fed-cba987654321\",\n    \"task_id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"client_id\": \"/Users/photos/IMG_1234.jpg\",\n    \"filename\": \"IMG_1234.jpg\",\n    \"size_bytes\": 4200000,\n    \"uploaded_at\": \"2024-01-15T10:32:00Z\"\n}"
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/photos/nonexistent",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "photos",
+                                        "nonexistent"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Photo with id nonexistent not found\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Delete Photo",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/photos/{{photo_id}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "photos",
+                                "{{photo_id}}"
+                            ]
+                        },
+                        "description": "Deletes a specific photo.\n\nReturns `409 Conflict` if the photo's task has any active (queued or processing) jobs.\n\nNote: You need to set the photo_id variable manually or capture it from an upload response."
+                    },
+                    "response": [
+                        {
+                            "name": "Success",
+                            "originalRequest": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/photos/{{photo_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "photos",
+                                        "{{photo_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "No Content",
+                            "code": 204,
+                            "_postman_previewlanguage": "text",
+                            "header": [],
+                            "body": ""
+                        },
+                        {
+                            "name": "Not Found",
+                            "originalRequest": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/photos/nonexistent",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "photos",
+                                        "nonexistent"
+                                    ]
+                                }
+                            },
+                            "status": "Not Found",
+                            "code": 404,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"not_found\",\n    \"message\": \"Photo with id nonexistent not found\"\n}"
+                        },
+                        {
+                            "name": "Active Job",
+                            "originalRequest": {
+                                "method": "DELETE",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/photos/{{photo_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "photos",
+                                        "{{photo_id}}"
+                                    ]
+                                }
+                            },
+                            "status": "Conflict",
+                            "code": 409,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"job_active\",\n    \"message\": \"Cannot delete: task '550e8400-e29b-41d4-a716-446655440000' has active jobs\"\n}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
 }
