@@ -49,8 +49,9 @@ local function uploadBatch(host, taskId, batch)
 end
 
 --- Exports photos and uploads them in micro-batches.
---- Returns { total, uploaded, failed, cancelled }.
-function PhotoUploader.run(host, taskId, photos, batchSize)
+--- maxPhotoSizeBytes: optional size limit for exported files; 0 means no limit.
+--- Returns { total, uploaded, failed, oversized, cancelled }.
+function PhotoUploader.run(host, taskId, photos, batchSize, maxPhotoSizeBytes)
 	local totalPhotos = #photos
 
 	local progressScope = LrProgressScope {
@@ -81,6 +82,7 @@ function PhotoUploader.run(host, taskId, photos, batchSize)
 	local processedCount = 0
 	local totalUploaded = 0
 	local totalFailed = 0
+	local totalOversized = 0
 	local aborted = false
 
 	for _, rendition in exportSession:renditions() do
@@ -96,11 +98,18 @@ function PhotoUploader.run(host, taskId, photos, batchSize)
 		progressScope:setPortionComplete(processedCount, totalPhotos)
 
 		if success then
-			batch[#batch + 1] = {
-				clientId = rendition.photo:getRawMetadata('uuid'),
-				filePath = pathOrMessage,
-				fileName = LrPathUtils.leafName(pathOrMessage),
-			}
+			local attrs = LrFileUtils.fileAttributes(pathOrMessage)
+			local fileSize = attrs and attrs.fileSize or 0
+			if maxPhotoSizeBytes and maxPhotoSizeBytes > 0 and fileSize > maxPhotoSizeBytes then
+				deleteFile(pathOrMessage)
+				totalOversized = totalOversized + 1
+			else
+				batch[#batch + 1] = {
+					clientId = rendition.photo:getRawMetadata('uuid'),
+					filePath = pathOrMessage,
+					fileName = LrPathUtils.leafName(pathOrMessage),
+				}
+			end
 		else
 			totalFailed = totalFailed + 1
 		end
@@ -128,6 +137,7 @@ function PhotoUploader.run(host, taskId, photos, batchSize)
 		total = totalPhotos,
 		uploaded = totalUploaded,
 		failed = totalFailed,
+		oversized = totalOversized,
 		cancelled = progressScope:isCanceled() or aborted,
 	}
 end

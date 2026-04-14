@@ -444,9 +444,10 @@ LrTasks.startAsyncTask(function()
 	Guard.release('AddPhotosDialog')
 
 	if confirmedTaskId then
-		local uploadResult = PhotoUploader.run(host, confirmedTaskId, validation.photos, data.maxPhotosPerRequest)
+		local uploadResult = PhotoUploader.run(host, confirmedTaskId, validation.photos, data.maxPhotosPerRequest, data.maxPhotoSizeBytes)
 
 		local title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos"
+		local oversized = uploadResult.oversized or 0
 
 		if uploadResult.cancelled then
 			LrDialogs.message(
@@ -457,12 +458,18 @@ LrTasks.startAsyncTask(function()
 			)
 		else
 			local body
-			if uploadResult.failed == 0 then
+			if uploadResult.failed == 0 and oversized == 0 then
 				body = LOC("$$$/Photometoria/Upload/Success=^1 photos uploaded successfully. Open the task window?",
 					tostring(uploadResult.uploaded))
-			else
+			elseif uploadResult.failed == 0 then
+				body = LOC("$$$/Photometoria/Upload/SuccessWithOversized=^1 photos uploaded (^2 skipped: file too large for server limit). Open the task window?",
+					tostring(uploadResult.uploaded), tostring(oversized))
+			elseif oversized == 0 then
 				body = LOC("$$$/Photometoria/Upload/Partial=^1 of ^2 photos uploaded (^3 failed). Open the task window?",
 					tostring(uploadResult.uploaded), tostring(uploadResult.total), tostring(uploadResult.failed))
+			else
+				body = LOC("$$$/Photometoria/Upload/PartialWithOversized=^1 of ^2 photos uploaded (^3 failed, ^4 too large for server limit). Open the task window?",
+					tostring(uploadResult.uploaded), tostring(uploadResult.total), tostring(uploadResult.failed), tostring(oversized))
 			end
 
 			local action = LrDialogs.confirm(
