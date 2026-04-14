@@ -16,7 +16,9 @@ use super::super::error::{AIProviderError, AIProviderResult};
 use super::super::provider::{
     AIProvider, AnalyzeImageRequest, AnalyzeImageResponse, HealthStatus, ModelInfo, TokenUsage,
 };
-use super::types::{OllamaGenerateRequest, OllamaGenerateResponse, OllamaTagsResponse};
+use super::types::{
+    OllamaGenerateOptions, OllamaGenerateRequest, OllamaGenerateResponse, OllamaTagsResponse,
+};
 
 /// Ollama AI provider implementation.
 ///
@@ -89,6 +91,19 @@ impl OllamaProvider {
             .and_then(|config| config.prompt_template.as_ref())
             .cloned()
             .unwrap_or_else(|| default_prompt.to_string())
+    }
+
+    /// Builds generation options from the model config, or returns `None` if
+    /// no options are configured (so the request omits the field entirely).
+    fn get_options_for_model(&self, model_id: &str) -> Option<OllamaGenerateOptions> {
+        let config = self.configured_models.get(model_id)?;
+        if config.num_ctx.is_none() {
+            return None;
+        }
+        Some(OllamaGenerateOptions {
+            num_ctx: config.num_ctx,
+            ..Default::default()
+        })
     }
 }
 
@@ -254,7 +269,7 @@ impl AIProvider for OllamaProvider {
             prompt,
             images: Some(vec![request.image_base64]),
             stream: false,
-            options: None,
+            options: self.get_options_for_model(&request.model),
         };
 
         let url = self.api_url("/api/generate");
@@ -374,6 +389,7 @@ mod tests {
                 description: None,
                 supports_vision: true,
                 supported_languages: vec![],
+                num_ctx: None,
             },
         );
 
@@ -397,6 +413,7 @@ mod tests {
                 description: None,
                 supports_vision: true,
                 supported_languages: vec![],
+                num_ctx: None,
             },
         );
 
@@ -410,5 +427,54 @@ mod tests {
             provider.get_prompt_for_model("unknown", "default"),
             "default"
         );
+    }
+
+    #[test]
+    fn test_get_options_for_model_with_num_ctx() {
+        let mut models = HashMap::new();
+        models.insert(
+            "qwen3-vl".to_string(),
+            OllamaModelConfig {
+                ollama_model: "qwen3-vl:8b".to_string(),
+                prompt_template: None,
+                description: None,
+                supports_vision: true,
+                supported_languages: vec![],
+                num_ctx: Some(8192),
+            },
+        );
+
+        let provider = OllamaProvider::new("test", "http://localhost:11434", 30, models);
+
+        let options = provider.get_options_for_model("qwen3-vl").unwrap();
+        assert_eq!(options.num_ctx, Some(8192));
+        assert!(options.temperature.is_none());
+        assert!(options.num_predict.is_none());
+    }
+
+    #[test]
+    fn test_get_options_for_model_without_num_ctx() {
+        let mut models = HashMap::new();
+        models.insert(
+            "llava".to_string(),
+            OllamaModelConfig {
+                ollama_model: "llava:latest".to_string(),
+                prompt_template: None,
+                description: None,
+                supports_vision: true,
+                supported_languages: vec![],
+                num_ctx: None,
+            },
+        );
+
+        let provider = OllamaProvider::new("test", "http://localhost:11434", 30, models);
+
+        assert!(provider.get_options_for_model("llava").is_none());
+    }
+
+    #[test]
+    fn test_get_options_for_unknown_model() {
+        let provider = OllamaProvider::new("test", "http://localhost:11434", 30, HashMap::new());
+        assert!(provider.get_options_for_model("unknown").is_none());
     }
 }

@@ -230,6 +230,7 @@ mod tests {
                 description: None,
                 supports_vision: true,
                 supported_languages: vec![],
+                num_ctx: None,
             },
         );
 

@@ -88,6 +88,10 @@ Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"},
 description = "Qwen 3.5 model: recommended for production"
 supports_vision = true
 supported_languages = ["English", "Italian", "French", "German", "Spanish"]
+# num_ctx sets the context window size in tokens forwarded to Ollama.
+# Increase this when processing images with long task context to avoid truncation.
+# When omitted, Ollama uses its own default (typically 2048 tokens).
+num_ctx = 8192
 
 [ai.providers.ollama.models.qwen3-vl]
 ollama_model = "qwen3-vl:8b"
@@ -100,6 +104,7 @@ Each object must have ONLY one key "tag" with a keyword string value.
 Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
 description = "Best quality vision model, slower processing"
 supports_vision = true
+num_ctx = 8192
 
 [ai.providers.ollama.models.ministral-3]
 ollama_model = "ministral-3:latest"
@@ -112,6 +117,7 @@ Each object must have ONLY one key "tag" with a keyword string value.
 Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
 description = "Mistral vision model"
 supports_vision = true
+num_ctx = 4096
 
 [ai.providers.ollama.models.llava]
 ollama_model = "llava:latest"
@@ -124,6 +130,7 @@ Each object must have ONLY one key "tag" with a keyword string value.
 Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
 description = "Fast vision model, good for development"
 supports_vision = true
+num_ctx = 4096
 
 [ai.providers.ollama.models.gemma3n]
 ollama_model = "gemma3n:e4b"
@@ -136,6 +143,7 @@ Each object must have ONLY one key "tag" with a keyword string value.
 Example: {"tags": [{"tag": "sunset"}, {"tag": "mountain"}, {"tag": "landscape"}, {"tag": "golden light"}, {"tag": "outdoor"}]}"""
 description = "Google Gemma 3n vision model"
 supports_vision = true
+num_ctx = 4096
 
 # Worker Pool Configuration
 # -------------------------

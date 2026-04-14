@@ -39,6 +39,10 @@ pub struct OllamaGenerateOptions {
     /// Maximum number of tokens to generate.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_predict: Option<i32>,
+
+    /// Context window size in tokens.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_ctx: Option<u32>,
 }
 
 /// Response from POST /api/generate (non-streaming).
@@ -196,5 +200,25 @@ mod tests {
         assert!(json.contains("\"model\":\"llava:latest\""));
         assert!(json.contains("\"stream\":false"));
         assert!(json.contains("\"images\":[\"base64data\"]"));
+        assert!(!json.contains("\"options\""));
+    }
+
+    #[test]
+    fn test_generate_options_num_ctx_serialized_when_set() {
+        let options = OllamaGenerateOptions {
+            num_ctx: Some(8192),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&options).unwrap();
+        assert!(json.contains("\"num_ctx\":8192"));
+        assert!(!json.contains("\"temperature\""));
+        assert!(!json.contains("\"num_predict\""));
+    }
+
+    #[test]
+    fn test_generate_options_num_ctx_omitted_when_none() {
+        let options = OllamaGenerateOptions::default();
+        let json = serde_json::to_string(&options).unwrap();
+        assert!(!json.contains("\"num_ctx\""));
     }
 }

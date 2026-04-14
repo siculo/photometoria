@@ -23,6 +23,7 @@ fn create_test_provider(mock_server_uri: &str) -> OllamaProvider {
             description: Some("Test vision model".to_string()),
             supports_vision: true,
             supported_languages: vec![],
+            num_ctx: None,
         },
     );
 
