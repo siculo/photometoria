@@ -60,3 +60,38 @@ pub fn create_router(state: AppState) -> Router {
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::handlers::app_error::ErrorResponse;
+    use crate::handlers::test_utils::fixtures::create_test_state;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_invalid_uuid_in_path_returns_400() {
+        let ts = create_test_state().await;
+        let app = create_router(ts.state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/tasks/not-a-uuid")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let error: ErrorResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(error.error, "invalid_uuid");
+        assert_eq!(error.message, "Invalid UUID format in path parameter");
+    }
+}
