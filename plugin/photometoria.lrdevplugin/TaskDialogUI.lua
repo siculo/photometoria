@@ -243,6 +243,11 @@ local dialogOpen = false
 local spinnerActive = false
 local onJobSelected
 
+local etaJobId = nil
+local etaAvgSecondsPerPhoto = nil
+local etaElapsedAtLastCompletion = 0
+local etaLastSeenProcessed = 0
+
 --- Fetches jobs for all tasks and stores them in jobsByTaskId.
 local function prefetchAllJobs(host, tasks)
 	jobsByTaskId = {}
@@ -392,11 +397,23 @@ end
 local ETA_MIN_PHOTOS = 2
 
 --- Computes estimated remaining seconds for a processing job.
+---
+--- Model: `X * N - T`, where
+---   X = average seconds per photo (recomputed only when a photo completes),
+---   N = photos still to process, including the one currently running,
+---   T = seconds elapsed since the last completion (time into current photo).
+---
+--- Because X and N are frozen between completions and only T grows, the ETA
+--- decreases at one second per second between completions. When a photo
+--- finishes, X is recalculated from the new processed count; this can make
+--- the ETA jump (usually downward, as more data gives a better estimate).
+--- Result is clamped to zero so the last photo never shows a negative value.
+---
 --- Returns nil when there is insufficient data for a reliable estimate.
 local function computeEtaSeconds(job)
 	local processed = job.processed_photo_count or 0
 	local total = job.photo_count or 0
-	if processed < ETA_MIN_PHOTOS or total <= processed then
+	if processed < ETA_MIN_PHOTOS then
 		return nil
 	end
 	local startTime = parseIsoTimestamp(job.started_at)
@@ -407,8 +424,35 @@ local function computeEtaSeconds(job)
 	if elapsed <= 0 then
 		return nil
 	end
-	local rate = processed / elapsed
-	return (total - processed) / rate
+
+	if job.job_id ~= etaJobId then
+		etaJobId = job.job_id
+		etaAvgSecondsPerPhoto = nil
+		etaElapsedAtLastCompletion = 0
+		etaLastSeenProcessed = 0
+	end
+
+	if processed ~= etaLastSeenProcessed or not etaAvgSecondsPerPhoto then
+		etaAvgSecondsPerPhoto = elapsed / processed
+		etaElapsedAtLastCompletion = elapsed
+		etaLastSeenProcessed = processed
+	end
+
+	local remainingPhotos = total - processed
+	local timeIntoCurrent = elapsed - etaElapsedAtLastCompletion
+	local remaining = etaAvgSecondsPerPhoto * remainingPhotos - timeIntoCurrent
+	return math.max(0, remaining)
+end
+
+--- Updates the ETA line (timing line 2) for a processing job.
+--- Reads in-memory data only; safe to call at any cadence without API traffic.
+local function updateEtaLine(props, job)
+	local etaSeconds = computeEtaSeconds(job)
+	if etaSeconds then
+		props.jobTimingLine2 = LOC "$$$/Photometoria/Job/EstimatedRemaining=Est. remaining:" .. ' ~' .. formatDuration(etaSeconds)
+	else
+		props.jobTimingLine2 = LOC "$$$/Photometoria/Job/EtaCalculating=Calculating..."
+	end
 end
 
 --- Updates job detail panel when a job is selected.
@@ -438,12 +482,7 @@ onJobSelected = function(props)
 		props.jobTimingLine1 = LOC "$$$/Photometoria/Job/StartedAt=Started:" .. ' ' .. formatDateTime(job.started_at)
 		props.jobTimingLine1Visible = (job.started_at ~= nil and job.started_at ~= '')
 
-		local etaSeconds = computeEtaSeconds(job)
-		if etaSeconds then
-			props.jobTimingLine2 = LOC "$$$/Photometoria/Job/EstimatedRemaining=Est. remaining:" .. ' ~' .. formatDuration(etaSeconds)
-		else
-			props.jobTimingLine2 = LOC "$$$/Photometoria/Job/EtaCalculating=Calculating..."
-		end
+		updateEtaLine(props, job)
 		props.jobTimingLine2Visible = true
 
 	elseif job.status == 'queued' then
@@ -593,6 +632,21 @@ local function startJobPolling(host, tasks, props)
 			if spinnerActive then
 				props.jobSpinnerText = SPINNER_FRAMES[frame]
 				frame = (frame % #SPINNER_FRAMES) + 1
+			end
+		end
+	end)
+
+	LrTasks.startAsyncTask(function()
+		while dialogOpen do
+			LrTasks.sleep(1)
+			if not dialogOpen then
+				break
+			end
+			local selectedJob = props.selectedJobValue
+			local jobIndex = selectedJob and selectedJob[1]
+			local job = jobIndex and currentJobs[jobIndex]
+			if job and job.status == 'processing' then
+				updateEtaLine(props, job)
 			end
 		end
 	end)
