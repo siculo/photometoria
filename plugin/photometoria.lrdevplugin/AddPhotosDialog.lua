@@ -449,7 +449,14 @@ LrTasks.startAsyncTask(function()
 		local title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos"
 		local oversized = uploadResult.oversized or 0
 
-		if uploadResult.cancelled then
+		if uploadResult.storage_full then
+			LrDialogs.message(
+				title,
+				LOC("$$$/Photometoria/Upload/StorageFull=Upload aborted: server storage is full. ^1 of ^2 photos were uploaded before the limit was reached.",
+					tostring(uploadResult.uploaded), tostring(uploadResult.total)),
+				'critical'
+			)
+		elseif uploadResult.cancelled then
 			LrDialogs.message(
 				title,
 				LOC("$$$/Photometoria/Upload/Cancelled=Upload cancelled. ^1 of ^2 photos uploaded.",

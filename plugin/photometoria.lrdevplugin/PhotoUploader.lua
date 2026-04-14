@@ -34,18 +34,27 @@ local function cleanupBatch(batch)
 	end
 end
 
+--- Returns true if any entry in the failed list has reason "storage_full".
+local function hasStorageFullError(failedList)
+	for _, entry in ipairs(failedList) do
+		if entry.reason == 'storage_full' then
+			return true
+		end
+	end
+	return false
+end
+
 --- Uploads a batch of exported files and tracks results.
---- Returns (uploadedCount, failedCount, networkOk).
+--- Returns (uploadedCount, failedCount, networkOk, storageFull).
 local function uploadBatch(host, taskId, batch)
 	local ok, result = ServerConnection.uploadPhotos(host, taskId, batch)
 
 	if ok then
-		local uploaded = #(result.uploaded or {})
-		local failed = #(result.failed or {})
-		return uploaded, failed, true
+		local failedList = result.failed or {}
+		return #(result.uploaded or {}), #failedList, true, hasStorageFullError(failedList)
 	end
 
-	return 0, #batch, false
+	return 0, #batch, false, false
 end
 
 --- Exports photos and uploads them in micro-batches.
@@ -84,6 +93,7 @@ function PhotoUploader.run(host, taskId, photos, batchSize, maxPhotoSizeBytes)
 	local totalFailed = 0
 	local totalOversized = 0
 	local aborted = false
+	local storageFull = false
 
 	for _, rendition in exportSession:renditions() do
 		if progressScope:isCanceled() then
@@ -115,12 +125,18 @@ function PhotoUploader.run(host, taskId, photos, batchSize, maxPhotoSizeBytes)
 		end
 
 		if #batch >= batchSize or (processedCount == totalPhotos and #batch > 0) then
-			local uploaded, failed, networkOk = uploadBatch(host, taskId, batch)
+			local uploaded, failed, networkOk, batchStorageFull = uploadBatch(host, taskId, batch)
 			totalUploaded = totalUploaded + uploaded
 			totalFailed = totalFailed + failed
 
 			cleanupBatch(batch)
 			batch = {}
+
+			if batchStorageFull then
+				storageFull = true
+				aborted = true
+				break
+			end
 
 			if not networkOk then
 				aborted = true
@@ -138,6 +154,7 @@ function PhotoUploader.run(host, taskId, photos, batchSize, maxPhotoSizeBytes)
 		uploaded = totalUploaded,
 		failed = totalFailed,
 		oversized = totalOversized,
+		storage_full = storageFull,
 		cancelled = progressScope:isCanceled() or aborted,
 	}
 end
