@@ -2,12 +2,16 @@
 -- SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
 local LrApplication = import 'LrApplication'
+local LrBinding = import 'LrBinding'
 local LrDialogs = import 'LrDialogs'
-local LrTasks = import 'LrTasks'
+local LrFunctionContext = import 'LrFunctionContext'
+local LrView = import 'LrView'
 
 local ServerConnection = require 'ServerConnection'
 
 local ApplyTagsDialog = {}
+
+local bind = LrView.bind
 
 --- Splits a comma-separated tag string into an array of trimmed tag names.
 local function parseTags(tagString)
@@ -52,8 +56,10 @@ local function resolveResults(results)
 end
 
 --- Applies keyword tags to matched photos inside a catalog write transaction.
+--- When removeExisting is true, existing keywords are removed before adding new ones.
+--- Both removal and addition share a single undo step.
 --- Returns the number of photos that received keywords.
-local function applyKeywords(matched)
+local function applyKeywords(matched, removeExisting)
 	local catalog = LrApplication.activeCatalog()
 	local appliedCount = 0
 
@@ -61,6 +67,14 @@ local function applyKeywords(matched)
 		LOC "$$$/Photometoria/Undo/ApplyTags=Photometoria: Apply tags",
 		function()
 			for _, entry in ipairs(matched) do
+				if removeExisting then
+					local existing = entry.photo:getRawMetadata('keywords')
+					if existing then
+						for _, kw in ipairs(existing) do
+							entry.photo:removeKeyword(kw)
+						end
+					end
+				end
 				for _, tagName in ipairs(entry.tags) do
 					local keyword = catalog:createKeyword(tagName, {}, true, nil, true)
 					if keyword then
@@ -75,8 +89,8 @@ local function applyKeywords(matched)
 	return appliedCount
 end
 
---- Builds a confirmation message describing what will be applied.
-local function buildConfirmMessage(matched, failedCount, missingCount)
+--- Returns an array of summary lines describing what will be applied.
+local function buildConfirmLines(matched, failedCount, missingCount)
 	local lines = {}
 
 	lines[#lines + 1] = LOC(
@@ -98,7 +112,56 @@ local function buildConfirmMessage(matched, failedCount, missingCount)
 		)
 	end
 
-	return table.concat(lines, '\n')
+	return lines
+end
+
+--- Counts the total number of existing keywords across all matched photos.
+local function countExistingKeywords(matched)
+	local total = 0
+	for _, entry in ipairs(matched) do
+		local existing = entry.photo:getRawMetadata('keywords')
+		if existing then
+			total = total + #existing
+		end
+	end
+	return total
+end
+
+--- Builds the modal dialog contents for the apply-tags confirmation.
+local function buildConfirmContents(f, props, lines, existingKeywordCount, photoCount)
+	local contents = {
+		bind_to_object = props,
+		spacing = f:control_spacing(),
+		fill_horizontal = 1,
+		width = 400,
+	}
+
+	for _, line in ipairs(lines) do
+		contents[#contents + 1] = f:static_text {
+			title = line,
+			fill_horizontal = 1,
+		}
+	end
+
+	contents[#contents + 1] = f:separator { fill_horizontal = 1 }
+
+	contents[#contents + 1] = f:checkbox {
+		title = LOC "$$$/Photometoria/ApplyTags/RemoveExisting=Remove existing keywords before applying",
+		value = bind 'removeExisting',
+	}
+
+	contents[#contents + 1] = f:static_text {
+		title = LOC(
+			"$$$/Photometoria/ApplyTags/ExistingKeywordsWarning=^1 existing keywords will be removed from ^2 photos.",
+			tostring(existingKeywordCount),
+			tostring(photoCount)
+		),
+		font = '<system/small>',
+		enabled = bind 'removeExisting',
+		fill_horizontal = 1,
+	}
+
+	return f:column(contents)
 end
 
 --- Fetches job results, shows a confirmation dialog, and applies tags.
@@ -137,19 +200,34 @@ function ApplyTagsDialog.run(host, jobId)
 		return
 	end
 
-	local message = buildConfirmMessage(matched, failedCount, missingCount)
-	local confirm = LrDialogs.confirm(
-		LOC "$$$/Photometoria/ApplyTags/ConfirmTitle=Apply tags",
-		message,
-		LOC "$$$/Photometoria/ApplyTags/ConfirmButton=Apply",
-		LOC "$$$/Photometoria/ApplyTags/CancelButton=Cancel"
-	)
+	local lines = buildConfirmLines(matched, failedCount, missingCount)
+	local existingKeywordCount = countExistingKeywords(matched)
 
-	if confirm ~= 'ok' then
+	local confirmed = false
+	local removeExisting = false
+
+	LrFunctionContext.callWithContext('ApplyTagsDialog', function(context)
+		local f = LrView.osFactory()
+		local props = LrBinding.makePropertyTable(context)
+		props.removeExisting = false
+
+		local result = LrDialogs.presentModalDialog {
+			title = LOC "$$$/Photometoria/ApplyTags/ConfirmTitle=Apply tags",
+			contents = buildConfirmContents(f, props, lines, existingKeywordCount, #matched),
+			actionVerb = LOC "$$$/Photometoria/ApplyTags/ConfirmButton=Apply",
+		}
+
+		if result == 'ok' then
+			confirmed = true
+			removeExisting = props.removeExisting
+		end
+	end)
+
+	if not confirmed then
 		return
 	end
 
-	local appliedCount = applyKeywords(matched)
+	local appliedCount = applyKeywords(matched, removeExisting)
 
 	LrDialogs.message(
 		LOC "$$$/Photometoria/ApplyTags/DoneTitle=Tags applied",

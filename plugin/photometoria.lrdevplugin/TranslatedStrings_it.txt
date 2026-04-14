@@ -180,6 +180,8 @@
 "$$$/Photometoria/ApplyTags/CancelButton=Annulla"
 "$$$/Photometoria/ApplyTags/DoneTitle=Tag applicati"
 "$$$/Photometoria/ApplyTags/DoneMsg=Tag applicati con successo a ^1 foto."
+"$$$/Photometoria/ApplyTags/RemoveExisting=Rimuovi le keyword esistenti prima di applicare"
+"$$$/Photometoria/ApplyTags/ExistingKeywordsWarning=^1 keyword esistenti verranno rimosse da ^2 foto."
 "$$$/Photometoria/Undo/ApplyTags=Photometoria: Applica tag"
 "$$$/Photometoria/Undo/ShowPhotos=Photometoria: Mostra foto"
 "$$$/Photometoria/ShowPhotos/NoPhotos=Questo task non contiene foto."
