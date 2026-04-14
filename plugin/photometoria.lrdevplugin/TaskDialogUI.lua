@@ -34,20 +34,44 @@ local function formatBytes(bytes)
 	end
 end
 
+--- Parses an ISO 8601 string into an LrDate timestamp (seconds since 2001-01-01 UTC).
+--- Returns nil if the string is absent or malformed.
+local function parseIsoTimestamp(isoString)
+	if not isoString or isoString == '' then
+		return nil
+	end
+	local y, mo, d, h, mi, s = isoString:match('(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)')
+	if not y then
+		return nil
+	end
+	return LrDate.timeFromComponents(
+		tonumber(y), tonumber(mo), tonumber(d),
+		tonumber(h), tonumber(mi), tonumber(s), 'UTC'
+	)
+end
+
 --- Formats an ISO 8601 date string as a locale-friendly date and time.
 local function formatDateTime(isoString)
-	if not isoString or isoString == '' then
+	local time = parseIsoTimestamp(isoString)
+	if not time then
 		return ''
 	end
-	local y, m, d, h, min, s = isoString:match('(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)')
-	if not y then
-		return ''
-	end
-	local time = LrDate.timeFromComponents(
-		tonumber(y), tonumber(m), tonumber(d),
-		tonumber(h), tonumber(min), tonumber(s), 'UTC'
-	)
 	return LrDate.formatMediumDate(time) .. ', ' .. LrDate.formatShortTime(time)
+end
+
+--- Formats a duration given in seconds as a human-readable string.
+local function formatDuration(seconds)
+	if seconds < 60 then
+		return string.format('%ds', math.floor(seconds))
+	elseif seconds < 3600 then
+		local m = math.floor(seconds / 60)
+		local s = math.floor(seconds % 60)
+		return string.format('%dm %ds', m, s)
+	else
+		local h = math.floor(seconds / 3600)
+		local m = math.floor((seconds % 3600) / 60)
+		return string.format('%dh %dm', h, m)
+	end
 end
 
 --- Reusable progress bar component for LrView.
@@ -219,6 +243,11 @@ local dialogOpen = false
 local spinnerActive = false
 local onJobSelected
 
+local etaJobId = nil
+local etaAvgSecondsPerPhoto = nil
+local etaElapsedAtLastCompletion = 0
+local etaLastSeenProcessed = 0
+
 --- Fetches jobs for all tasks and stores them in jobsByTaskId.
 local function prefetchAllJobs(host, tasks)
 	jobsByTaskId = {}
@@ -250,6 +279,8 @@ local function clearJobDetail(props)
 	props.jobDetailVisible = false
 	props.jobSpinnerVisible = false
 	props.jobWaitingVisible = false
+	props.jobTimingLine1Visible = false
+	props.jobTimingLine2Visible = false
 	spinnerActive = false
 	props.btnApplyEnabled = false
 	props.btnRetryEnabled = false
@@ -290,6 +321,10 @@ local function initProperties(props, tasks)
 	props.jobSpinnerVisible = false
 	props.jobWaitingVisible = false
 	props.jobInfoText = ''
+	props.jobTimingLine1 = ''
+	props.jobTimingLine1Visible = false
+	props.jobTimingLine2 = ''
+	props.jobTimingLine2Visible = false
 	ProgressBar.init(props, 'jobDetail_pb')
 
 	props.btnApplyEnabled = false
@@ -359,6 +394,67 @@ local function onTaskSelected(props, tasks, index)
 	onJobSelected(props)
 end
 
+local ETA_MIN_PHOTOS = 2
+
+--- Computes estimated remaining seconds for a processing job.
+---
+--- Model: `X * N - T`, where
+---   X = average seconds per photo (recomputed only when a photo completes),
+---   N = photos still to process, including the one currently running,
+---   T = seconds elapsed since the last completion (time into current photo).
+---
+--- Because X and N are frozen between completions and only T grows, the ETA
+--- decreases at one second per second between completions. When a photo
+--- finishes, X is recalculated from the new processed count; this can make
+--- the ETA jump (usually downward, as more data gives a better estimate).
+--- Result is clamped to zero so the last photo never shows a negative value.
+---
+--- Returns nil when there is insufficient data for a reliable estimate.
+local function computeEtaSeconds(job)
+	local processed = job.processed_photo_count or 0
+	local total = job.photo_count or 0
+	if processed < ETA_MIN_PHOTOS then
+		return nil
+	end
+	local startTime = parseIsoTimestamp(job.started_at)
+	if not startTime then
+		return nil
+	end
+	local elapsed = LrDate.currentTime() - startTime
+	if elapsed <= 0 then
+		return nil
+	end
+
+	if job.job_id ~= etaJobId then
+		etaJobId = job.job_id
+		etaAvgSecondsPerPhoto = nil
+		etaElapsedAtLastCompletion = 0
+		etaLastSeenProcessed = 0
+	end
+
+	if processed ~= etaLastSeenProcessed or not etaAvgSecondsPerPhoto then
+		etaAvgSecondsPerPhoto = elapsed / processed
+		etaElapsedAtLastCompletion = elapsed
+		etaLastSeenProcessed = processed
+	end
+
+	local remainingPhotos = total - processed
+	local timeIntoCurrent = elapsed - etaElapsedAtLastCompletion
+	local remaining = etaAvgSecondsPerPhoto * remainingPhotos - timeIntoCurrent
+	return math.max(0, remaining)
+end
+
+--- Updates the ETA line (timing line 2) for a processing job.
+--- Reads in-memory data only; safe to call at any cadence without API traffic.
+local function updateEtaLine(props, job)
+	local etaSeconds = computeEtaSeconds(job)
+	if etaSeconds then
+		props.jobTimingLine2 = LOC "$$$/Photometoria/Job/EstimatedRemaining=Est. remaining:" .. ' ~' .. formatDuration(etaSeconds)
+	else
+		props.jobTimingLine2 = LOC "$$$/Photometoria/Job/EtaCalculating=Calculating..."
+	end
+end
+
 --- Updates job detail panel when a job is selected.
 onJobSelected = function(props)
 	local selectedJob = props.selectedJobValue
@@ -382,6 +478,13 @@ onJobSelected = function(props)
 		local processed = job.processed_photo_count or 0
 		local total = job.photo_count or 0
 		ProgressBar.set(props, 'jobDetail_pb', processed, total)
+
+		props.jobTimingLine1 = LOC "$$$/Photometoria/Job/StartedAt=Started:" .. ' ' .. formatDateTime(job.started_at)
+		props.jobTimingLine1Visible = (job.started_at ~= nil and job.started_at ~= '')
+
+		updateEtaLine(props, job)
+		props.jobTimingLine2Visible = true
+
 	elseif job.status == 'queued' then
 		props.jobProgressVisible = true
 		props.jobSpinnerVisible = false
@@ -391,6 +494,12 @@ onJobSelected = function(props)
 		local processed = job.processed_photo_count or 0
 		local total = job.photo_count or 0
 		ProgressBar.set(props, 'jobDetail_pb', processed, total)
+
+		props.jobTimingLine1 = LOC "$$$/Photometoria/Job/CreatedAt=Created:" .. ' ' .. formatDateTime(job.created_at)
+		props.jobTimingLine1Visible = true
+		props.jobTimingLine2 = ''
+		props.jobTimingLine2Visible = false
+
 	else
 		props.jobProgressVisible = false
 		props.jobSpinnerVisible = false
@@ -398,6 +507,31 @@ onJobSelected = function(props)
 		spinnerActive = false
 		props.jobInfoText = formatJobCompletedInfo(job)
 		ProgressBar.clear(props, 'jobDetail_pb')
+
+		props.jobTimingLine1 = LOC "$$$/Photometoria/Job/StartedAt=Started:" .. ' ' .. formatDateTime(job.started_at)
+		props.jobTimingLine1Visible = (job.started_at ~= nil and job.started_at ~= '')
+
+		if job.completed_at and job.completed_at ~= '' then
+			local endLabel
+			if job.status == 'failed' then
+				endLabel = LOC "$$$/Photometoria/Job/FailedAt=Failed:"
+			elseif job.status == 'cancelled' then
+				endLabel = LOC "$$$/Photometoria/Job/CancelledAt=Cancelled:"
+			else
+				endLabel = LOC "$$$/Photometoria/Job/CompletedAt=Completed:"
+			end
+			local durationStr = ''
+			local startTime = parseIsoTimestamp(job.started_at)
+			local endTime = parseIsoTimestamp(job.completed_at)
+			if startTime and endTime and endTime > startTime then
+				durationStr = ' (' .. formatDuration(endTime - startTime) .. ')'
+			end
+			props.jobTimingLine2 = endLabel .. ' ' .. formatDateTime(job.completed_at) .. durationStr
+			props.jobTimingLine2Visible = true
+		else
+			props.jobTimingLine2 = ''
+			props.jobTimingLine2Visible = false
+		end
 	end
 
 	props.btnApplyEnabled = (job.status == 'completed' or job.status == 'failed' or job.status == 'cancelled')
@@ -498,6 +632,21 @@ local function startJobPolling(host, tasks, props)
 			if spinnerActive then
 				props.jobSpinnerText = SPINNER_FRAMES[frame]
 				frame = (frame % #SPINNER_FRAMES) + 1
+			end
+		end
+	end)
+
+	LrTasks.startAsyncTask(function()
+		while dialogOpen do
+			LrTasks.sleep(1)
+			if not dialogOpen then
+				break
+			end
+			local selectedJob = props.selectedJobValue
+			local jobIndex = selectedJob and selectedJob[1]
+			local job = jobIndex and currentJobs[jobIndex]
+			if job and job.status == 'processing' then
+				updateEtaLine(props, job)
 			end
 		end
 	end)
@@ -892,6 +1041,22 @@ local function buildJobDetailPanel(f, props, host, tasks)
 		f:static_text {
 			title = bind 'jobInfoText',
 			fill_horizontal = 1,
+		},
+
+		f:static_text {
+			title = bind 'jobTimingLine1',
+			visible = bind 'jobTimingLine1Visible',
+			fill_horizontal = 1,
+			font = '<system/small>',
+			enabled = false,
+		},
+
+		f:static_text {
+			title = bind 'jobTimingLine2',
+			visible = bind 'jobTimingLine2Visible',
+			fill_horizontal = 1,
+			font = '<system/small>',
+			enabled = false,
 		},
 
 		f:spacer { height = 8 },
