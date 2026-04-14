@@ -119,11 +119,21 @@ AppState         →  holds Arc<ProviderRegistry>
 
 ## AI Models (Ollama)
 
-- **qwen3.5:latest** — PRODUCTION (recommended, high quality)
-- **qwen3-vl:8b** — PRODUCTION (best vision quality, slower)
-- **ministral-3:latest** — Mistral vision model
-- **llava:latest** — DEVELOPMENT (faster, good for testing)
-- **gemma3n:e4b** — Google Gemma 3n vision model
+| Model | Status | Recommended `num_ctx` |
+|-------|--------|-----------------------|
+| **qwen3.5:latest** | PRODUCTION (recommended, high quality) | 8192 |
+| **qwen3-vl:8b** | PRODUCTION (best vision quality, slower) | 8192 |
+| **ministral-3:latest** | Mistral vision model | 4096 |
+| **llava:latest** | DEVELOPMENT (faster, good for testing) | 4096 |
+| **gemma3n:e4b** | Google Gemma 3n vision model | 4096 |
+
+Configure `num_ctx` per-model in TOML to avoid Ollama's default 2048-token context window being too small for vision prompts with task context:
+
+```toml
+[ai.providers.ollama.models.qwen3-vl]
+ollama_model = "qwen3-vl:8b"
+num_ctx = 8192
+```
 
 ---
 
