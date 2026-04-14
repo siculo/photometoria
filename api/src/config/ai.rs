@@ -146,6 +146,11 @@ pub struct OllamaModelConfig {
     /// Languages this model has been tested or verified to support.
     #[serde(default)]
     pub supported_languages: Vec<String>,
+
+    /// Context window size in tokens. When set, forwarded to Ollama as
+    /// `options.num_ctx`. When absent, Ollama uses its own default.
+    #[serde(default)]
+    pub num_ctx: Option<u32>,
 }
 
 impl OllamaModelConfig {
@@ -268,5 +273,26 @@ mod tests {
         "#;
         let config: OllamaModelConfig = toml::from_str(toml).unwrap();
         assert!(config.supported_languages.is_empty());
+    }
+
+    #[test]
+    fn test_model_config_with_num_ctx() {
+        let toml = r#"
+            ollama_model = "qwen3-vl:8b"
+            supports_vision = true
+            num_ctx = 8192
+        "#;
+        let config: OllamaModelConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.num_ctx, Some(8192));
+    }
+
+    #[test]
+    fn test_model_config_without_num_ctx() {
+        let toml = r#"
+            ollama_model = "llava:latest"
+            supports_vision = true
+        "#;
+        let config: OllamaModelConfig = toml::from_str(toml).unwrap();
+        assert!(config.num_ctx.is_none());
     }
 }
