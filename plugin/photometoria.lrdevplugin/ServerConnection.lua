@@ -113,6 +113,7 @@ function ServerConnection.info(host)
 		queuedJobs          = server.running_jobs_count or 0,
 		maxPhotosPerRequest = limits.max_photos_per_request or 100,
 		maxPhotoSizeBytes   = limits.max_photo_size_bytes or 0,
+		maxContextLength    = limits.max_context_length,
 	}
 end
 

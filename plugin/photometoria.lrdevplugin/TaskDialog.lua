@@ -57,5 +57,5 @@ LrTasks.startAsyncTask(function()
 		return
 	end
 
-	TaskDialogUI.showDialog(host, tasks)
+	TaskDialogUI.showDialog(host, tasks, data.maxContextLength)
 end)

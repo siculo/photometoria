@@ -3,6 +3,7 @@
 
 use crate::app_state::AppState;
 use crate::handlers::app_error::AppError;
+use crate::handlers::upload_photos::ALLOWED_MIME_TYPES;
 use crate::models::info::{GeneralInfo, InfoResult, LimitsInfo, ServerInfo};
 use crate::storage::{JobStore, PhotoStore};
 use axum::Json;
@@ -45,7 +46,9 @@ pub async fn info(State(state): State<AppState>) -> Result<Json<InfoResult>, App
         limits: LimitsInfo {
             max_photos_per_request: state.config.upload.max_photos_per_request,
             max_photo_size_bytes: state.config.upload.max_photo_size.0,
+            max_context_length: state.config.task.max_context_length,
             max_concurrent_jobs: None,
+            allowed_photo_types: ALLOWED_MIME_TYPES.iter().map(|s| s.to_string()).collect(),
         },
     };
     Ok(Json(info))
@@ -99,7 +102,18 @@ mod tests {
             info_result.limits.max_photo_size_bytes,
             ts.state.config.upload.max_photo_size.0
         );
+        assert_eq!(
+            info_result.limits.max_context_length,
+            ts.state.config.task.max_context_length
+        );
         assert_eq!(info_result.limits.max_concurrent_jobs, None);
+        assert_eq!(
+            info_result.limits.allowed_photo_types,
+            ALLOWED_MIME_TYPES
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        );
     }
 
     #[tokio::test]

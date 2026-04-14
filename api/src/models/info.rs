@@ -31,5 +31,7 @@ pub struct ServerInfo {
 pub struct LimitsInfo {
     pub max_photos_per_request: usize,
     pub max_photo_size_bytes: u64,
+    pub max_context_length: usize,
     pub max_concurrent_jobs: Option<usize>,
+    pub allowed_photo_types: Vec<String>,
 }

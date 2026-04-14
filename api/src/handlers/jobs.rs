@@ -8,6 +8,7 @@ use crate::models::{
     CreateJobRequest, Job, JobDetailResponse, JobResponse, JobResultsResponse, JobSummary, Photo,
     RetryJobResponse,
 };
+use crate::services::ai::AIProviderError;
 use crate::storage::JobStore;
 use axum::Json;
 use axum::extract::State;
@@ -26,16 +27,37 @@ pub async fn create_job(
 ) -> Result<(StatusCode, Json<JobResponse>), AppError> {
     get_existing_task(&state.task_store, task_id).await?;
 
-    if !state.ai_providers.is_model_configured(&request.model) {
-        return Err(AppError::bad_request(
-            "invalid_model",
-            format!("Model '{}' is not configured", request.model),
-        ));
-    }
+    state
+        .ai_providers
+        .check_model_available(None, &request.model)
+        .await
+        .map_err(|e| match e {
+            AIProviderError::ModelNotFound { .. } => AppError::bad_request(
+                "invalid_model",
+                format!("Model '{}' is not configured", request.model),
+            ),
+            AIProviderError::ModelNotAvailable { .. } => AppError::bad_request(
+                "model_not_available",
+                format!(
+                    "Model '{}' is not available in the AI provider",
+                    request.model
+                ),
+            ),
+            AIProviderError::Unavailable { .. } | AIProviderError::Timeout { .. } => {
+                AppError::service_unavailable(format!("AI provider is not available: {}", e))
+            }
+            e => AppError::internal_error(e.to_string()),
+        })?;
 
     match state.photo_store.list_by_task(task_id).await {
         Ok(photos) => {
             let photo_ids = job_photo_ids(task_id, photos, request.photo_ids)?;
+            if photo_ids.is_empty() {
+                return Err(AppError::bad_request(
+                    "no_photos",
+                    "Task must have at least one photo to create a job",
+                ));
+            }
             let language = request
                 .language
                 .or_else(|| state.config.ai.default_language.clone());
@@ -265,7 +287,10 @@ pub async fn delete_job(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::handlers::test_utils::fixtures::{create_test_state, test_catalog_id};
+    use crate::handlers::test_utils::fixtures::{
+        create_test_state, create_test_state_model_not_available,
+        create_test_state_provider_unavailable, test_catalog_id,
+    };
     use crate::models::{JobStatus, Photo, Task};
     use uuid::Uuid;
 
@@ -404,6 +429,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_job_model_not_available() {
+        let ts = create_test_state_model_not_available().await;
+
+        let task = Task::new(
+            test_catalog_id(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let request = CreateJobRequest {
+            model: "qwen3-vl:8b".to_string(),
+            language: None,
+            photo_ids: None,
+        };
+
+        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.status, axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(error.body.error, "model_not_available");
+        assert!(error.body.message.contains("qwen3-vl:8b"));
+    }
+
+    #[tokio::test]
+    async fn test_create_job_provider_unavailable() {
+        let ts = create_test_state_provider_unavailable().await;
+
+        let task = Task::new(
+            test_catalog_id(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let request = CreateJobRequest {
+            model: "qwen3-vl:8b".to_string(),
+            language: None,
+            photo_ids: None,
+        };
+
+        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.status, axum::http::StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(error.body.error, "service_unavailable");
+    }
+
+    #[tokio::test]
     async fn test_create_job_task_not_found() {
         let ts = create_test_state().await;
         let nonexistent_task_id = Uuid::new_v4();
@@ -487,22 +571,38 @@ mod tests {
 
         let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
-        // Should succeed but with 0 photos
-        assert!(result.is_ok());
-        let (status, Json(job_response)) = result.unwrap();
-        assert_eq!(status, StatusCode::CREATED);
-        assert_eq!(job_response.task_id, task_id);
-        assert_eq!(job_response.photo_count, 0);
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.body.error, "no_photos");
+    }
 
-        // Verify the job has no photos
-        let stored_job = ts
-            .state
-            .job_store
-            .get(job_response.job_id)
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(stored_job.photo_ids.is_empty());
+    #[tokio::test]
+    async fn test_create_job_explicit_empty_photo_ids() {
+        let ts = create_test_state().await;
+
+        let task = Task::new(
+            test_catalog_id(),
+            "Task with photos".to_string(),
+            "task with photos".to_string(),
+        );
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        // Explicitly pass an empty photo_ids list
+        let request = CreateJobRequest {
+            model: "qwen3-vl:8b".to_string(),
+            language: None,
+            photo_ids: Some(vec![]),
+        };
+
+        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.body.error, "no_photos");
     }
 
     // ========================================================================

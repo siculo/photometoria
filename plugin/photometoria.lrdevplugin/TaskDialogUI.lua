@@ -266,6 +266,7 @@ local function initProperties(props, tasks)
 
 	props.taskSelected = (#tasks > 0)
 	props.noTasksVisible = (#tasks == 0)
+	props.newJobEnabled = false
 
 	props.taskSummary = ''
 	props.deleteEnabled = (#tasks > 0)
@@ -309,6 +310,8 @@ local function onTaskSelected(props, tasks, index)
 	local photoCount = task.photo_count or 0
 	local storageUsed = task.storage_used or 0
 	local jobCount = task.job_count or 0
+
+	props.newJobEnabled = (photoCount > 0)
 
 	local createdAt = formatDateTime(task.created_at)
 
@@ -550,6 +553,7 @@ local function buildTaskSelectorRow(f, props, host, tasks)
 						else
 							props.selectedTask = nil
 							props.deleteEnabled = false
+							props.newJobEnabled = false
 							clearJobDetail(props)
 							props.taskSummary = ''
 							props.nameText = ''
@@ -713,8 +717,31 @@ local function buildTaskSection(f, props, host, tasks)
 				value = bind 'contextText',
 				enabled = bind 'taskSelected',
 				fill_horizontal = 1,
-				height_in_lines = 4,
+				height_in_lines = 6,
 				immediate = true,
+			},
+		},
+
+		f:row {
+			spacing = f:label_spacing(),
+
+			f:spacer { width = 80 },
+
+			f:static_text {
+				title = bind 'contextCounter',
+				width_in_chars = 10,
+				font = '<system/small>',
+				alignment = 'right',
+				visible = bind 'contextCounterOk',
+			},
+
+			f:static_text {
+				title = bind 'contextCounter',
+				width_in_chars = 10,
+				font = '<system/small>',
+				alignment = 'right',
+				text_color = LrColor(0.85, 0, 0),
+				visible = bind 'contextCounterError',
 			},
 		},
 
@@ -732,10 +759,38 @@ local function buildTaskSection(f, props, host, tasks)
 
 					local trimmedName = props.nameText:match('^%s*(.-)%s*$')
 					if trimmedName == '' then
+						LrTasks.startAsyncTask(function()
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC "$$$/Photometoria/Error/EmptyName=The task name cannot be empty.",
+								'warning'
+							)
+						end)
 						return
 					end
 
-					local contextText = props.contextText
+					local contextText = props.contextText:match('^%s*(.-)%s*$')
+					if contextText == '' then
+						LrTasks.startAsyncTask(function()
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC "$$$/Photometoria/Error/EmptyContext=The context cannot be empty.",
+								'warning'
+							)
+						end)
+						return
+					end
+
+					if #contextText > props.maxContextLength then
+						LrTasks.startAsyncTask(function()
+							LrDialogs.message(
+								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+								LOC "$$$/Photometoria/Error/ContextTooLong=The context exceeds the maximum allowed length.",
+								'warning'
+							)
+						end)
+						return
+					end
 
 					LrTasks.startAsyncTask(function()
 						local ok, data = ServerConnection.updateTask(host, task.task_id, trimmedName, contextText)
@@ -745,6 +800,7 @@ local function buildTaskSection(f, props, host, tasks)
 							task.context = contextText
 							props.nameText = trimmedName
 							props.nameSavedText = trimmedName
+							props.contextText = contextText
 							props.contextSavedText = contextText
 							props.taskModified = false
 							props.taskPopupItems = buildTaskPopupItems(tasks)
@@ -1067,7 +1123,7 @@ local function buildJobsSection(f, props, host, tasks)
 
 				f:push_button {
 					title = LOC "$$$/Photometoria/Button/NewJob=+ Start New Job",
-					enabled = bind 'taskSelected',
+					enabled = bind 'newJobEnabled',
 					fill_horizontal = 1,
 					action = function()
 						local task = tasks[props.selectedTask]
@@ -1155,7 +1211,8 @@ end
 --- Shows the task management dialog. Must be called from within an async task.
 --- @param host string Server host:port
 --- @param tasks table Array of TaskSummary from the server
-function TaskDialogUI.showDialog(host, tasks)
+--- @param maxContextLength number Maximum allowed context length in characters
+function TaskDialogUI.showDialog(host, tasks, maxContextLength)
 	prefetchAllJobs(host, tasks)
 	prefetchProviders(host)
 
@@ -1164,6 +1221,10 @@ function TaskDialogUI.showDialog(host, tasks)
 
 		local props = LrBinding.makePropertyTable(context)
 		initProperties(props, tasks)
+		props.maxContextLength = maxContextLength
+		props.contextCounter = ''
+		props.contextCounterOk = true
+		props.contextCounterError = false
 
 		props:addObserver('selectedTask', function(propTable, key, value)
 			if not value then
@@ -1197,6 +1258,10 @@ function TaskDialogUI.showDialog(host, tasks)
 		props:addObserver('contextText', function(propTable, key, value)
 			propTable.taskModified = (value ~= propTable.contextSavedText)
 				or (propTable.nameText ~= propTable.nameSavedText)
+			local len = #(value or '')
+			propTable.contextCounter = string.format('%d/%d', len, propTable.maxContextLength)
+			propTable.contextCounterError = (len == 0) or (len > propTable.maxContextLength)
+			propTable.contextCounterOk = not propTable.contextCounterError
 		end)
 
 		if props.selectedTask then

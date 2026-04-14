@@ -31,6 +31,24 @@ fn validate_task_name(name: &str) -> Result<String, AppError> {
     Ok(trimmed)
 }
 
+/// Validates and trims a task context, returning an error if empty or too long.
+fn validate_task_context(context: &str, max_length: usize) -> Result<String, AppError> {
+    let trimmed = context.trim().to_string();
+    if trimmed.is_empty() {
+        return Err(AppError::bad_request(
+            "invalid_context",
+            "Task context must not be empty",
+        ));
+    }
+    if trimmed.len() > max_length {
+        return Err(AppError::bad_request(
+            "context_too_long",
+            &format!("Task context must not exceed {max_length} characters"),
+        ));
+    }
+    Ok(trimmed)
+}
+
 /// Handler for POST /api/catalogs/{catalog_id}/tasks
 ///
 /// Creates a new task with the provided name and context and stores it.
@@ -40,6 +58,7 @@ pub async fn create_task(
     AppJson(request): AppJson<CreateTaskRequest>,
 ) -> Result<(StatusCode, Json<TaskResponse>), AppError> {
     let name = validate_task_name(&request.name)?;
+    let context = validate_task_context(&request.context, state.config.task.max_context_length)?;
 
     if state
         .task_store
@@ -54,7 +73,7 @@ pub async fn create_task(
         ));
     }
 
-    let task = Task::new(catalog_id, name, request.context);
+    let task = Task::new(catalog_id, name, context);
 
     match state.task_store.create(task).await {
         Ok(created_task) => {
@@ -180,6 +199,7 @@ pub async fn update_task(
     let task = get_existing_task(&state.task_store, task_id).await?;
 
     let name = validate_task_name(&request.name)?;
+    let context = validate_task_context(&request.context, state.config.task.max_context_length)?;
 
     if let Some(existing) = state
         .task_store
@@ -199,7 +219,7 @@ pub async fn update_task(
         task_id: task.task_id,
         catalog_id: task.catalog_id,
         name,
-        context: request.context,
+        context,
         created_at: task.created_at,
     };
 
@@ -273,6 +293,119 @@ mod tests {
         assert_eq!(response.name, "SF Vacation");
         assert_eq!(response.context, "vacation in San Francisco");
         assert!(!response.task_id.is_nil());
+    }
+
+    #[tokio::test]
+    async fn test_create_task_empty_context_rejected() {
+        let ts = create_test_state().await;
+        let request = CreateTaskRequest {
+            name: "My Task".to_string(),
+            context: "".to_string(),
+        };
+
+        let result = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "invalid_context");
+    }
+
+    #[tokio::test]
+    async fn test_create_task_whitespace_context_rejected() {
+        let ts = create_test_state().await;
+        let request = CreateTaskRequest {
+            name: "My Task".to_string(),
+            context: "   ".to_string(),
+        };
+
+        let result = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "invalid_context");
+    }
+
+    #[tokio::test]
+    async fn test_create_task_context_trimmed() {
+        let ts = create_test_state().await;
+        let request = CreateTaskRequest {
+            name: "My Task".to_string(),
+            context: "  vacation in SF  ".to_string(),
+        };
+
+        let (_, Json(response)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.context, "vacation in SF");
+    }
+
+    #[tokio::test]
+    async fn test_update_task_empty_context_rejected() {
+        let ts = create_test_state().await;
+        let (_, Json(created)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(CreateTaskRequest {
+                name: "My Task".to_string(),
+                context: "original context".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let result = update_task(
+            State(ts.state.clone()),
+            AppPath(created.task_id),
+            AppJson(UpdateTaskRequest {
+                name: "My Task".to_string(),
+                context: "".to_string(),
+            }),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "invalid_context");
+    }
+
+    #[tokio::test]
+    async fn test_update_task_whitespace_context_rejected() {
+        let ts = create_test_state().await;
+        let (_, Json(created)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(CreateTaskRequest {
+                name: "My Task".to_string(),
+                context: "original context".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let result = update_task(
+            State(ts.state.clone()),
+            AppPath(created.task_id),
+            AppJson(UpdateTaskRequest {
+                name: "My Task".to_string(),
+                context: "   ".to_string(),
+            }),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "invalid_context");
     }
 
     #[tokio::test]
@@ -363,6 +496,55 @@ mod tests {
         let err = result.unwrap_err();
         assert_eq!(err.status, StatusCode::CONFLICT);
         assert_eq!(err.body.error, "name_taken");
+    }
+
+    #[tokio::test]
+    async fn test_create_task_context_too_long_rejected() {
+        let ts = create_test_state().await;
+        let long_context = "a".repeat(ts.state.config.task.max_context_length + 1);
+        let request = CreateTaskRequest {
+            name: "My Task".to_string(),
+            context: long_context,
+        };
+
+        let result = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(request),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "context_too_long");
+    }
+
+    #[tokio::test]
+    async fn test_update_task_context_too_long_rejected() {
+        let ts = create_test_state().await;
+        let (_, Json(created)) = create_task(
+            State(ts.state.clone()),
+            AppPath(test_catalog_id()),
+            AppJson(CreateTaskRequest {
+                name: "My Task".to_string(),
+                context: "original context".to_string(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let long_context = "a".repeat(ts.state.config.task.max_context_length + 1);
+        let result = update_task(
+            State(ts.state.clone()),
+            AppPath(created.task_id),
+            AppJson(UpdateTaskRequest {
+                name: "My Task".to_string(),
+                context: long_context,
+            }),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().body.error, "context_too_long");
     }
 
     #[tokio::test]

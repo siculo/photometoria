@@ -154,14 +154,51 @@ impl ProviderRegistry {
         self.providers.len()
     }
 
-    /// Returns true if no providers are registered.
-    /// Returns true if the given model ID is configured in the default provider.
+    /// Checks whether a model is configured and available in the provider backend.
     ///
-    /// Does not make a network call — validates against the static configuration.
-    pub fn is_model_configured(&self, model_id: &str) -> bool {
-        self.default_provider()
-            .map(|p| p.configured_model_ids().contains(&model_id.to_string()))
-            .unwrap_or(false)
+    /// First resolves the model's backend name from the static configuration,
+    /// then queries the provider live to verify it is installed.
+    ///
+    /// # Arguments
+    ///
+    /// * `provider_name` - Provider to check. `None` uses the default provider.
+    /// * `model_id` - The model ID as used in API requests (config key).
+    ///
+    /// # Errors
+    ///
+    /// - `AIProviderError::ModelNotFound` if `model_id` is not in the provider configuration.
+    /// - `AIProviderError::ModelNotAvailable` if the model is configured but not installed.
+    /// - `AIProviderError::Unavailable` / `Timeout` if the provider backend is unreachable.
+    pub async fn check_model_available(
+        &self,
+        provider_name: Option<&str>,
+        model_id: &str,
+    ) -> AIProviderResult<()> {
+        let provider = match provider_name {
+            Some(name) => self.get(name)?,
+            None => self.default_provider()?,
+        };
+
+        let backend_name = provider
+            .configured_model_details()
+            .into_iter()
+            .find(|m| m.id == model_id)
+            .map(|m| m.backend_model_name)
+            .ok_or_else(|| AIProviderError::ModelNotFound {
+                provider: provider.name().to_string(),
+                model: model_id.to_string(),
+            })?;
+
+        let available = provider.list_models(false).await?;
+
+        if !available.iter().any(|m| m.id == backend_name) {
+            return Err(AIProviderError::ModelNotAvailable {
+                provider: provider.name().to_string(),
+                model: model_id.to_string(),
+            });
+        }
+
+        Ok(())
     }
 
     pub fn is_empty(&self) -> bool {

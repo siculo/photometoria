@@ -2,6 +2,7 @@
 -- SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
 local LrFunctionContext = import 'LrFunctionContext'
+local LrColor = import 'LrColor'
 local LrDialogs = import 'LrDialogs'
 local LrView = import 'LrView'
 local LrBinding = import 'LrBinding'
@@ -63,7 +64,10 @@ local function updateConfirmEnabled(props)
 	end
 
 	if props.destination == 'new' then
-		props.confirmEnabled = (props.taskName ~= nil and props.taskName ~= '')
+		local nameOk = (props.taskName ~= nil and props.taskName ~= '')
+		local contextOk = (props.taskContext ~= nil and props.taskContext ~= '')
+		local withinLimit = #(props.taskContext or '') <= props.maxContextLength
+		props.confirmEnabled = nameOk and contextOk and withinLimit
 	else
 		props.confirmEnabled = (#props.existingTaskItems > 0)
 	end
@@ -92,8 +96,12 @@ local function initProperties(props, validation, serverData, tasks, prefs)
 	props.newTaskVisible = not hasTasks
 	props.existingTaskVisible = hasTasks
 
+	props.maxContextLength = serverData.maxContextLength
 	props.taskName = ''
 	props.taskContext = ''
+	props.contextCounter = '0/' .. serverData.maxContextLength
+	props.contextCounterOk = false
+	props.contextCounterError = true
 
 	props.existingTaskItems = buildTaskPopupItems(tasks)
 	props.existingTask = TaskUtils.findTaskIndex(tasks, prefs.lastActiveTaskId) or 1
@@ -218,7 +226,8 @@ local function buildDestinationSection(f, props)
 				value = bind 'taskContext',
 				enabled = bind 'newTaskVisible',
 				fill_horizontal = 1,
-				height_in_lines = 4,
+				height_in_lines = 6,
+				immediate = true,
 			},
 		},
 
@@ -233,7 +242,27 @@ local function buildDestinationSection(f, props)
 				font = '<system/small>',
 				enabled = bind 'newTaskVisible',
 			},
+
+			f:static_text {
+				title = bind 'contextCounter',
+				width_in_chars = 10,
+				font = '<system/small>',
+				alignment = 'right',
+				enabled = bind 'newTaskVisible',
+				visible = bind 'contextCounterOk',
+			},
+
+			f:static_text {
+				title = bind 'contextCounter',
+				width_in_chars = 10,
+				font = '<system/small>',
+				alignment = 'right',
+				text_color = LrColor(0.85, 0, 0),
+				enabled = bind 'newTaskVisible',
+				visible = bind 'contextCounterError',
+			},
 		},
+
 	}
 end
 
@@ -348,6 +377,14 @@ LrTasks.startAsyncTask(function()
 			updateConfirmEnabled(propTable)
 		end)
 
+		props:addObserver('taskContext', function(propTable, _, value)
+			local len = #(value or '')
+			propTable.contextCounter = string.format('%d/%d', len, propTable.maxContextLength)
+			propTable.contextCounterError = (len == 0) or (len > propTable.maxContextLength)
+			propTable.contextCounterOk = not propTable.contextCounterError
+			updateConfirmEnabled(propTable)
+		end)
+
 		props:addObserver('existingTask', function(propTable)
 			updateExistingTaskSummary(propTable, tasks)
 		end)
@@ -407,11 +444,19 @@ LrTasks.startAsyncTask(function()
 	Guard.release('AddPhotosDialog')
 
 	if confirmedTaskId then
-		local uploadResult = PhotoUploader.run(host, confirmedTaskId, validation.photos, data.maxPhotosPerRequest)
+		local uploadResult = PhotoUploader.run(host, confirmedTaskId, validation.photos, data.maxPhotosPerRequest, data.maxPhotoSizeBytes)
 
 		local title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos"
+		local oversized = uploadResult.oversized or 0
 
-		if uploadResult.cancelled then
+		if uploadResult.storage_full then
+			LrDialogs.message(
+				title,
+				LOC("$$$/Photometoria/Upload/StorageFull=Upload aborted: server storage is full. ^1 of ^2 photos were uploaded before the limit was reached.",
+					tostring(uploadResult.uploaded), tostring(uploadResult.total)),
+				'critical'
+			)
+		elseif uploadResult.cancelled then
 			LrDialogs.message(
 				title,
 				LOC("$$$/Photometoria/Upload/Cancelled=Upload cancelled. ^1 of ^2 photos uploaded.",
@@ -420,12 +465,18 @@ LrTasks.startAsyncTask(function()
 			)
 		else
 			local body
-			if uploadResult.failed == 0 then
+			if uploadResult.failed == 0 and oversized == 0 then
 				body = LOC("$$$/Photometoria/Upload/Success=^1 photos uploaded successfully. Open the task window?",
 					tostring(uploadResult.uploaded))
-			else
+			elseif uploadResult.failed == 0 then
+				body = LOC("$$$/Photometoria/Upload/SuccessWithOversized=^1 photos uploaded (^2 skipped: file too large for server limit). Open the task window?",
+					tostring(uploadResult.uploaded), tostring(oversized))
+			elseif oversized == 0 then
 				body = LOC("$$$/Photometoria/Upload/Partial=^1 of ^2 photos uploaded (^3 failed). Open the task window?",
 					tostring(uploadResult.uploaded), tostring(uploadResult.total), tostring(uploadResult.failed))
+			else
+				body = LOC("$$$/Photometoria/Upload/PartialWithOversized=^1 of ^2 photos uploaded (^3 failed, ^4 too large for server limit). Open the task window?",
+					tostring(uploadResult.uploaded), tostring(uploadResult.total), tostring(uploadResult.failed), tostring(oversized))
 			end
 
 			local action = LrDialogs.confirm(
@@ -437,7 +488,7 @@ LrTasks.startAsyncTask(function()
 			if action == 'ok' then
 				local refreshOk, refreshedTasks = ServerConnection.listTasks(host, catalogId)
 				if refreshOk then
-					TaskDialogUI.showDialog(host, refreshedTasks)
+					TaskDialogUI.showDialog(host, refreshedTasks, data.maxContextLength)
 				end
 			end
 		end

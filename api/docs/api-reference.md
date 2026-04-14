@@ -94,7 +94,9 @@ Returns general server information: version, storage usage, available AI provide
   "limits": {
     "max_photos_per_request": 100,
     "max_photo_size_bytes": 20971520,
-    "max_concurrent_jobs": null
+    "max_context_length": 2000,
+    "max_concurrent_jobs": null,
+    "allowed_photo_types": ["image/jpeg", "image/png"]
   }
 }
 ```
@@ -108,7 +110,9 @@ Returns general server information: version, storage usage, available AI provide
 - `running_jobs_count` — number of jobs in `queued` or `processing` state
 - `max_photos_per_request` — maximum number of photos allowed in a single upload request
 - `max_photo_size_bytes` — maximum size in bytes for a single photo file
+- `max_context_length` — maximum allowed length of a task context in characters
 - `max_concurrent_jobs` — maximum concurrent jobs, or `null` if not enforced
+- `allowed_photo_types` — MIME types accepted for photo uploads, validated via magic bytes
 
 ## Catalog Endpoints
 
@@ -520,7 +524,9 @@ Fields `started_at` and `completed_at` are omitted until the job reaches the cor
 
 **Errors:**
 
+- `400` - Task has no photos to process (`no_photos`)
 - `400` - One or more `photo_ids` do not belong to the task (`invalid_parameter`)
+- `400` - Specified model is not configured (`invalid_model`)
 - `404` - Task not found
 
 ### POST /api/jobs/{job_id}/cancel
@@ -768,7 +774,12 @@ All errors follow a consistent JSON format:
 - `task_not_found` (404) - Specified task does not exist
 - `job_not_found` (404) - Specified job does not exist
 - `photo_not_found` (404) - Specified photo does not exist
-- `invalid_model` (400) - Model not in supported/available list
+- `invalid_uuid` (400) - Path parameter is not a valid UUID
+- `invalid_name` (400) - Task name is empty or blank
+- `invalid_context` (400) - Task context is empty or blank
+- `context_too_long` (400) - Task context exceeds `max_context_length`
+- `invalid_model` (400) - Model name is not configured on the server
+- `model_not_available` (400) - Model is configured but not currently available in the AI backend
 - `invalid_parameter` (400) - One or more photo IDs not found in the task
 - `file_too_large` (400) - Uploaded file exceeds max_photo_size
 - `too_many_files` (400) - Upload exceeds max_photos_per_request

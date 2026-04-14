@@ -95,9 +95,8 @@ impl IntoResponse for AppError {
 impl From<PathRejection> for AppError {
     fn from(rejection: PathRejection) -> Self {
         match rejection {
-            PathRejection::FailedToDeserializePathParams(inner) => {
-                let message = inner.body_text();
-                Self::bad_request("invalid_path_parameter", &message)
+            PathRejection::FailedToDeserializePathParams(_) => {
+                Self::bad_request("invalid_uuid", "Invalid UUID format in path parameter")
             }
             PathRejection::MissingPathParams(inner) => {
                 let message = inner.body_text();

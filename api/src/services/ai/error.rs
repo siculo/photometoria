@@ -20,8 +20,11 @@ pub enum AIProviderError {
     /// Provider returned an invalid response.
     InvalidResponse { provider: String, message: String },
 
-    /// The requested model was not found.
+    /// The requested model was not found in the provider configuration.
     ModelNotFound { provider: String, model: String },
+
+    /// The model is configured but not currently available in the provider backend.
+    ModelNotAvailable { provider: String, model: String },
 
     /// The model does not support vision/image analysis.
     VisionNotSupported { provider: String, model: String },
@@ -60,6 +63,13 @@ impl fmt::Display for AIProviderError {
                 write!(
                     f,
                     "Model '{}' not found in AI provider '{}'",
+                    model, provider
+                )
+            }
+            Self::ModelNotAvailable { provider, model } => {
+                write!(
+                    f,
+                    "Model '{}' is not available in AI provider '{}'",
                     model, provider
                 )
             }
