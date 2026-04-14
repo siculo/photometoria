@@ -395,6 +395,7 @@ pub struct JobResponse {
 ///   "model": "qwen3-vl:8b",
 ///   "photo_count": 15,
 ///   "created_at": "2024-01-15T10:35:00Z",
+///   "started_at": "2024-01-15T10:36:00Z",
 ///   "completed_at": "2024-01-15T10:45:00Z"
 /// }
 /// ```
@@ -427,6 +428,10 @@ pub struct JobSummary {
 
     /// Creation timestamp (ISO 8601)
     pub created_at: DateTime<Utc>,
+
+    /// Processing start timestamp (ISO 8601), None if not yet started
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<DateTime<Utc>>,
 
     /// Completion timestamp (ISO 8601), None if not finished
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -698,6 +703,7 @@ impl From<Job> for JobSummary {
             model: job.model.clone(),
             language: job.language.clone(),
             created_at: job.created_at,
+            started_at: job.started_at,
             completed_at: job.completed_at,
         }
     }
@@ -715,6 +721,7 @@ impl From<&Job> for JobSummary {
             model: job.model.clone(),
             language: job.language.clone(),
             created_at: job.created_at,
+            started_at: job.started_at,
             completed_at: job.completed_at,
         }
     }

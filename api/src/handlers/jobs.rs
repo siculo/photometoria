@@ -1445,6 +1445,38 @@ mod tests {
         assert_eq!(result.unwrap_err().body.error, "not_found");
     }
 
+    #[tokio::test]
+    async fn test_list_task_jobs_includes_started_at() {
+        let ts = create_test_state().await;
+
+        let task = Task::new(
+            test_catalog_id(),
+            "Task".to_string(),
+            "ctx".to_string(),
+        );
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let queued_job = Job::new(task_id, "llava".to_string(), None, vec![]);
+        let mut processing_job = Job::new(task_id, "llava".to_string(), None, vec![]);
+        processing_job.start();
+
+        ts.state.job_store.create(queued_job).await.unwrap();
+        ts.state.job_store.create(processing_job).await.unwrap();
+
+        let Json(jobs) = list_task_jobs(State(ts.state.clone()), AppPath(task_id))
+            .await
+            .unwrap();
+
+        assert_eq!(jobs.len(), 2);
+
+        let queued = jobs.iter().find(|j| j.status == JobStatus::Queued).unwrap();
+        let processing = jobs.iter().find(|j| j.status == JobStatus::Processing).unwrap();
+
+        assert!(queued.started_at.is_none());
+        assert!(processing.started_at.is_some());
+    }
+
     // ========================================================================
     // Tests for language support
     // ========================================================================

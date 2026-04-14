@@ -60,6 +60,13 @@
 "$$$/Photometoria/Job/Waiting=In attesa..."
 "$$$/Photometoria/Job/CompletedIn=completato in ^1."
 "$$$/Photometoria/Job/Errors=errori"
+"$$$/Photometoria/Job/CreatedAt=Creato:"
+"$$$/Photometoria/Job/StartedAt=Avviato:"
+"$$$/Photometoria/Job/CompletedAt=Completato:"
+"$$$/Photometoria/Job/FailedAt=Fallito:"
+"$$$/Photometoria/Job/CancelledAt=Annullato:"
+"$$$/Photometoria/Job/EstimatedRemaining=Rimanente stimato:"
+"$$$/Photometoria/Job/EtaCalculating=Calcolo in corso..."
 
 "$$$/Photometoria/Button/ShowPhotos=Mostra foto in libreria"
 "$$$/Photometoria/Button/Delete=Elimina"

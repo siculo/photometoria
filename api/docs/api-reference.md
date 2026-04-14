@@ -477,12 +477,13 @@ Returns a summary list of all jobs belonging to a specific task.
     "queued_photo_count": 0,
     "processed_photo_count": 15,
     "created_at": "2024-01-15T10:35:00Z",
+    "started_at": "2024-01-15T10:35:10Z",
     "completed_at": "2024-01-15T10:45:00Z"
   }
 ]
 ```
 
-`completed_at` is omitted when the job has not yet finished.
+`started_at` is omitted while the job is still `queued`. `completed_at` is omitted when the job has not yet finished.
 
 **Errors:**
 
@@ -594,12 +595,13 @@ Returns a summary list of all jobs across all tasks.
     "queued_photo_count": 0,
     "processed_photo_count": 15,
     "created_at": "2024-01-15T10:35:00Z",
+    "started_at": "2024-01-15T10:35:10Z",
     "completed_at": "2024-01-15T10:45:00Z"
   }
 ]
 ```
 
-`completed_at` is omitted when the job has not yet finished.
+`started_at` is omitted while the job is still `queued`. `completed_at` is omitted when the job has not yet finished.
 
 ### GET /api/jobs/{job_id}
 
