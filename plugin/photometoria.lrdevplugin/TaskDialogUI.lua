@@ -980,8 +980,6 @@ local function buildTaskSection(f, props, host, tasks)
 end
 
 --- Builds the job detail panel (right column of jobs section).
---- TODO: job mutation actions (start, retry, restart, cancel, remove) should
---- update prefs.lastActiveTaskId with the current task's task_id.
 local function buildJobDetailPanel(f, props, host, tasks)
 	return f:column {
 		visible = bind 'jobDetailVisible',
@@ -1398,6 +1396,8 @@ function TaskDialogUI.showDialog(host, tasks, maxContextLength)
 			onTaskSelected(propTable, tasks, value)
 			local task = tasks[value]
 			if task then
+				local prefs = LrPrefs.prefsForPlugin()
+				prefs.lastActiveTaskId = task.task_id
 				LrTasks.startAsyncTask(function()
 					local ok, jobs = ServerConnection.listTaskJobs(host, task.task_id)
 					if ok then
