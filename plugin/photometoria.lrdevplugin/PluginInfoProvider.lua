@@ -8,6 +8,7 @@ local LrApplication = import 'LrApplication'
 local LrTasks = import 'LrTasks'
 
 local ServerConnection = require 'ServerConnection'
+local RecentHosts = require 'RecentHosts'
 
 local bind = LrView.bind
 local LABEL_WIDTH = 130
@@ -58,8 +59,10 @@ end
 
 local function sectionsForTopOfDialog(f, propertyTable)
 	local prefs = LrPrefs.prefsForPlugin()
+	local clearLabel = LOC "$$$/Photometoria/RecentHosts/ClearList=Clear list"
 
 	propertyTable.serverHost = prefs.serverHost or ''
+	propertyTable.recentHostItems = RecentHosts.toComboItems(clearLabel)
 	propertyTable.connectEnabled = false
 	propertyTable.validationMessage = ''
 	propertyTable.connecting = false
@@ -89,7 +92,18 @@ local function sectionsForTopOfDialog(f, propertyTable)
 
 	hideDetails(propertyTable)
 
+	local lastTypedHost = prefs.serverHost or ''
+	local onConnect
+
 	local function onServerHostChanged(propTable, key, value)
+		if value == clearLabel then
+			RecentHosts.clear(lastTypedHost)
+			propTable.recentHostItems = RecentHosts.toComboItems(clearLabel)
+			propTable.serverHost = lastTypedHost
+			return
+		end
+
+		lastTypedHost = value
 		prefs.serverHost = value
 
 		hideStatus(propTable)
@@ -105,6 +119,13 @@ local function sectionsForTopOfDialog(f, propertyTable)
 		if ServerConnection.isValidHostPort(value) then
 			propTable.connectEnabled = not propTable.connecting
 			propTable.validationMessage = ''
+
+			for _, item in ipairs(propTable.recentHostItems) do
+				if item == value then
+					onConnect()
+					break
+				end
+			end
 		else
 			propTable.connectEnabled = false
 			propTable.validationMessage = LOC "$$$/Photometoria/Validation/InvalidHostPort=Invalid format. Use host:port (e.g. 192.168.1.50:8080)"
@@ -113,7 +134,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 
 	propertyTable:addObserver('serverHost', onServerHostChanged)
 
-	local function onConnect()
+	onConnect = function()
 		local host = propertyTable.serverHost
 		if not ServerConnection.isValidHostPort(host) then
 			return
@@ -138,6 +159,8 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				propertyTable.statusMessage = LOC("$$$/Photometoria/Status/ConnectedTo=Connected to ^1", host)
 				propertyTable.synopsis = onlineStr
 				showDetails(propertyTable, data)
+				RecentHosts.add(host)
+				propertyTable.recentHostItems = RecentHosts.toComboItems(clearLabel)
 			else
 				local unreachableStr = LOC "$$$/Photometoria/Status/Unreachable=Unreachable"
 				propertyTable.statusText = unreachableStr
@@ -173,8 +196,9 @@ local function sectionsForTopOfDialog(f, propertyTable)
 						width = LABEL_WIDTH,
 					},
 
-					f:edit_field {
+					f:combo_box {
 						value = bind 'serverHost',
+						items = bind 'recentHostItems',
 						width_in_chars = 25,
 						immediate = true,
 					},
