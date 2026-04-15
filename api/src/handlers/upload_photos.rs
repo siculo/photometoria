@@ -30,7 +30,6 @@ pub async fn upload_photos(
 ) -> Result<(StatusCode, Json<UploadPhotosResponse>), AppError> {
     debug!("Upload photos request for task_id={}", task_id);
 
-    // Verify task exists
     let task_exists = state
         .task_store
         .exists(task_id)
@@ -40,8 +39,9 @@ pub async fn upload_photos(
         return Err(AppError::task_not_found(task_id));
     }
 
+    let (client_ids, files) = extract_multipart_fields(&mut multipart).await?;
     let (uploaded, failed, uploaded_size_bytes) =
-        process_multipart(&state, task_id, &mut multipart).await?;
+        process_files(&state, task_id, client_ids, files).await?;
 
     let status = if uploaded.is_empty() {
         StatusCode::OK
@@ -72,7 +72,7 @@ struct FileData {
     data: Bytes,
 }
 
-/// Processes the entire multipart request, returning the result of the upload operation.
+/// Reads all fields from the multipart stream and validates structural consistency.
 ///
 /// Expects:
 /// - An optional `client_ids` field with a JSON array of strings
@@ -80,11 +80,9 @@ struct FileData {
 ///
 /// If `client_ids` is provided, its length must match the number of files.
 /// If omitted, all photos are stored with `client_id = None`.
-async fn process_multipart(
-    state: &AppState,
-    task_id: Uuid,
+async fn extract_multipart_fields(
     multipart: &mut Multipart,
-) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), AppError> {
+) -> Result<(Option<Vec<String>>, Vec<FileData>), AppError> {
     let mut client_ids: Option<Vec<String>> = None;
     let mut files: Vec<FileData> = vec![];
 
@@ -143,7 +141,6 @@ async fn process_multipart(
         }
     }
 
-    // Validate: if client_ids is provided, counts must match
     if let Some(ref ids) = client_ids {
         if ids.len() != files.len() {
             error!(
@@ -162,7 +159,16 @@ async fn process_multipart(
         }
     }
 
-    // Process files
+    Ok((client_ids, files))
+}
+
+/// Iterates the collected files, saving each one to the store.
+async fn process_files(
+    state: &AppState,
+    task_id: Uuid,
+    client_ids: Option<Vec<String>>,
+    files: Vec<FileData>,
+) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), AppError> {
     let mut used_storage = state
         .photo_store
         .total_size()
@@ -172,12 +178,14 @@ async fn process_multipart(
     let mut failed: Vec<FailedUpload> = vec![];
     let mut uploaded_size_bytes: u64 = 0;
 
-    for (idx, file) in files.into_iter().enumerate() {
-        let client_id = client_ids.as_ref().map(|ids| ids[idx].clone());
+    let pairs: Vec<(FileData, Option<String>)> = match client_ids {
+        Some(ids) => files.into_iter().zip(ids.into_iter().map(Some)).collect(),
+        None => files.into_iter().map(|f| (f, None)).collect(),
+    };
 
+    for (file, client_id) in pairs {
         let result = process_field(
-            file.data,
-            file.filename,
+            file,
             client_id,
             task_id,
             uploaded.len(),
@@ -204,10 +212,9 @@ async fn process_multipart(
     Ok((uploaded, failed, uploaded_size_bytes))
 }
 
-/// Process a single upload field: validate and save to store.
+/// Validates a single file and saves it to the store.
 async fn process_field(
-    data: Bytes,
-    filename: String,
+    file: FileData,
     client_id: Option<String>,
     task_id: Uuid,
     uploaded_count: usize,
@@ -215,37 +222,35 @@ async fn process_field(
     config: &Config,
     photo_store: &Arc<dyn PhotoStore>,
 ) -> ProcessedField {
-    let data_size = data.len() as u64;
+    let data_size = file.data.len() as u64;
 
-    // Validate photo
-    if let Some(reason) = validate_photo(&data, uploaded_count, used_storage, config) {
+    if let Some(reason) = validate_photo(&file.data, uploaded_count, used_storage, config) {
         return ProcessedField::Failed(FailedUpload {
             client_id,
-            filename,
+            filename: file.filename,
             reason,
         });
     }
 
-    // Create photo and save to store
-    let photo = Photo::new(task_id, client_id.clone(), filename.clone(), data_size);
-    match photo_store.create(photo.clone()).await {
+    let photo = Photo::new(task_id, client_id.clone(), file.filename.clone(), data_size);
+    let photo_id = photo.photo_id;
+    match photo_store.create(photo).await {
         Ok(_) => {
-            // Save actual image data
-            if let Err(e) = photo_store.save_data(photo.photo_id, &data).await {
-                error!("Failed to save image data for '{}': {:?}", filename, e);
+            if let Err(e) = photo_store.save_data(photo_id, &file.data).await {
+                error!("Failed to save image data for '{}': {:?}", file.filename, e);
                 // Try to clean up the metadata we just created
-                let _ = photo_store.delete(photo.photo_id).await;
+                let _ = photo_store.delete(photo_id).await;
                 return ProcessedField::Failed(FailedUpload {
                     client_id,
-                    filename,
+                    filename: file.filename,
                     reason: "storage_error".to_string(),
                 });
             }
             ProcessedField::Uploaded(
                 UploadedPhoto {
                     client_id,
-                    photo_id: photo.photo_id,
-                    filename,
+                    photo_id,
+                    filename: file.filename,
                     size_bytes: data_size,
                 },
                 data_size,
@@ -253,7 +258,7 @@ async fn process_field(
         }
         Err(_) => ProcessedField::Failed(FailedUpload {
             client_id,
-            filename,
+            filename: file.filename,
             reason: "storage_error".to_string(),
         }),
     }
@@ -272,7 +277,6 @@ fn validate_photo(
 ) -> Option<String> {
     let data_size = data.len() as u64;
 
-    // Check format using magic bytes
     let is_supported = infer::get(data)
         .map(|k| ALLOWED_MIME_TYPES.contains(&k.mime_type()))
         .unwrap_or(false);
@@ -280,17 +284,14 @@ fn validate_photo(
         return Some("invalid_format".to_string());
     }
 
-    // Check count limit
     if uploaded_count >= config.upload.max_photos_per_request {
         return Some("too_many_files".to_string());
     }
 
-    // Check file size
     if data_size > config.upload.max_photo_size.0 {
         return Some("file_too_large".to_string());
     }
 
-    // Check storage space
     if used_storage + data_size > config.storage_max_size() {
         return Some("storage_full".to_string());
     }
