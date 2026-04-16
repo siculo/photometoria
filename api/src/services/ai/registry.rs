@@ -161,7 +161,7 @@ impl ProviderRegistry {
     ///
     /// # Arguments
     ///
-    /// * `provider_name` - Provider to check. `None` uses the default provider.
+    /// * `provider_name` - Name of the provider to check. Must be a registered provider.
     /// * `model_id` - The model ID as used in API requests (config key).
     ///
     /// # Errors
@@ -171,13 +171,10 @@ impl ProviderRegistry {
     /// - `AIProviderError::Unavailable` / `Timeout` if the provider backend is unreachable.
     pub async fn check_model_available(
         &self,
-        provider_name: Option<&str>,
+        provider_name: &str,
         model_id: &str,
     ) -> AIProviderResult<()> {
-        let provider = match provider_name {
-            Some(name) => self.get(name)?,
-            None => self.default_provider()?,
-        };
+        let provider = self.get(provider_name)?;
 
         let backend_name = provider
             .configured_model_details()

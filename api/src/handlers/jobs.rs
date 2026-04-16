@@ -36,7 +36,7 @@ pub async fn create_job(
 
     state
         .ai_providers
-        .check_model_available(Some(&request.provider), &request.model)
+        .check_model_available(&request.provider, &request.model)
         .await
         .map_err(|e| match e {
             AIProviderError::ModelNotFound { .. } => AppError::bad_request(
