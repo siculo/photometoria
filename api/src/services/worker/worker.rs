@@ -258,6 +258,7 @@ mod tests {
         if count_a > 0 {
             let job = Job::new(
                 Uuid::new_v4(),
+                "ollama".to_string(),
                 "modelA".to_string(),
                 None,
                 (0..count_a).map(|_| Uuid::new_v4()).collect(),
@@ -267,6 +268,7 @@ mod tests {
         if count_b > 0 {
             let job = Job::new(
                 Uuid::new_v4(),
+                "ollama".to_string(),
                 "modelB".to_string(),
                 None,
                 (0..count_b).map(|_| Uuid::new_v4()).collect(),
@@ -359,6 +361,7 @@ mod tests {
         let mut buf = PhotoBuffer::new();
         let job = Job::new(
             Uuid::new_v4(),
+            "ollama".to_string(),
             "solo".to_string(),
             None,
             (0..3).map(|_| Uuid::new_v4()).collect(),
