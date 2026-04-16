@@ -201,6 +201,11 @@ impl ProviderRegistry {
         Ok(())
     }
 
+    /// Returns `true` if a provider with the given name is registered.
+    pub fn contains(&self, name: &str) -> bool {
+        self.providers.contains_key(name)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.providers.is_empty()
     }

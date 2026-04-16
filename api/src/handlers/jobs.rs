@@ -27,14 +27,24 @@ pub async fn create_job(
 ) -> Result<(StatusCode, Json<JobResponse>), AppError> {
     get_existing_task(&state.task_store, task_id).await?;
 
+    if !state.ai_providers.contains(&request.provider) {
+        return Err(AppError::bad_request(
+            "invalid_provider",
+            format!("Provider '{}' is not configured", request.provider),
+        ));
+    }
+
     state
         .ai_providers
-        .check_model_available(None, &request.model)
+        .check_model_available(Some(&request.provider), &request.model)
         .await
         .map_err(|e| match e {
             AIProviderError::ModelNotFound { .. } => AppError::bad_request(
                 "invalid_model",
-                format!("Model '{}' is not configured", request.model),
+                format!(
+                    "Model '{}' is not configured for provider '{}'",
+                    request.model, request.provider
+                ),
             ),
             AIProviderError::ModelNotAvailable { .. } => AppError::bad_request(
                 "model_not_available",
@@ -49,14 +59,6 @@ pub async fn create_job(
             e => AppError::internal_error(e.to_string()),
         })?;
 
-    let provider = state
-        .ai_providers
-        .default_provider_name()
-        .ok_or_else(|| {
-            AppError::service_unavailable("No default AI provider configured".to_string())
-        })?
-        .to_string();
-
     match state.photo_store.list_by_task(task_id).await {
         Ok(photos) => {
             let photo_ids = job_photo_ids(task_id, photos, request.photo_ids)?;
@@ -69,7 +71,13 @@ pub async fn create_job(
             let language = request
                 .language
                 .or_else(|| state.config.ai.default_language.clone());
-            let job = Job::new(task_id, provider, request.model, language, photo_ids);
+            let job = Job::new(
+                task_id,
+                request.provider,
+                request.model,
+                language,
+                photo_ids,
+            );
             let job_response = add_job_to_store(&state.job_store, job).await?;
             Ok((StatusCode::CREATED, Json(job_response)))
         }
@@ -331,6 +339,7 @@ mod tests {
 
         // Create job with all photos (photo_ids = None)
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
@@ -384,6 +393,7 @@ mod tests {
 
         // Create job with only photo1 and photo2
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "llava".to_string(),
             language: None,
             photo_ids: Some(vec![photo1_id, photo2_id]),
@@ -412,6 +422,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_job_invalid_provider() {
+        let ts = create_test_state().await;
+
+        let task = Task::new(
+            test_catalog_id(),
+            "Test task".to_string(),
+            "test task".to_string(),
+        );
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let request = CreateJobRequest {
+            provider: "nonexistent-provider".to_string(),
+            model: "qwen3-vl:8b".to_string(),
+            language: None,
+            photo_ids: None,
+        };
+
+        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.status, axum::http::StatusCode::BAD_REQUEST);
+        assert_eq!(error.body.error, "invalid_provider");
+        assert!(error.body.message.contains("nonexistent-provider"));
+    }
+
+    #[tokio::test]
     async fn test_create_job_invalid_model() {
         let ts = create_test_state().await;
 
@@ -425,6 +463,7 @@ mod tests {
         ts.state.task_store.create(task).await.unwrap();
 
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "nonexistent-model".to_string(),
             language: None,
             photo_ids: None,
@@ -454,6 +493,7 @@ mod tests {
         ts.state.photo_store.create(photo).await.unwrap();
 
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
@@ -484,6 +524,7 @@ mod tests {
         ts.state.photo_store.create(photo).await.unwrap();
 
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
@@ -503,6 +544,7 @@ mod tests {
         let nonexistent_task_id = Uuid::new_v4();
 
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
@@ -545,6 +587,7 @@ mod tests {
         // Try to create job with a photo_id that doesn't belong to this task
         let invalid_photo_id = Uuid::new_v4();
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: Some(vec![invalid_photo_id]),
@@ -574,6 +617,7 @@ mod tests {
 
         // Create job for empty task
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
@@ -603,6 +647,7 @@ mod tests {
 
         // Explicitly pass an empty photo_ids list
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: Some(vec![]),
@@ -1576,6 +1621,7 @@ mod tests {
         ts.state.photo_store.create(photo).await.unwrap();
 
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: Some("Italian".to_string()),
             photo_ids: None,
@@ -1609,6 +1655,7 @@ mod tests {
         ts.state.photo_store.create(photo).await.unwrap();
 
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
@@ -1636,6 +1683,7 @@ mod tests {
         ts.state.photo_store.create(photo).await.unwrap();
 
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
@@ -1663,6 +1711,7 @@ mod tests {
         ts.state.photo_store.create(photo).await.unwrap();
 
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: Some("German".to_string()),
             photo_ids: None,
@@ -1727,6 +1776,7 @@ mod tests {
         ts.state.photo_store.create(photo).await.unwrap();
 
         let request = CreateJobRequest {
+            provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
@@ -1739,7 +1789,7 @@ mod tests {
 
         assert_eq!(
             response.provider, "test",
-            "JobResponse should be populated with the default provider name"
+            "JobResponse should record the explicitly requested provider"
         );
 
         let stored = ts
@@ -1751,7 +1801,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             stored.provider, "test",
-            "Persisted job should record the default provider name"
+            "Persisted job should record the explicitly requested provider"
         );
     }
 
