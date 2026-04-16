@@ -39,6 +39,147 @@ fn calculate_task_size(photos: &[Photo]) -> Option<u64> {
 
 ---
 
+## Defensive Programming
+
+### When to add a sanity check
+
+A check is required when a wrong value produces a **silent error** — one that generates neither a `Result::Err` nor a panic, but a wrong result that propagates through the system. The at-risk categories in Rust are:
+
+| Situation | Risk | Solution |
+|-----------|------|----------|
+| `as` cast on non-constant value | Silent truncation | `TryFrom`/`TryInto` |
+| `usize` arithmetic in `--release` | Silent underflow/overflow (wrapping) | `checked_sub`, `checked_mul` |
+| Unvalidated state transition | Invariant violated without error | `debug_assert!` or explicit guard |
+| `unwrap()` outside `#[cfg(test)]` | Panic in production | `?` with `.context()` |
+| Multiple `Uuid` as positional parameters | Accidental swap not detected | Newtype wrapper |
+
+> In `--debug`, arithmetic overflow panics; in `--release` it wraps silently.
+> The server runs in `--release`: all arithmetic on non-constant values is at risk.
+
+---
+
+### Rule 1 — `TryFrom`/`TryInto` instead of `as` on non-constant values
+
+```rust
+// AVOID: as in routes/mod.rs:24
+// u64 → usize followed by multiplication: silent overflow in release
+let max_upload_size = state.config.upload.max_photo_size.0 as usize
+    * state.config.upload.max_photos_per_request
+    + 1024 * 1024;
+
+// PREFER
+let max_photo_size = usize::try_from(state.config.upload.max_photo_size.0)
+    .context("max_photo_size exceeds usize")?;
+let max_upload_size = max_photo_size
+    .checked_mul(state.config.upload.max_photos_per_request)
+    .context("max upload size overflow")?
+    + 1024 * 1024;
+```
+
+**Exception:** `usize → u64` is always safe (on 64-bit, `usize == u64`).
+The pattern `data.len() as u64` in `upload_photos.rs:218` is acceptable.
+
+---
+
+### Rule 2 — `checked_sub` / `checked_mul` for arithmetic on derived values
+
+```rust
+// AVOID: as in models/job.rs:264
+// if a bug causes completed + failed > photo_ids.len(),
+// usize subtraction wraps to usize::MAX in release
+let remaining = self.photo_ids.len() - (completed + failed);
+
+// PREFER
+let processed = completed + failed;
+let remaining = self.photo_ids.len()
+    .checked_sub(processed)
+    .unwrap_or(0); // or: .context("processed count exceeds total")?
+```
+
+---
+
+### Rule 3 — `debug_assert!` for state invariants
+
+The transition methods in `models/job.rs` (`start`, `complete`, `fail`, `cancel`)
+do not validate the current state — any transition is accepted silently.
+
+```rust
+// PREFER: debug_assert! for invariants known to be true at call sites
+// but that should be verified during development and in tests
+
+/// Marks the job as started (Processing).
+pub fn start(&mut self) {
+    debug_assert_eq!(
+        self.status, JobStatus::Queued,
+        "start() called on job with status {:?}", self.status
+    );
+    self.status = JobStatus::Processing;
+    self.started_at = Some(Utc::now());
+}
+
+/// Marks the job as completed.
+pub fn complete(&mut self) {
+    debug_assert_eq!(
+        self.status, JobStatus::Processing,
+        "complete() called on job with status {:?}", self.status
+    );
+    self.status = JobStatus::Completed;
+    self.completed_at = Some(Utc::now());
+}
+```
+
+`debug_assert!` is zero-cost in `--release` and panics in `--debug` and in tests,
+making state machine bugs visible during development without penalising production.
+
+---
+
+### Rule 4 — No `unwrap()` outside `#[cfg(test)]`
+
+```rust
+// AVOID: as in config/storage.rs:27 and config/upload.rs:30
+// unwrap() in a Default impl is not test code —
+// if the hardcoded string becomes invalid, the server fails to start
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            max_size: "10GiB".parse().unwrap(), // ← panics in production
+        }
+    }
+}
+
+// PREFER: a typed, infallible constructor
+impl Default for StorageConfig {
+    fn default() -> Self {
+        Self {
+            max_size: ByteSize::gibibytes(10),
+        }
+    }
+}
+```
+
+---
+
+### Rule 5 — Newtype for domain IDs (prevent positional mixing)
+
+Functions in `storage/filesystem_layout.rs` accept multiple positional `Uuid` arguments:
+
+```rust
+// FRAGILE: the compiler cannot detect argument swaps
+pub fn job_file_path(&self, catalog_id: Uuid, task_id: Uuid, job_id: Uuid) -> PathBuf
+
+// ROBUST: compile-time error if arguments are swapped
+pub fn job_file_path(&self, catalog_id: CatalogId, task_id: TaskId, job_id: JobId) -> PathBuf
+
+// Newtype definition — zero runtime overhead
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TaskId(pub Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct JobId(pub Uuid);
+```
+
+---
+
 ## Testing Guidelines (CRITICAL)
 
 ### Test-First Strategy
