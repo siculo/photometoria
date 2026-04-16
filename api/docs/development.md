@@ -359,6 +359,41 @@ curl -X PATCH http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-4466554400
 curl -X DELETE http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000
 ```
 
+**5b. Upload photos with upsert (re-upload same photo):**
+
+```bash
+# First upload (creates new photos)
+curl -X POST http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/photos \
+  -F 'client_ids=["lr:001","lr:002"]' \
+  -F 'files=@/path/to/IMG_001.jpg' \
+  -F 'files=@/path/to/IMG_002.jpg'
+
+# Re-upload same photos (replaces existing, preserves photo_id)
+curl -X POST http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/photos \
+  -F 'client_ids=["lr:001"]' \
+  -F 'files=@/path/to/IMG_001_edited.jpg'
+```
+
+Response (replacement):
+```json
+{
+  "uploaded": [
+    {
+      "client_id": "lr:001",
+      "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
+      "filename": "IMG_001_edited.jpg",
+      "size_bytes": 3950000,
+      "replaced": true
+    }
+  ],
+  "failed": [],
+  "created_count": 0,
+  "replaced_count": 1,
+  "failed_count": 0,
+  "uploaded_size_bytes": 3950000
+}
+```
+
 **6. List jobs for a task:**
 
 ```bash

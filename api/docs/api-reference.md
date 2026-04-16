@@ -24,10 +24,10 @@ This example demonstrates a typical workflow from task creation to cleanup:
    {name: "SF Vacation", context: "vacation in San Francisco"}
    ← {task_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890", catalog_id: "c0ffee00-cafe-4000-b000-000000000001", name: "SF Vacation"}
 
-2. Client uploads photos (single or batch)
+2. Client uploads photos (single or batch, upsert semantics)
    POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/photos
-   {files: [photo1.jpg, photo2.jpg, ...]}
-   ← {uploaded: [{photo_id: "f0e1d2c3-b4a5-6789-0fed-cba987654321", ...}, ...], failed: [], uploaded_size_bytes: ...}
+   {files: [photo1.jpg, photo2.jpg, ...], client_ids: ["lr:001", "lr:002"]}
+   ← {uploaded: [{photo_id: "...", replaced: false, ...}, ...], failed: [], created_count: 2, replaced_count: 0, failed_count: 0, uploaded_size_bytes: ...}
 
 3. Client starts analysis job
    POST /api/tasks/a1b2c3d4-e5f6-7890-abcd-ef1234567890/jobs
@@ -341,54 +341,76 @@ Uploads one or more photos to a task using multipart/form-data.
 - Limits: max_photos_per_request, max_photo_size (from config)
 
 Each `client_id` is an opaque string supplied by the client for reconciliation
-(e.g., a local file path). When `client_ids` is provided, the array must have the
-same length as the number of `files` fields. When omitted, all photos receive
-`client_id = null`.
+(e.g., a Lightroom local identifier). When `client_ids` is provided, the array must
+have the same length as the number of `files` fields. When omitted, all photos
+receive `client_id = null`.
 
-**Behavior:**
+**Behavior (upsert semantics):**
 
-The endpoint processes all photos and returns details about successes and failures.
-Photos are uploaded as long as storage space is available and validation passes.
-The response always includes both `uploaded` (successful) and `failed` arrays.
+- If `client_id` is provided and a photo with the same `client_id` already exists
+  in the task, the existing photo's image data and metadata are **replaced**. The
+  `photo_id` is preserved (stable reference for jobs and results).
+- If no matching `client_id` is found, or if `client_id` is `null`, a new photo is
+  created as usual.
+- For storage validation, a replacement is treated as a net delta (`new_size −
+  old_size`), so re-uploading a photo of similar size does not consume additional
+  quota.
+
+The response always includes both `uploaded` (successful, covering both new and
+replaced) and `failed` arrays, plus aggregate counters.
 
 **Response:**
 
-- `201 Created` - At least one photo was uploaded successfully
-- `200 OK` - No photos were uploaded (all failed or empty request)
+- `201 Created` — at least one photo was uploaded or replaced
+- `200 OK` — no photos were processed (all failed or empty request)
 
 ```json
 {
   "uploaded": [
     {
-      "client_id": "/Users/photos/IMG_001.jpg",
+      "client_id": "lr:001",
       "photo_id": "f0e1d2c3-b4a5-6789-0fed-cba987654321",
       "filename": "IMG_001.jpg",
-      "size_bytes": 4200000
+      "size_bytes": 4200000,
+      "replaced": false
     },
     {
-      "client_id": "/Users/photos/IMG_002.jpg",
+      "client_id": "lr:002",
       "photo_id": "a9b8c7d6-e5f4-3210-9876-543210fedcba",
-      "filename": "IMG_002.jpg",
-      "size_bytes": 3800000
+      "filename": "IMG_002_v2.jpg",
+      "size_bytes": 3900000,
+      "replaced": true
     }
   ],
   "failed": [
     {
-      "client_id": "/Users/photos/IMG_003.jpg",
+      "client_id": "lr:003",
       "filename": "IMG_003.jpg",
       "reason": "file_too_large"
     }
   ],
-  "uploaded_size_bytes": 8000000
+  "created_count": 1,
+  "replaced_count": 1,
+  "failed_count": 1,
+  "uploaded_size_bytes": 8100000
 }
 ```
 
-**Failure Reasons:**
+**Response fields:**
 
-- `file_too_large` - File exceeds max_photo_size
-- `invalid_format` - Unsupported file format
-- `too_many_files` - Uploaded files count exceeds max_photos_per_request
-- `storage_full` - Insufficient storage space
+- `uploaded` — photos processed successfully (both new and replaced)
+- `uploaded[].replaced` — `true` if this upload replaced an existing photo; `false` if new
+- `created_count` — number of newly created photos in this request
+- `replaced_count` — number of existing photos replaced in this request
+- `failed_count` — number of photos that failed (same as `failed.length`)
+- `uploaded_size_bytes` — total bytes transferred for successful uploads
+
+**Failure reasons:**
+
+- `file_too_large` — file exceeds `max_photo_size`
+- `invalid_format` — unsupported file format (only JPEG and PNG accepted)
+- `too_many_files` — file count exceeds `max_photos_per_request`
+- `storage_full` — insufficient storage space
 
 **Errors:**
 
