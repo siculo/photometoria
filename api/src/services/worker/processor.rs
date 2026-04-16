@@ -547,6 +547,7 @@ mod tests {
             .job_store
             .create(Job::new(
                 task.task_id,
+                "ollama".to_string(),
                 "llava".to_string(),
                 None,
                 vec![photo_id],
@@ -828,6 +829,7 @@ mod tests {
             .job_store
             .create(Job::new(
                 task.task_id,
+                "ollama".to_string(),
                 "llava".to_string(),
                 None,
                 vec![photo_id_1, photo_id_2],
@@ -927,6 +929,7 @@ mod tests {
             .job_store
             .create(Job::new(
                 task.task_id,
+                "ollama".to_string(),
                 "llava".to_string(),
                 None,
                 vec![photo_id],

@@ -296,7 +296,13 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let job = crate::models::Job::new(task_id, "llava".to_string(), None, vec![photo_id]);
+        let job = crate::models::Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![photo_id],
+        );
         ts.state.job_store.create(job).await.unwrap();
 
         let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
@@ -318,7 +324,13 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let mut job = crate::models::Job::new(task_id, "llava".to_string(), None, vec![photo_id]);
+        let mut job = crate::models::Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![photo_id],
+        );
         job.start();
         ts.state.job_store.create(job).await.unwrap();
 
@@ -341,7 +353,13 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let mut job = crate::models::Job::new(task_id, "llava".to_string(), None, vec![photo_id]);
+        let mut job = crate::models::Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![photo_id],
+        );
         job.start();
         job.complete();
         ts.state.job_store.create(job).await.unwrap();

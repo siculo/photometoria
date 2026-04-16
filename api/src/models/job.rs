@@ -94,6 +94,10 @@ impl std::fmt::Display for JobStatus {
     }
 }
 
+fn default_legacy_provider() -> String {
+    "ollama".to_string()
+}
+
 // ============================================================================
 // Job Entity (Internal Domain Model)
 // ============================================================================
@@ -114,6 +118,16 @@ pub struct Job {
 
     /// Reference to the parent Task
     pub task_id: Uuid,
+
+    /// Name of the AI provider resolved at job creation (e.g., "ollama").
+    ///
+    /// Persisted so the provider used for analysis can be audited after the fact,
+    /// independently of runtime configuration changes.
+    ///
+    /// Defaults to "ollama" when deserializing jobs persisted before this field
+    /// existed — at that time ollama was the only supported provider.
+    #[serde(default = "default_legacy_provider")]
+    pub provider: String,
 
     /// AI model to use for analysis (e.g., "qwen3-vl:8b", "llava")
     pub model: String,
@@ -154,6 +168,7 @@ impl Job {
     ///
     /// # Arguments
     /// * `task_id` - The UUID of the parent Task
+    /// * `provider` - The AI provider name resolved at creation time
     /// * `model` - The AI model to use for analysis
     /// * `language` - Optional language for generated tags (None = server default)
     /// * `photo_ids` - UUIDs of photos to process
@@ -165,6 +180,7 @@ impl Job {
     ///
     /// let job = Job::new(
     ///     Uuid::new_v4(),
+    ///     "ollama".to_string(),
     ///     "qwen3-vl:8b".to_string(),
     ///     None,
     ///     vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -173,6 +189,7 @@ impl Job {
     /// ```
     pub fn new(
         task_id: Uuid,
+        provider: String,
         model: String,
         language: Option<String>,
         photo_ids: Vec<Uuid>,
@@ -181,6 +198,7 @@ impl Job {
         Self {
             job_id: Uuid::new_v4(),
             task_id,
+            provider,
             model,
             language,
             status: JobStatus::Queued,
@@ -358,6 +376,9 @@ pub struct JobResponse {
     /// Current status
     pub status: JobStatus,
 
+    /// AI provider used
+    pub provider: String,
+
     /// AI model used
     pub model: String,
 
@@ -409,6 +430,9 @@ pub struct JobSummary {
 
     /// Current status
     pub status: JobStatus,
+
+    /// AI provider used
+    pub provider: String,
 
     /// AI model used
     pub model: String,
@@ -519,6 +543,9 @@ pub struct JobDetailResponse {
 
     /// Current status
     pub status: JobStatus,
+
+    /// AI provider used
+    pub provider: String,
 
     /// AI model used
     pub model: String,
@@ -638,6 +665,9 @@ pub struct RetryJobResponse {
     /// Status (always "queued")
     pub status: JobStatus,
 
+    /// AI provider (same as original job)
+    pub provider: String,
+
     /// AI model (same as original job)
     pub model: String,
 
@@ -665,6 +695,7 @@ impl From<Job> for JobResponse {
             job_id: job.job_id,
             task_id: job.task_id,
             status: job.status,
+            provider: job.provider,
             model: job.model,
             language: job.language,
             photo_count: job.photo_ids.len(),
@@ -681,6 +712,7 @@ impl From<&Job> for JobResponse {
             job_id: job.job_id,
             task_id: job.task_id,
             status: job.status,
+            provider: job.provider.clone(),
             model: job.model.clone(),
             language: job.language.clone(),
             photo_count: job.photo_ids.len(),
@@ -700,6 +732,7 @@ impl From<Job> for JobSummary {
             job_id: job.job_id,
             task_id: job.task_id,
             status: job.status,
+            provider: job.provider.clone(),
             model: job.model.clone(),
             language: job.language.clone(),
             created_at: job.created_at,
@@ -718,6 +751,7 @@ impl From<&Job> for JobSummary {
             job_id: job.job_id,
             task_id: job.task_id,
             status: job.status,
+            provider: job.provider.clone(),
             model: job.model.clone(),
             language: job.language.clone(),
             created_at: job.created_at,
@@ -734,6 +768,7 @@ impl From<Job> for JobDetailResponse {
             job_id: job.job_id,
             task_id: job.task_id,
             status: job.status,
+            provider: job.provider,
             model: job.model,
             language: job.language,
             photo_count: job.photo_ids.len(),
@@ -752,6 +787,7 @@ impl From<&Job> for JobDetailResponse {
             job_id: job.job_id,
             task_id: job.task_id,
             status: job.status,
+            provider: job.provider.clone(),
             model: job.model.clone(),
             language: job.language.clone(),
             photo_count: job.photo_ids.len(),
@@ -823,7 +859,13 @@ mod tests {
     fn test_job_new_generates_uuid() {
         let task_id = Uuid::new_v4();
         let photo_id = Uuid::new_v4();
-        let job = Job::new(task_id, "qwen3-vl:8b".to_string(), None, vec![photo_id]);
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![photo_id],
+        );
         assert!(!job.job_id.is_nil());
     }
 
@@ -831,9 +873,16 @@ mod tests {
     fn test_job_new_sets_fields() {
         let task_id = Uuid::new_v4();
         let photo_ids = vec![Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()];
-        let job = Job::new(task_id, "llava".to_string(), None, photo_ids.clone());
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            photo_ids.clone(),
+        );
 
         assert_eq!(job.task_id, task_id);
+        assert_eq!(job.provider, "ollama");
         assert_eq!(job.model, "llava");
         assert_eq!(job.status, JobStatus::Queued);
         assert_eq!(job.photo_ids, photo_ids);
@@ -848,6 +897,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -862,6 +912,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -881,6 +932,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -899,6 +951,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -916,6 +969,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -932,6 +986,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -985,6 +1040,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -1005,7 +1061,13 @@ mod tests {
     #[test]
     fn test_job_to_summary_conversion() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "llava".to_string(), None, vec![Uuid::new_v4()]);
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
 
         let summary: JobSummary = (&job).into();
 
@@ -1043,6 +1105,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1060,6 +1123,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1085,6 +1149,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1097,6 +1162,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -1120,6 +1186,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2, photo3],
@@ -1165,6 +1232,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2],
@@ -1181,6 +1249,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -1198,6 +1267,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2, photo3],
@@ -1264,6 +1334,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -1286,6 +1357,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -1305,6 +1377,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2],
@@ -1339,6 +1412,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2, photo3],
@@ -1402,6 +1476,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             Some("Italian".to_string()),
             vec![Uuid::new_v4()],
@@ -1412,7 +1487,13 @@ mod tests {
     #[test]
     fn test_job_new_without_language() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "llava".to_string(), None, vec![Uuid::new_v4()]);
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
         assert!(job.language.is_none());
     }
 
@@ -1421,6 +1502,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             Some("French".to_string()),
             vec![Uuid::new_v4()],
@@ -1433,7 +1515,13 @@ mod tests {
     #[test]
     fn test_job_response_skips_none_language() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "llava".to_string(), None, vec![Uuid::new_v4()]);
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
 
         let response: JobResponse = job.into();
         let json = serde_json::to_string(&response).unwrap();
@@ -1445,6 +1533,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "llava".to_string(),
             Some("Spanish".to_string()),
             vec![Uuid::new_v4()],
@@ -1459,6 +1548,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             Some("German".to_string()),
             vec![Uuid::new_v4()],
@@ -1492,6 +1582,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             Some("Italian".to_string()),
             vec![Uuid::new_v4()],
@@ -1503,7 +1594,13 @@ mod tests {
     #[test]
     fn test_job_serialization_skips_none_language() {
         let task_id = Uuid::new_v4();
-        let job = Job::new(task_id, "llava".to_string(), None, vec![Uuid::new_v4()]);
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
         let json = serde_json::to_string(&job).unwrap();
         assert!(!json.contains("\"language\""));
     }
@@ -1513,6 +1610,7 @@ mod tests {
         let task_id = Uuid::new_v4();
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             Some("Italian".to_string()),
             vec![Uuid::new_v4()],
@@ -1539,5 +1637,97 @@ mod tests {
             job.language.is_none(),
             "Missing language field should deserialize as None for backward compatibility"
         );
+        assert_eq!(
+            job.provider, "ollama",
+            "Missing provider field should default to 'ollama' for backward compatibility"
+        );
+    }
+
+    // ========================================================================
+    // Provider field tests
+    // ========================================================================
+
+    #[test]
+    fn test_job_new_sets_provider() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "custom-provider".to_string(),
+            "llava".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
+        assert_eq!(job.provider, "custom-provider");
+    }
+
+    #[test]
+    fn test_job_response_includes_provider() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
+        let response: JobResponse = (&job).into();
+        assert_eq!(response.provider, "ollama");
+    }
+
+    #[test]
+    fn test_job_summary_includes_provider() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
+        let summary: JobSummary = (&job).into();
+        assert_eq!(summary.provider, "ollama");
+    }
+
+    #[test]
+    fn test_job_detail_response_includes_provider() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
+        let response: JobDetailResponse = (&job).into();
+        assert_eq!(response.provider, "ollama");
+    }
+
+    #[test]
+    fn test_job_serialization_includes_provider() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
+        let json = serde_json::to_string(&job).unwrap();
+        assert!(json.contains("\"provider\":\"ollama\""));
+    }
+
+    #[test]
+    fn test_job_roundtrip_preserves_provider() {
+        let task_id = Uuid::new_v4();
+        let job = Job::new(
+            task_id,
+            "custom-provider".to_string(),
+            "llava".to_string(),
+            None,
+            vec![Uuid::new_v4()],
+        );
+        let json = serde_json::to_string(&job).unwrap();
+        let deserialized: Job = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.provider, "custom-provider");
     }
 }
