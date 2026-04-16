@@ -447,36 +447,55 @@ LrTasks.startAsyncTask(function()
 		local uploadResult = PhotoUploader.run(host, confirmedTaskId, validation.photos, data.maxPhotosPerRequest, data.maxPhotoSizeBytes)
 
 		local title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos"
+		local created = uploadResult.created or 0
+		local replaced = uploadResult.replaced or 0
+		local totalSuccessful = created + replaced
 		local oversized = uploadResult.oversized or 0
 
 		if uploadResult.storage_full then
 			LrDialogs.message(
 				title,
 				LOC("$$$/Photometoria/Upload/StorageFull=Upload aborted: server storage is full. ^1 of ^2 photos were uploaded before the limit was reached.",
-					tostring(uploadResult.uploaded), tostring(uploadResult.total)),
+					tostring(totalSuccessful), tostring(uploadResult.total)),
 				'critical'
 			)
 		elseif uploadResult.cancelled then
 			LrDialogs.message(
 				title,
 				LOC("$$$/Photometoria/Upload/Cancelled=Upload cancelled. ^1 of ^2 photos uploaded.",
-					tostring(uploadResult.uploaded), tostring(uploadResult.total)),
+					tostring(totalSuccessful), tostring(uploadResult.total)),
 				'info'
 			)
 		else
 			local body
 			if uploadResult.failed == 0 and oversized == 0 then
-				body = LOC("$$$/Photometoria/Upload/Success=^1 photos uploaded successfully. Open the task window?",
-					tostring(uploadResult.uploaded))
+				if replaced == 0 then
+					body = LOC("$$$/Photometoria/Upload/Success=^1 photos uploaded successfully. Open the task window?",
+						tostring(created))
+				elseif created == 0 then
+					body = LOC("$$$/Photometoria/Upload/SuccessReplaced=^1 photos updated successfully. Open the task window?",
+						tostring(replaced))
+				else
+					body = LOC("$$$/Photometoria/Upload/SuccessMixed=^1 new photos added, ^2 updated. Open the task window?",
+						tostring(created), tostring(replaced))
+				end
 			elseif uploadResult.failed == 0 then
-				body = LOC("$$$/Photometoria/Upload/SuccessWithOversized=^1 photos uploaded (^2 skipped: file too large for server limit). Open the task window?",
-					tostring(uploadResult.uploaded), tostring(oversized))
+				if replaced == 0 then
+					body = LOC("$$$/Photometoria/Upload/SuccessWithOversized=^1 photos uploaded (^2 skipped: file too large for server limit). Open the task window?",
+						tostring(created), tostring(oversized))
+				elseif created == 0 then
+					body = LOC("$$$/Photometoria/Upload/SuccessReplacedWithOversized=^1 photos updated (^2 skipped: file too large for server limit). Open the task window?",
+						tostring(replaced), tostring(oversized))
+				else
+					body = LOC("$$$/Photometoria/Upload/SuccessMixedWithOversized=^1 new, ^2 updated (^3 skipped: file too large for server limit). Open the task window?",
+						tostring(created), tostring(replaced), tostring(oversized))
+				end
 			elseif oversized == 0 then
 				body = LOC("$$$/Photometoria/Upload/Partial=^1 of ^2 photos uploaded (^3 failed). Open the task window?",
-					tostring(uploadResult.uploaded), tostring(uploadResult.total), tostring(uploadResult.failed))
+					tostring(totalSuccessful), tostring(uploadResult.total), tostring(uploadResult.failed))
 			else
 				body = LOC("$$$/Photometoria/Upload/PartialWithOversized=^1 of ^2 photos uploaded (^3 failed, ^4 too large for server limit). Open the task window?",
-					tostring(uploadResult.uploaded), tostring(uploadResult.total), tostring(uploadResult.failed), tostring(oversized))
+					tostring(totalSuccessful), tostring(uploadResult.total), tostring(uploadResult.failed), tostring(oversized))
 			end
 
 			local action = LrDialogs.confirm(
