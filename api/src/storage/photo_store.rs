@@ -109,6 +109,27 @@ pub trait PhotoStore: Send + Sync {
         client_id: &str,
     ) -> PhotoStoreResult<Vec<Photo>>;
 
+    /// Updates the mutable metadata of an existing photo.
+    ///
+    /// Replaces `filename`, `size_bytes`, and `uploaded_at` (set to now).
+    /// The `photo_id`, `task_id`, and `client_id` are preserved unchanged.
+    ///
+    /// # Arguments
+    /// * `photo_id` - The unique identifier of the photo to update
+    /// * `filename` - New filename
+    /// * `size_bytes` - New file size in bytes
+    ///
+    /// # Returns
+    /// * `Ok(Photo)` - The updated photo
+    /// * `Err(NotFound)` - If no photo with the given ID exists
+    /// * `Err(StorageError)` - If a storage-level error occurs
+    async fn update(
+        &self,
+        photo_id: Uuid,
+        filename: String,
+        size_bytes: u64,
+    ) -> PhotoStoreResult<Photo>;
+
     /// Deletes a photo from the store.
     ///
     /// # Arguments
