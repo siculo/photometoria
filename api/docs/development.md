@@ -406,12 +406,12 @@ curl http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/jobs
 # Default language (falls back to config default_language, then English)
 curl -X POST http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/jobs \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen3-vl","photo_ids":null}'
+  -d '{"provider":"ollama","model":"qwen3-vl","photo_ids":null}'
 
 # Specify language for generated tags
 curl -X POST http://localhost:3000/api/tasks/550e8400-e29b-41d4-a716-446655440000/jobs \
   -H "Content-Type: application/json" \
-  -d '{"model":"qwen3-vl","photo_ids":null,"language":"Italian"}'
+  -d '{"provider":"ollama","model":"qwen3-vl","photo_ids":null,"language":"Italian"}'
 ```
 
 **8. Create multiple tasks (to test multi-task support):**

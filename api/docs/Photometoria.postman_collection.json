@@ -1195,7 +1195,7 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
+                            "raw": "{\n    \"provider\": \"ollama\",\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
                         },
                         "url": {
                             "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
@@ -1209,7 +1209,7 @@
                                 "jobs"
                             ]
                         },
-                        "description": "Creates a new job to process photos with the specified AI model.\n\n- `model`: AI model to use (e.g. `qwen3-vl`, `llava`)\n- `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task\n- `language`: language for generated tags (optional). Falls back to server-side `default_language` config, then to English\n\nThe job is created in `queued` status. The `job_id` is saved automatically for subsequent requests."
+                        "description": "Creates a new job to process photos with the specified AI provider and model.\n\n- `provider`: AI provider to use (e.g. `ollama`). Must match a registered provider name from `GET /api/providers`\n- `model`: AI model to use (e.g. `qwen3-vl`, `llava`). Must be configured for the specified provider\n- `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task\n- `language`: language for generated tags (optional). Falls back to server-side `default_language` config, then to English\n\nThe job is created in `queued` status. The `job_id` is saved automatically for subsequent requests."
                     },
                     "response": [
                         {
@@ -1224,7 +1224,7 @@
                                 ],
                                 "body": {
                                     "mode": "raw",
-                                    "raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
+                                    "raw": "{\n    \"provider\": \"ollama\",\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
                                 },
                                 "url": {
                                     "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",
@@ -1262,7 +1262,7 @@
                                 ],
                                 "body": {
                                     "mode": "raw",
-                                    "raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
+                                    "raw": "{\n    \"provider\": \"ollama\",\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": null,\n    \"language\": \"Italian\"\n}"
                                 },
                                 "url": {
                                     "raw": "{{base_url}}/api/tasks/nonexistent/jobs",
@@ -1300,7 +1300,7 @@
                                 ],
                                 "body": {
                                     "mode": "raw",
-                                    "raw": "{\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": [\"00000000-0000-0000-0000-000000000000\"]\n}"
+                                    "raw": "{\n    \"provider\": \"ollama\",\n    \"model\": \"qwen3-vl\",\n    \"photo_ids\": [\"00000000-0000-0000-0000-000000000000\"]\n}"
                                 },
                                 "url": {
                                     "raw": "{{base_url}}/api/tasks/{{task_id}}/jobs",

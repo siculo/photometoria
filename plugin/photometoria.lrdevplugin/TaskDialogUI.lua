@@ -1313,7 +1313,7 @@ local function buildJobsSection(f, props, host, tasks)
 						end
 
 						LrTasks.startAsyncTask(function()
-							local ok, data = ServerConnection.createJob(host, task.task_id, selection.model, selection.language)
+							local ok, data = ServerConnection.createJob(host, task.task_id, selection.provider, selection.model, selection.language)
 							if ok then
 								local newJobId = data.job_id
 								local jOk, jobs = ServerConnection.listTaskJobs(host, task.task_id)

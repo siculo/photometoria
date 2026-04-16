@@ -8,6 +8,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Deserialize)]
 pub struct AIConfig {
     /// The default provider to use when none is specified.
+    ///
+    /// **Deprecated**: clients are required to specify the provider explicitly
+    /// in each job creation request (`POST /api/tasks/{id}/jobs`). This field
+    /// is retained for backward compatibility and will be removed in a future version.
     #[serde(default)]
     pub default_provider: Option<String>,
 

@@ -520,13 +520,15 @@ Creates a new analysis job in `queued` status.
 
 ```json
 {
+  "provider": "ollama",
   "model": "qwen3-vl",
   "photo_ids": null,
   "language": "Italian"
 }
 ```
 
-- `model`: AI model to use (e.g. `qwen3-vl`, `llava`)
+- `provider`: AI provider to use (e.g. `ollama`). Must match a registered provider name from `GET /api/providers`
+- `model`: AI model to use (e.g. `qwen3-vl`, `llava`). Must be configured for the specified provider
 - `photo_ids`: array of photo UUIDs to process, or `null` to process all photos in the task
 - `language`: language for generated tags (optional). If omitted, falls back to the server-side `default_language` config, then to `"English"`
 
@@ -545,14 +547,17 @@ Creates a new analysis job in `queued` status.
 }
 ```
 
-Fields `started_at` and `completed_at` are omitted until the job reaches the corresponding state. `provider` is populated with the name of the AI provider selected for this job (currently the server's default provider).
+Fields `started_at` and `completed_at` are omitted until the job reaches the corresponding state. `provider` records the name of the AI provider explicitly specified in the request.
 
 **Errors:**
 
+- `400` - Provider is not configured (`invalid_provider`)
+- `400` - Model is not configured for the specified provider (`invalid_model`)
+- `400` - Model is configured but not available in the provider backend (`model_not_available`)
 - `400` - Task has no photos to process (`no_photos`)
 - `400` - One or more `photo_ids` do not belong to the task (`invalid_parameter`)
-- `400` - Specified model is not configured (`invalid_model`)
 - `404` - Task not found
+- `503` - Provider backend is unreachable (`service_unavailable`)
 
 ### POST /api/jobs/{job_id}/cancel
 
@@ -774,7 +779,7 @@ Deletes a job. The job must be in a terminal state (`completed`, `failed`, or `c
 }
 ```
 
-- `provider` — name of the AI provider selected at job creation (from `[ai.providers]` in the server configuration). Jobs persisted before this field was introduced deserialize with `"ollama"` as a fallback.
+- `provider` — name of the AI provider explicitly specified in the job creation request.
 
 ### Result
 

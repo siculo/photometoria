@@ -333,6 +333,10 @@ impl Job {
 /// Note: `photo_ids: null` means "process all photos in the task"
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateJobRequest {
+    /// AI provider to use for analysis (e.g., "ollama").
+    /// Must match a registered provider name.
+    pub provider: String,
+
     /// AI model to use for analysis
     pub model: String,
 
@@ -1082,9 +1086,10 @@ mod tests {
 
     #[test]
     fn test_create_job_request_deserialization() {
-        let json = r#"{"model":"qwen3-vl:8b","photo_ids":null}"#;
+        let json = r#"{"provider":"ollama","model":"qwen3-vl:8b","photo_ids":null}"#;
         let request: CreateJobRequest = serde_json::from_str(json).unwrap();
 
+        assert_eq!(request.provider, "ollama");
         assert_eq!(request.model, "qwen3-vl:8b");
         assert!(request.photo_ids.is_none());
     }
@@ -1093,9 +1098,13 @@ mod tests {
     fn test_create_job_request_with_photo_ids() {
         let id1 = Uuid::new_v4();
         let id2 = Uuid::new_v4();
-        let json = format!(r#"{{"model":"llava","photo_ids":["{}","{}"]}}"#, id1, id2);
+        let json = format!(
+            r#"{{"provider":"ollama","model":"llava","photo_ids":["{}","{}"]}}"#,
+            id1, id2
+        );
         let request: CreateJobRequest = serde_json::from_str(&json).unwrap();
 
+        assert_eq!(request.provider, "ollama");
         assert_eq!(request.model, "llava");
         assert_eq!(request.photo_ids, Some(vec![id1, id2]));
     }
@@ -1561,9 +1570,11 @@ mod tests {
 
     #[test]
     fn test_create_job_request_with_language() {
-        let json = r#"{"model":"qwen3-vl:8b","language":"Italian","photo_ids":null}"#;
+        let json =
+            r#"{"provider":"ollama","model":"qwen3-vl:8b","language":"Italian","photo_ids":null}"#;
         let request: CreateJobRequest = serde_json::from_str(json).unwrap();
 
+        assert_eq!(request.provider, "ollama");
         assert_eq!(request.model, "qwen3-vl:8b");
         assert_eq!(request.language.as_deref(), Some("Italian"));
         assert!(request.photo_ids.is_none());
@@ -1571,9 +1582,10 @@ mod tests {
 
     #[test]
     fn test_create_job_request_without_language() {
-        let json = r#"{"model":"llava","photo_ids":null}"#;
+        let json = r#"{"provider":"ollama","model":"llava","photo_ids":null}"#;
         let request: CreateJobRequest = serde_json::from_str(json).unwrap();
 
+        assert_eq!(request.provider, "ollama");
         assert!(request.language.is_none());
     }
 
