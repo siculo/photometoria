@@ -17,8 +17,12 @@ use crate::models::{FailedUpload, Photo, UploadPhotosResponse, UploadedPhoto};
 use crate::storage::PhotoStore;
 
 /// Result of processing a single upload field.
+///
+/// `Uploaded` carries `(photo, new_size, old_size)` — `old_size` is `0` for new
+/// photos and the previous `size_bytes` for replacements, enabling callers to
+/// compute the net storage delta.
 enum ProcessedField {
-    Uploaded(UploadedPhoto, u64),
+    Uploaded(UploadedPhoto, u64, u64),
     Failed(FailedUpload),
 }
 
@@ -30,7 +34,6 @@ pub async fn upload_photos(
 ) -> Result<(StatusCode, Json<UploadPhotosResponse>), AppError> {
     debug!("Upload photos request for task_id={}", task_id);
 
-    // Verify task exists
     let task_exists = state
         .task_store
         .exists(task_id)
@@ -40,8 +43,9 @@ pub async fn upload_photos(
         return Err(AppError::task_not_found(task_id));
     }
 
+    let (client_ids, files) = extract_multipart_fields(&mut multipart).await?;
     let (uploaded, failed, uploaded_size_bytes) =
-        process_multipart(&state, task_id, &mut multipart).await?;
+        process_files(&state, task_id, client_ids, files).await?;
 
     let status = if uploaded.is_empty() {
         StatusCode::OK
@@ -49,17 +53,21 @@ pub async fn upload_photos(
         StatusCode::CREATED
     };
 
+    let created_count = uploaded.iter().filter(|p| !p.replaced).count();
+    let replaced_count = uploaded.iter().filter(|p| p.replaced).count();
+    let failed_count = failed.len();
+
     info!(
-        "Upload completed for task_id={}: {} uploaded, {} failed, {} bytes",
-        task_id,
-        uploaded.len(),
-        failed.len(),
-        uploaded_size_bytes
+        "Upload completed for task_id={}: {} created, {} replaced, {} failed, {} bytes",
+        task_id, created_count, replaced_count, failed_count, uploaded_size_bytes
     );
 
     let response = UploadPhotosResponse {
         uploaded,
         failed,
+        created_count,
+        replaced_count,
+        failed_count,
         uploaded_size_bytes,
     };
 
@@ -72,7 +80,7 @@ struct FileData {
     data: Bytes,
 }
 
-/// Processes the entire multipart request, returning the result of the upload operation.
+/// Reads all fields from the multipart stream and validates structural consistency.
 ///
 /// Expects:
 /// - An optional `client_ids` field with a JSON array of strings
@@ -80,11 +88,9 @@ struct FileData {
 ///
 /// If `client_ids` is provided, its length must match the number of files.
 /// If omitted, all photos are stored with `client_id = None`.
-async fn process_multipart(
-    state: &AppState,
-    task_id: Uuid,
+async fn extract_multipart_fields(
     multipart: &mut Multipart,
-) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), AppError> {
+) -> Result<(Option<Vec<String>>, Vec<FileData>), AppError> {
     let mut client_ids: Option<Vec<String>> = None;
     let mut files: Vec<FileData> = vec![];
 
@@ -143,7 +149,6 @@ async fn process_multipart(
         }
     }
 
-    // Validate: if client_ids is provided, counts must match
     if let Some(ref ids) = client_ids {
         if ids.len() != files.len() {
             error!(
@@ -162,7 +167,16 @@ async fn process_multipart(
         }
     }
 
-    // Process files
+    Ok((client_ids, files))
+}
+
+/// Iterates the collected files, saving each one to the store.
+async fn process_files(
+    state: &AppState,
+    task_id: Uuid,
+    client_ids: Option<Vec<String>>,
+    files: Vec<FileData>,
+) -> Result<(Vec<UploadedPhoto>, Vec<FailedUpload>, u64), AppError> {
     let mut used_storage = state
         .photo_store
         .total_size()
@@ -172,12 +186,14 @@ async fn process_multipart(
     let mut failed: Vec<FailedUpload> = vec![];
     let mut uploaded_size_bytes: u64 = 0;
 
-    for (idx, file) in files.into_iter().enumerate() {
-        let client_id = client_ids.as_ref().map(|ids| ids[idx].clone());
+    let pairs: Vec<(FileData, Option<String>)> = match client_ids {
+        Some(ids) => files.into_iter().zip(ids.into_iter().map(Some)).collect(),
+        None => files.into_iter().map(|f| (f, None)).collect(),
+    };
 
+    for (file, client_id) in pairs {
         let result = process_field(
-            file.data,
-            file.filename,
+            file,
             client_id,
             task_id,
             uploaded.len(),
@@ -188,10 +204,10 @@ async fn process_multipart(
         .await;
 
         match result {
-            ProcessedField::Uploaded(photo, size) => {
-                debug!("Photo uploaded: {} ({} bytes)", photo.photo_id, size);
-                used_storage += size;
-                uploaded_size_bytes += size;
+            ProcessedField::Uploaded(photo, new_size, old_size) => {
+                debug!("Photo uploaded: {} ({} bytes)", photo.photo_id, new_size);
+                used_storage = used_storage.saturating_sub(old_size) + new_size;
+                uploaded_size_bytes += new_size;
                 uploaded.push(photo);
             }
             ProcessedField::Failed(failure) => {
@@ -204,37 +220,41 @@ async fn process_multipart(
     Ok((uploaded, failed, uploaded_size_bytes))
 }
 
-/// Process a single upload field: validate and save to store.
-async fn process_field(
-    data: Bytes,
-    filename: String,
-    client_id: Option<String>,
-    task_id: Uuid,
-    uploaded_count: usize,
-    used_storage: u64,
-    config: &Config,
+/// Finds an existing photo by `client_id` within a task, returning the first match.
+async fn find_existing_photo(
     photo_store: &Arc<dyn PhotoStore>,
+    task_id: Uuid,
+    client_id: &str,
+) -> Result<Option<crate::models::Photo>, ()> {
+    match photo_store.find_by_client_id(task_id, client_id).await {
+        Ok(mut photos) => Ok(photos.drain(..).next()),
+        Err(e) => {
+            error!(
+                "Failed to look up photo by client_id '{}' in task {}: {:?}",
+                client_id, task_id, e
+            );
+            Err(())
+        }
+    }
+}
+
+/// Validates and saves a new photo, cleaning up metadata if the data write fails.
+async fn create_photo(
+    photo_store: &Arc<dyn PhotoStore>,
+    task_id: Uuid,
+    client_id: Option<String>,
+    filename: String,
+    data: &Bytes,
 ) -> ProcessedField {
     let data_size = data.len() as u64;
-
-    // Validate photo
-    if let Some(reason) = validate_photo(&data, uploaded_count, used_storage, config) {
-        return ProcessedField::Failed(FailedUpload {
-            client_id,
-            filename,
-            reason,
-        });
-    }
-
-    // Create photo and save to store
     let photo = Photo::new(task_id, client_id.clone(), filename.clone(), data_size);
-    match photo_store.create(photo.clone()).await {
+    let photo_id = photo.photo_id;
+
+    match photo_store.create(photo).await {
         Ok(_) => {
-            // Save actual image data
-            if let Err(e) = photo_store.save_data(photo.photo_id, &data).await {
+            if let Err(e) = photo_store.save_data(photo_id, data).await {
                 error!("Failed to save image data for '{}': {:?}", filename, e);
-                // Try to clean up the metadata we just created
-                let _ = photo_store.delete(photo.photo_id).await;
+                let _ = photo_store.delete(photo_id).await;
                 return ProcessedField::Failed(FailedUpload {
                     client_id,
                     filename,
@@ -244,11 +264,13 @@ async fn process_field(
             ProcessedField::Uploaded(
                 UploadedPhoto {
                     client_id,
-                    photo_id: photo.photo_id,
+                    photo_id,
                     filename,
                     size_bytes: data_size,
+                    replaced: false,
                 },
                 data_size,
+                0,
             )
         }
         Err(_) => ProcessedField::Failed(FailedUpload {
@@ -256,6 +278,107 @@ async fn process_field(
             filename,
             reason: "storage_error".to_string(),
         }),
+    }
+}
+
+/// Updates an existing photo's metadata and overwrites its image data.
+async fn replace_photo(
+    photo_store: &Arc<dyn PhotoStore>,
+    existing: crate::models::Photo,
+    client_id: Option<String>,
+    filename: String,
+    data: &Bytes,
+) -> ProcessedField {
+    let data_size = data.len() as u64;
+    let old_size = existing.size_bytes;
+    let photo_id = existing.photo_id;
+
+    match photo_store
+        .update(photo_id, filename.clone(), data_size)
+        .await
+    {
+        Ok(updated) => {
+            if let Err(e) = photo_store.save_data(photo_id, data).await {
+                error!("Failed to overwrite image data for '{}': {:?}", filename, e);
+                return ProcessedField::Failed(FailedUpload {
+                    client_id,
+                    filename,
+                    reason: "storage_error".to_string(),
+                });
+            }
+            ProcessedField::Uploaded(
+                UploadedPhoto {
+                    client_id: updated.client_id,
+                    photo_id,
+                    filename: updated.filename,
+                    size_bytes: data_size,
+                    replaced: true,
+                },
+                data_size,
+                old_size,
+            )
+        }
+        Err(_) => ProcessedField::Failed(FailedUpload {
+            client_id,
+            filename,
+            reason: "storage_error".to_string(),
+        }),
+    }
+}
+
+/// Validates a single file and saves it to the store (upsert semantics).
+///
+/// When `client_id` is `Some` and a photo with the same `client_id` already
+/// exists in the task, the existing photo is replaced (metadata updated, image
+/// data overwritten). Otherwise a new photo is created.
+async fn process_field(
+    file: FileData,
+    client_id: Option<String>,
+    task_id: Uuid,
+    uploaded_count: usize,
+    used_storage: u64,
+    config: &Config,
+    photo_store: &Arc<dyn PhotoStore>,
+) -> ProcessedField {
+    let existing = match client_id {
+        Some(ref cid) => match find_existing_photo(photo_store, task_id, cid).await {
+            Ok(photo) => photo,
+            Err(()) => {
+                return ProcessedField::Failed(FailedUpload {
+                    client_id,
+                    filename: file.filename,
+                    reason: "storage_error".to_string(),
+                });
+            }
+        },
+        None => None,
+    };
+
+    let effective_storage = match &existing {
+        Some(p) => used_storage.saturating_sub(p.size_bytes),
+        None => used_storage,
+    };
+
+    if let Some(reason) = validate_photo(&file.data, uploaded_count, effective_storage, config) {
+        return ProcessedField::Failed(FailedUpload {
+            client_id,
+            filename: file.filename,
+            reason,
+        });
+    }
+
+    match existing {
+        Some(existing_photo) => {
+            replace_photo(
+                photo_store,
+                existing_photo,
+                client_id,
+                file.filename,
+                &file.data,
+            )
+            .await
+        }
+        None => create_photo(photo_store, task_id, client_id, file.filename, &file.data).await,
     }
 }
 
@@ -272,7 +395,6 @@ fn validate_photo(
 ) -> Option<String> {
     let data_size = data.len() as u64;
 
-    // Check format using magic bytes
     let is_supported = infer::get(data)
         .map(|k| ALLOWED_MIME_TYPES.contains(&k.mime_type()))
         .unwrap_or(false);
@@ -280,17 +402,14 @@ fn validate_photo(
         return Some("invalid_format".to_string());
     }
 
-    // Check count limit
     if uploaded_count >= config.upload.max_photos_per_request {
         return Some("too_many_files".to_string());
     }
 
-    // Check file size
     if data_size > config.upload.max_photo_size.0 {
         return Some("file_too_large".to_string());
     }
 
-    // Check storage space
     if used_storage + data_size > config.storage_max_size() {
         return Some("storage_full".to_string());
     }
@@ -450,5 +569,238 @@ mod tests {
 
         // Should report invalid_format, not other errors
         assert_eq!(result, Some("invalid_format".to_string()));
+    }
+
+    // =========================================================================
+    // Handler tests (upsert behaviour)
+    // =========================================================================
+
+    use crate::handlers::app_error::AppPath;
+    use crate::handlers::test_utils::fixtures::{create_test_state, test_catalog_id};
+    use crate::models::Task;
+    use axum::extract::FromRequest;
+    use axum::http::Request;
+    use chrono::Utc;
+
+    fn jpeg_data() -> Vec<u8> {
+        create_jpeg_data(200)
+    }
+
+    /// Builds a raw multipart/form-data body.
+    ///
+    /// `client_ids`: if Some, serialised as a JSON array in the `client_ids` field.
+    /// `files`: list of (filename, bytes) pairs sent as `files` fields.
+    fn build_multipart_body(
+        boundary: &str,
+        client_ids: Option<Vec<&str>>,
+        files: Vec<(&str, Vec<u8>)>,
+    ) -> Vec<u8> {
+        let mut body = Vec::new();
+
+        if let Some(ids) = client_ids {
+            let json = serde_json::to_string(&ids).unwrap();
+            body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+            body.extend_from_slice(b"Content-Disposition: form-data; name=\"client_ids\"\r\n\r\n");
+            body.extend_from_slice(json.as_bytes());
+            body.extend_from_slice(b"\r\n");
+        }
+
+        for (filename, data) in files {
+            body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+            body.extend_from_slice(
+                format!(
+                    "Content-Disposition: form-data; name=\"files\"; filename=\"{}\"\r\n",
+                    filename
+                )
+                .as_bytes(),
+            );
+            body.extend_from_slice(b"Content-Type: application/octet-stream\r\n\r\n");
+            body.extend_from_slice(&data);
+            body.extend_from_slice(b"\r\n");
+        }
+
+        body.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+        body
+    }
+
+    async fn make_multipart(boundary: &str, body: Vec<u8>) -> Multipart {
+        let content_type = format!("multipart/form-data; boundary={}", boundary);
+        let request = Request::builder()
+            .method("POST")
+            .header("content-type", content_type)
+            .body(axum::body::Body::from(body))
+            .unwrap();
+        Multipart::from_request(request, &()).await.unwrap()
+    }
+
+    async fn create_task_in_store(ts: &crate::handlers::test_utils::fixtures::TestState) -> Task {
+        let task = Task {
+            task_id: Uuid::new_v4(),
+            catalog_id: test_catalog_id(),
+            name: "test task".to_string(),
+            context: "test context".to_string(),
+            created_at: Utc::now(),
+        };
+        ts.state.task_store.create(task.clone()).await.unwrap();
+        task
+    }
+
+    #[tokio::test]
+    async fn test_upload_creates_new_photo() {
+        let ts = create_test_state().await;
+        let task = create_task_in_store(&ts).await;
+        let boundary = "boundary_new";
+        let body = build_multipart_body(
+            boundary,
+            Some(vec!["lr:001"]),
+            vec![("photo.jpg", jpeg_data())],
+        );
+        let multipart = make_multipart(boundary, body).await;
+
+        let (status, Json(response)) =
+            upload_photos(State(ts.state.clone()), AppPath(task.task_id), multipart)
+                .await
+                .unwrap();
+
+        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(response.created_count, 1);
+        assert_eq!(response.replaced_count, 0);
+        assert_eq!(response.failed_count, 0);
+        assert!(!response.uploaded[0].replaced);
+        assert_eq!(response.uploaded[0].client_id, Some("lr:001".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_upload_replaces_existing_photo() {
+        let ts = create_test_state().await;
+        let task = create_task_in_store(&ts).await;
+
+        // First upload
+        let body1 = build_multipart_body(
+            "boundary_1",
+            Some(vec!["lr:001"]),
+            vec![("photo_v1.jpg", jpeg_data())],
+        );
+        upload_photos(
+            State(ts.state.clone()),
+            AppPath(task.task_id),
+            make_multipart("boundary_1", body1).await,
+        )
+        .await
+        .unwrap();
+
+        let photos_before = ts
+            .state
+            .photo_store
+            .list_by_task(task.task_id)
+            .await
+            .unwrap();
+        assert_eq!(photos_before.len(), 1);
+        let original_photo_id = photos_before[0].photo_id;
+
+        // Re-upload with same client_id
+        let body2 = build_multipart_body(
+            "boundary_2",
+            Some(vec!["lr:001"]),
+            vec![("photo_v2.jpg", jpeg_data())],
+        );
+        let (status, Json(response)) = upload_photos(
+            State(ts.state.clone()),
+            AppPath(task.task_id),
+            make_multipart("boundary_2", body2).await,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(response.created_count, 0);
+        assert_eq!(response.replaced_count, 1);
+        assert_eq!(response.failed_count, 0);
+        assert!(response.uploaded[0].replaced);
+        assert_eq!(response.uploaded[0].photo_id, original_photo_id);
+        assert_eq!(response.uploaded[0].filename, "photo_v2.jpg");
+        assert_eq!(response.uploaded[0].client_id, Some("lr:001".to_string()));
+
+        // photo_id preserved and store still has only one photo
+        let photos_after = ts
+            .state
+            .photo_store
+            .list_by_task(task.task_id)
+            .await
+            .unwrap();
+        assert_eq!(photos_after.len(), 1);
+        assert_eq!(photos_after[0].photo_id, original_photo_id);
+        assert_eq!(photos_after[0].filename, "photo_v2.jpg");
+    }
+
+    #[tokio::test]
+    async fn test_upload_no_client_id_always_creates_new() {
+        let ts = create_test_state().await;
+        let task = create_task_in_store(&ts).await;
+
+        for _ in 0..2 {
+            let body = build_multipart_body("boundary", None, vec![("photo.jpg", jpeg_data())]);
+            upload_photos(
+                State(ts.state.clone()),
+                AppPath(task.task_id),
+                make_multipart("boundary", body).await,
+            )
+            .await
+            .unwrap();
+        }
+
+        let photos = ts
+            .state
+            .photo_store
+            .list_by_task(task.task_id)
+            .await
+            .unwrap();
+        assert_eq!(photos.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_upload_mixed_new_and_replace_in_one_request() {
+        let ts = create_test_state().await;
+        let task = create_task_in_store(&ts).await;
+
+        // Seed: one existing photo with lr:001
+        let body1 = build_multipart_body(
+            "boundary_seed",
+            Some(vec!["lr:001"]),
+            vec![("existing.jpg", jpeg_data())],
+        );
+        upload_photos(
+            State(ts.state.clone()),
+            AppPath(task.task_id),
+            make_multipart("boundary_seed", body1).await,
+        )
+        .await
+        .unwrap();
+
+        // Upload: lr:001 (replace) + lr:002 (new) in one request
+        let body2 = build_multipart_body(
+            "boundary_batch",
+            Some(vec!["lr:001", "lr:002"]),
+            vec![("existing_v2.jpg", jpeg_data()), ("new.jpg", jpeg_data())],
+        );
+        let (_, Json(response)) = upload_photos(
+            State(ts.state.clone()),
+            AppPath(task.task_id),
+            make_multipart("boundary_batch", body2).await,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.created_count, 1);
+        assert_eq!(response.replaced_count, 1);
+        assert_eq!(response.failed_count, 0);
+
+        let photos = ts
+            .state
+            .photo_store
+            .list_by_task(task.task_id)
+            .await
+            .unwrap();
+        assert_eq!(photos.len(), 2);
     }
 }

@@ -45,16 +45,16 @@ local function hasStorageFullError(failedList)
 end
 
 --- Uploads a batch of exported files and tracks results.
---- Returns (uploadedCount, failedCount, networkOk, storageFull).
+--- Returns (createdCount, replacedCount, failedCount, networkOk, storageFull).
 local function uploadBatch(host, taskId, batch)
 	local ok, result = ServerConnection.uploadPhotos(host, taskId, batch)
 
 	if ok then
 		local failedList = result.failed or {}
-		return #(result.uploaded or {}), #failedList, true, hasStorageFullError(failedList)
+		return result.created_count or 0, result.replaced_count or 0, result.failed_count or #failedList, true, hasStorageFullError(failedList)
 	end
 
-	return 0, #batch, false, false
+	return 0, 0, #batch, false, false
 end
 
 --- Exports photos and uploads them in micro-batches.
@@ -89,7 +89,8 @@ function PhotoUploader.run(host, taskId, photos, batchSize, maxPhotoSizeBytes)
 
 	local batch = {}
 	local processedCount = 0
-	local totalUploaded = 0
+	local totalCreated = 0
+	local totalReplaced = 0
 	local totalFailed = 0
 	local totalOversized = 0
 	local aborted = false
@@ -125,8 +126,9 @@ function PhotoUploader.run(host, taskId, photos, batchSize, maxPhotoSizeBytes)
 		end
 
 		if #batch >= batchSize or (processedCount == totalPhotos and #batch > 0) then
-			local uploaded, failed, networkOk, batchStorageFull = uploadBatch(host, taskId, batch)
-			totalUploaded = totalUploaded + uploaded
+			local created, replaced, failed, networkOk, batchStorageFull = uploadBatch(host, taskId, batch)
+			totalCreated = totalCreated + created
+			totalReplaced = totalReplaced + replaced
 			totalFailed = totalFailed + failed
 
 			cleanupBatch(batch)
@@ -151,7 +153,8 @@ function PhotoUploader.run(host, taskId, photos, batchSize, maxPhotoSizeBytes)
 
 	return {
 		total = totalPhotos,
-		uploaded = totalUploaded,
+		created = totalCreated,
+		replaced = totalReplaced,
 		failed = totalFailed,
 		oversized = totalOversized,
 		storage_full = storageFull,

@@ -339,6 +339,40 @@ impl PhotoStore for FileSystemPhotoStore {
         }
     }
 
+    async fn update(
+        &self,
+        photo_id: Uuid,
+        filename: String,
+        size_bytes: u64,
+    ) -> PhotoStoreResult<Photo> {
+        debug!("Attempting to update photo: {}", photo_id);
+
+        let task_id = match self.photos.get(&photo_id) {
+            Some(entry) => entry.value().task_id,
+            None => return Err(PhotoStoreError::NotFound(photo_id)),
+        };
+
+        let catalog_id = self.resolve_catalog_id(task_id).await?;
+
+        let updated = match self.photos.get_mut(&photo_id) {
+            Some(mut entry) => {
+                entry.filename = filename;
+                entry.size_bytes = size_bytes;
+                entry.uploaded_at = chrono::Utc::now();
+                entry.value().clone()
+            }
+            None => return Err(PhotoStoreError::NotFound(photo_id)),
+        };
+
+        self.save_photos_for_task(catalog_id, task_id).await?;
+
+        info!(
+            "Photo updated successfully: {} (task: {}, filename: '{}')",
+            photo_id, task_id, updated.filename
+        );
+        Ok(updated)
+    }
+
     async fn get(&self, photo_id: Uuid) -> PhotoStoreResult<Option<Photo>> {
         debug!("Retrieving photo: {}", photo_id);
 
@@ -1064,6 +1098,112 @@ mod tests {
             !wrong_path.exists(),
             "Photo should NOT be in task root directory"
         );
+    }
+
+    #[tokio::test]
+    async fn test_update_photo_metadata() {
+        let ts = create_store().await;
+        let task_id = Uuid::new_v4();
+        setup_task(&ts, task_id).await;
+        let photo = create_test_photo(task_id, "original.jpg", 1_000_000);
+        let photo_id = photo.photo_id;
+        let original_uploaded_at = photo.uploaded_at;
+
+        ts.store.create(photo).await.unwrap();
+
+        let updated = ts
+            .store
+            .update(photo_id, "renamed.jpg".to_string(), 2_000_000)
+            .await
+            .unwrap();
+
+        assert_eq!(updated.photo_id, photo_id);
+        assert_eq!(updated.task_id, task_id);
+        assert_eq!(updated.filename, "renamed.jpg");
+        assert_eq!(updated.size_bytes, 2_000_000);
+        assert!(updated.uploaded_at >= original_uploaded_at);
+
+        let retrieved = ts.store.get(photo_id).await.unwrap().unwrap();
+        assert_eq!(retrieved.filename, "renamed.jpg");
+        assert_eq!(retrieved.size_bytes, 2_000_000);
+    }
+
+    #[tokio::test]
+    async fn test_update_preserves_client_id_and_task_id() {
+        let ts = create_store().await;
+        let task_id = Uuid::new_v4();
+        setup_task(&ts, task_id).await;
+        let photo = Photo::new(
+            task_id,
+            Some("lr:42".to_string()),
+            "photo.jpg".to_string(),
+            500_000,
+        );
+        let photo_id = photo.photo_id;
+
+        ts.store.create(photo).await.unwrap();
+
+        let updated = ts
+            .store
+            .update(photo_id, "photo_v2.jpg".to_string(), 600_000)
+            .await
+            .unwrap();
+
+        assert_eq!(updated.client_id, Some("lr:42".to_string()));
+        assert_eq!(updated.task_id, task_id);
+    }
+
+    #[tokio::test]
+    async fn test_update_nonexistent_photo_fails() {
+        let ts = create_store().await;
+
+        let result = ts
+            .store
+            .update(Uuid::new_v4(), "new.jpg".to_string(), 1_000)
+            .await;
+
+        assert!(result.is_err());
+        match result {
+            Err(PhotoStoreError::NotFound(_)) => {}
+            _ => panic!("Expected NotFound error"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_update_persists_across_reload() {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let storage_path = temp_dir.path().to_path_buf();
+        let task_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
+        let photo = create_test_photo(task_id, "original.jpg", 1_000_000);
+        let photo_id = photo.photo_id;
+
+        {
+            let task_store: Arc<dyn TaskStore> =
+                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let task = Task {
+                task_id,
+                catalog_id,
+                name: "test".to_string(),
+                context: "test".to_string(),
+                created_at: Utc::now(),
+            };
+            task_store.create(task).await.unwrap();
+            let store = FileSystemPhotoStore::new(storage_path.clone(), task_store).await;
+            store.create(photo).await.unwrap();
+            store
+                .update(photo_id, "updated.jpg".to_string(), 2_000_000)
+                .await
+                .unwrap();
+        }
+
+        let task_store: Arc<dyn TaskStore> =
+            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let store = FileSystemPhotoStore::new(storage_path, task_store).await;
+
+        let reloaded = store.get(photo_id).await.unwrap().unwrap();
+        assert_eq!(reloaded.filename, "updated.jpg");
+        assert_eq!(reloaded.size_bytes, 2_000_000);
     }
 
     #[tokio::test]

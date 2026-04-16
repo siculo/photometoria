@@ -1449,11 +1449,7 @@ mod tests {
     async fn test_list_task_jobs_includes_started_at() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
-            test_catalog_id(),
-            "Task".to_string(),
-            "ctx".to_string(),
-        );
+        let task = Task::new(test_catalog_id(), "Task".to_string(), "ctx".to_string());
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
@@ -1471,7 +1467,10 @@ mod tests {
         assert_eq!(jobs.len(), 2);
 
         let queued = jobs.iter().find(|j| j.status == JobStatus::Queued).unwrap();
-        let processing = jobs.iter().find(|j| j.status == JobStatus::Processing).unwrap();
+        let processing = jobs
+            .iter()
+            .find(|j| j.status == JobStatus::Processing)
+            .unwrap();
 
         assert!(queued.started_at.is_none());
         assert!(processing.started_at.is_some());
