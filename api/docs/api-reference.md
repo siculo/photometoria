@@ -493,6 +493,7 @@ Returns a summary list of all jobs belonging to a specific task.
   {
     "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
     "status": "completed",
+    "provider": "ollama",
     "model": "qwen3-vl",
     "language": "English",
     "photo_count": 15,
@@ -505,7 +506,7 @@ Returns a summary list of all jobs belonging to a specific task.
 ]
 ```
 
-`started_at` is omitted while the job is still `queued`. `completed_at` is omitted when the job has not yet finished.
+`started_at` is omitted while the job is still `queued`. `completed_at` is omitted when the job has not yet finished. `provider` records the name of the AI provider selected at job creation (currently the server's default provider).
 
 **Errors:**
 
@@ -536,6 +537,7 @@ Creates a new analysis job in `queued` status.
   "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
+  "provider": "ollama",
   "model": "qwen3-vl",
   "language": "Italian",
   "photo_count": 15,
@@ -543,7 +545,7 @@ Creates a new analysis job in `queued` status.
 }
 ```
 
-Fields `started_at` and `completed_at` are omitted until the job reaches the corresponding state.
+Fields `started_at` and `completed_at` are omitted until the job reaches the corresponding state. `provider` is populated with the name of the AI provider selected for this job (currently the server's default provider).
 
 **Errors:**
 
@@ -563,6 +565,7 @@ Cancels an active job. Any photos still waiting in the worker buffer are discard
   "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "cancelled",
+  "provider": "ollama",
   "model": "qwen3-vl",
   "language": "English",
   "photo_count": 15,
@@ -577,7 +580,7 @@ Cancels an active job. Any photos still waiting in the worker buffer are discard
 
 ### POST /api/jobs/{job_id}/retry
 
-Creates a new job to retry failed and unprocessed photos from a finished job, using the same model. This includes photos that failed during analysis and photos that were never processed (e.g. because the original job was cancelled).
+Creates a new job to retry failed and unprocessed photos from a finished job, using the same provider and model as the original. This includes photos that failed during analysis and photos that were never processed (e.g. because the original job was cancelled).
 
 **Errors:**
 
@@ -592,6 +595,7 @@ Creates a new job to retry failed and unprocessed photos from a finished job, us
   "job_id": "fedcba98-7654-3210-fedc-ba9876543210",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "queued",
+  "provider": "ollama",
   "model": "qwen3-vl",
   "language": "English",
   "photo_count": 2,
@@ -611,6 +615,7 @@ Returns a summary list of all jobs across all tasks.
   {
     "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
     "status": "completed",
+    "provider": "ollama",
     "model": "qwen3-vl",
     "language": "English",
     "photo_count": 15,
@@ -623,7 +628,7 @@ Returns a summary list of all jobs across all tasks.
 ]
 ```
 
-`started_at` is omitted while the job is still `queued`. `completed_at` is omitted when the job has not yet finished.
+`started_at` is omitted while the job is still `queued`. `completed_at` is omitted when the job has not yet finished. `provider` records the name of the AI provider selected at job creation.
 
 ### GET /api/jobs/{job_id}
 
@@ -636,6 +641,7 @@ Returns the current state of a specific job.
   "job_id": "12345678-abcd-ef01-2345-6789abcdef01",
   "task_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "status": "processing",
+  "provider": "ollama",
   "model": "qwen3-vl",
   "language": "English",
   "photo_count": 15,
@@ -754,6 +760,7 @@ Deletes a job. The job must be in a terminal state (`completed`, `failed`, or `c
   "job_id": "string (UUID)",
   "task_id": "string (UUID)",
   "status": "queued|processing|completed|failed|cancelled",
+  "provider": "string",
   "model": "string",
   "language": "string",
   "photo_ids": [
@@ -766,6 +773,8 @@ Deletes a job. The job must be in a terminal state (`completed`, `failed`, or `c
   "completed_at": "ISO 8601 timestamp | null"
 }
 ```
+
+- `provider` — name of the AI provider selected at job creation (from `[ai.providers]` in the server configuration). Jobs persisted before this field was introduced deserialize with `"ollama"` as a fallback.
 
 ### Result
 

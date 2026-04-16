@@ -149,7 +149,13 @@ mod tests {
 
     fn make_job(model: &str, photo_count: usize) -> Job {
         let photo_ids = (0..photo_count).map(|_| Uuid::new_v4()).collect();
-        Job::new(Uuid::new_v4(), model.to_string(), None, photo_ids)
+        Job::new(
+            Uuid::new_v4(),
+            "ollama".to_string(),
+            model.to_string(),
+            None,
+            photo_ids,
+        )
     }
 
     // --- enqueue_job ---

@@ -49,6 +49,14 @@ pub async fn create_job(
             e => AppError::internal_error(e.to_string()),
         })?;
 
+    let provider = state
+        .ai_providers
+        .default_provider_name()
+        .ok_or_else(|| {
+            AppError::service_unavailable("No default AI provider configured".to_string())
+        })?
+        .to_string();
+
     match state.photo_store.list_by_task(task_id).await {
         Ok(photos) => {
             let photo_ids = job_photo_ids(task_id, photos, request.photo_ids)?;
@@ -61,7 +69,7 @@ pub async fn create_job(
             let language = request
                 .language
                 .or_else(|| state.config.ai.default_language.clone());
-            let job = Job::new(task_id, request.model, language, photo_ids);
+            let job = Job::new(task_id, provider, request.model, language, photo_ids);
             let job_response = add_job_to_store(&state.job_store, job).await?;
             Ok((StatusCode::CREATED, Json(job_response)))
         }
@@ -237,9 +245,10 @@ pub async fn retry_job(
         ));
     }
 
-    // Create new job with retriable photos, preserving the language from the original
+    // Create new job with retriable photos, preserving the provider and language from the original
     let new_job = Job::new(
         original_job.task_id,
+        original_job.provider.clone(),
         original_job.model.clone(),
         original_job.language.clone(),
         retriable_photo_ids,
@@ -251,6 +260,7 @@ pub async fn retry_job(
             job_id: created_job.job_id,
             task_id: created_job.task_id,
             status: created_job.status,
+            provider: created_job.provider,
             model: created_job.model,
             language: created_job.language,
             photo_count: created_job.photo_ids.len(),
@@ -637,8 +647,20 @@ mod tests {
         ts.state.photo_store.create(photo1).await.unwrap();
 
         // Create multiple jobs
-        let job1 = Job::new(task_id, "qwen3-vl:8b".to_string(), None, vec![]);
-        let job2 = Job::new(task_id, "llava".to_string(), None, vec![]);
+        let job1 = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![],
+        );
+        let job2 = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![],
+        );
         ts.state.job_store.create(job1.clone()).await.unwrap();
         ts.state.job_store.create(job2.clone()).await.unwrap();
 
@@ -667,9 +689,21 @@ mod tests {
         ts.state.task_store.create(task).await.unwrap();
 
         // Create jobs with different statuses
-        let mut job1 = Job::new(task_id, "qwen3-vl:8b".to_string(), None, vec![]);
+        let mut job1 = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![],
+        );
         job1.start();
-        let mut job2 = Job::new(task_id, "llava".to_string(), None, vec![]);
+        let mut job2 = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![],
+        );
         job2.start();
         job2.complete();
 
@@ -706,6 +740,7 @@ mod tests {
 
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -739,6 +774,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -791,6 +827,7 @@ mod tests {
 
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
@@ -826,6 +863,7 @@ mod tests {
         let photo2 = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2],
@@ -907,6 +945,7 @@ mod tests {
         let photo3 = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2, photo3],
@@ -1008,6 +1047,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1038,7 +1078,13 @@ mod tests {
         ts.state.task_store.create(task).await.unwrap();
 
         let photo1 = Uuid::new_v4();
-        let mut job = Job::new(task_id, "qwen3-vl:8b".to_string(), None, vec![photo1]);
+        let mut job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![photo1],
+        );
         job.start();
         // Simulate photo1 having been processed
         job.queued_photo_ids.clear();
@@ -1088,6 +1134,7 @@ mod tests {
         let photo3 = Uuid::new_v4();
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2, photo3],
@@ -1151,6 +1198,7 @@ mod tests {
 
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1184,6 +1232,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1213,6 +1262,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1258,6 +1308,7 @@ mod tests {
 
         let job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1285,6 +1336,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1313,6 +1365,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1344,6 +1397,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
@@ -1415,9 +1469,27 @@ mod tests {
         ts.state.task_store.create(task1).await.unwrap();
         ts.state.task_store.create(task2).await.unwrap();
 
-        let job1 = Job::new(task1_id, "llava".to_string(), None, vec![]);
-        let job2 = Job::new(task1_id, "llava".to_string(), None, vec![]);
-        let job3 = Job::new(task2_id, "llava".to_string(), None, vec![]);
+        let job1 = Job::new(
+            task1_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![],
+        );
+        let job2 = Job::new(
+            task1_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![],
+        );
+        let job3 = Job::new(
+            task2_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![],
+        );
         let job1_id = job1.job_id;
         let job2_id = job2.job_id;
         ts.state.job_store.create(job1).await.unwrap();
@@ -1453,8 +1525,20 @@ mod tests {
         let task_id = task.task_id;
         ts.state.task_store.create(task).await.unwrap();
 
-        let queued_job = Job::new(task_id, "llava".to_string(), None, vec![]);
-        let mut processing_job = Job::new(task_id, "llava".to_string(), None, vec![]);
+        let queued_job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![],
+        );
+        let mut processing_job = Job::new(
+            task_id,
+            "ollama".to_string(),
+            "llava".to_string(),
+            None,
+            vec![],
+        );
         processing_job.start();
 
         ts.state.job_store.create(queued_job).await.unwrap();
@@ -1608,6 +1692,7 @@ mod tests {
 
         let mut job = Job::new(
             task_id,
+            "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             Some("Italian".to_string()),
             vec![photo_id],
@@ -1623,6 +1708,95 @@ mod tests {
             retry_response.language.as_deref(),
             Some("Italian"),
             "Retry job should preserve language from original job"
+        );
+    }
+
+    // ========================================================================
+    // Tests for provider field population
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_create_job_populates_provider() {
+        let ts = create_test_state().await;
+
+        let task = Task::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let request = CreateJobRequest {
+            model: "qwen3-vl:8b".to_string(),
+            language: None,
+            photo_ids: None,
+        };
+
+        let (_, Json(response)) =
+            create_job(State(ts.state.clone()), AppPath(task_id), Json(request))
+                .await
+                .unwrap();
+
+        assert_eq!(
+            response.provider, "test",
+            "JobResponse should be populated with the default provider name"
+        );
+
+        let stored = ts
+            .state
+            .job_store
+            .get(response.job_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            stored.provider, "test",
+            "Persisted job should record the default provider name"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_retry_job_preserves_provider() {
+        let ts = create_test_state().await;
+
+        let task = Task::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
+        let task_id = task.task_id;
+        ts.state.task_store.create(task).await.unwrap();
+
+        let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
+        let photo_id = photo.photo_id;
+        ts.state.photo_store.create(photo).await.unwrap();
+
+        let mut job = Job::new(
+            task_id,
+            "custom-provider".to_string(),
+            "qwen3-vl:8b".to_string(),
+            None,
+            vec![photo_id],
+        );
+        job.fail();
+        ts.state.job_store.create(job.clone()).await.unwrap();
+        ts.state.job_store.update(job.clone()).await.unwrap();
+
+        let Json(retry_response) = retry_job(State(ts.state.clone()), AppPath(job.job_id))
+            .await
+            .unwrap();
+
+        assert_eq!(
+            retry_response.provider, "custom-provider",
+            "Retry job should preserve provider from the original job"
+        );
+
+        let stored = ts
+            .state
+            .job_store
+            .get(retry_response.job_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            stored.provider, "custom-provider",
+            "Persisted retry job should preserve provider from the original job"
         );
     }
 }
