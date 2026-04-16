@@ -49,17 +49,21 @@ pub async fn upload_photos(
         StatusCode::CREATED
     };
 
+    let created_count = uploaded.iter().filter(|p| !p.replaced).count();
+    let replaced_count = uploaded.iter().filter(|p| p.replaced).count();
+    let failed_count = failed.len();
+
     info!(
-        "Upload completed for task_id={}: {} uploaded, {} failed, {} bytes",
-        task_id,
-        uploaded.len(),
-        failed.len(),
-        uploaded_size_bytes
+        "Upload completed for task_id={}: {} created, {} replaced, {} failed, {} bytes",
+        task_id, created_count, replaced_count, failed_count, uploaded_size_bytes
     );
 
     let response = UploadPhotosResponse {
         uploaded,
         failed,
+        created_count,
+        replaced_count,
+        failed_count,
         uploaded_size_bytes,
     };
 
@@ -252,6 +256,7 @@ async fn process_field(
                     photo_id,
                     filename: file.filename,
                     size_bytes: data_size,
+                    replaced: false,
                 },
                 data_size,
             )

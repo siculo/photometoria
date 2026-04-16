@@ -167,22 +167,34 @@ pub struct PhotoSummary {
 /// ```json
 /// {
 ///   "uploaded": [
-///     {"photo_id": "p1", "filename": "IMG_001.jpg", "size_bytes": 4200000},
-///     {"photo_id": "p2", "filename": "IMG_002.jpg", "size_bytes": 3800000}
+///     {"photo_id": "p1", "client_id": "lr:001", "filename": "IMG_001.jpg", "size_bytes": 4200000, "replaced": false},
+///     {"photo_id": "p2", "client_id": "lr:002", "filename": "IMG_002.jpg", "size_bytes": 3800000, "replaced": true}
 ///   ],
 ///   "failed": [
 ///     {"filename": "IMG_003.jpg", "reason": "file_too_large"}
 ///   ],
+///   "created_count": 1,
+///   "replaced_count": 1,
+///   "failed_count": 1,
 ///   "uploaded_size_bytes": 8000000
 /// }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadPhotosResponse {
-    /// Successfully uploaded photos
+    /// Successfully uploaded photos (both new and replaced)
     pub uploaded: Vec<UploadedPhoto>,
 
     /// Photos that failed to upload
     pub failed: Vec<FailedUpload>,
+
+    /// Number of newly created photos
+    pub created_count: usize,
+
+    /// Number of photos that replaced an existing entry with the same client_id
+    pub replaced_count: usize,
+
+    /// Number of photos that failed to upload
+    pub failed_count: usize,
 
     /// Total size of successfully uploaded photos in bytes
     pub uploaded_size_bytes: u64,
@@ -203,6 +215,9 @@ pub struct UploadedPhoto {
 
     /// File size in bytes
     pub size_bytes: u64,
+
+    /// Whether this upload replaced an existing photo with the same client_id
+    pub replaced: bool,
 }
 
 /// Information about a photo that failed to upload.
@@ -421,12 +436,14 @@ mod tests {
                     photo_id: Uuid::new_v4(),
                     filename: "IMG_001.jpg".to_string(),
                     size_bytes: 4_200_000,
+                    replaced: false,
                 },
                 UploadedPhoto {
                     client_id: Some("lr:002".to_string()),
                     photo_id: Uuid::new_v4(),
                     filename: "IMG_002.jpg".to_string(),
                     size_bytes: 4_300_000,
+                    replaced: true,
                 },
             ],
             failed: vec![FailedUpload {
@@ -434,16 +451,23 @@ mod tests {
                 filename: "IMG_003.jpg".to_string(),
                 reason: "file_too_large".to_string(),
             }],
+            created_count: 1,
+            replaced_count: 1,
+            failed_count: 1,
             uploaded_size_bytes: 8_500_000,
         };
         let json = serde_json::to_string(&response).unwrap();
 
         assert!(json.contains("uploaded"));
         assert!(json.contains("failed"));
+        assert!(json.contains("created_count"));
+        assert!(json.contains("replaced_count"));
+        assert!(json.contains("failed_count"));
         assert!(json.contains("uploaded_size_bytes"));
         assert!(json.contains("client_id"));
         assert!(json.contains("photo_id"));
         assert!(json.contains("filename"));
         assert!(json.contains("reason"));
+        assert!(json.contains("replaced"));
     }
 }
