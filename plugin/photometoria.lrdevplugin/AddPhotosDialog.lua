@@ -354,6 +354,7 @@ LrTasks.startAsyncTask(function()
 	end
 
 	local confirmedTaskId = nil
+	local isNewTask = false
 
 	LrFunctionContext.callWithContext('AddPhotosDialog', function(context)
 		local f = LrView.osFactory()
@@ -416,6 +417,7 @@ LrTasks.startAsyncTask(function()
 				if ok then
 					confirmedTaskId = taskData.task_id
 					prefs.lastActiveTaskId = taskData.task_id
+					isNewTask = true
 					done = true
 				elseif taskData.duplicate then
 					LrDialogs.message(
@@ -443,8 +445,91 @@ LrTasks.startAsyncTask(function()
 
 	Guard.release('AddPhotosDialog')
 
+	local photosToUpload = validation.photos
+
+	if confirmedTaskId and not isNewTask then
+		local checkScope = LrProgressScope {
+			title = LOC "$$$/Photometoria/Progress/CheckingExisting=Checking for existing photos...",
+		}
+		local listOk, existingData = ServerConnection.listTaskPhotos(host, confirmedTaskId)
+		checkScope:done()
+
+		if listOk then
+			local existingIds = {}
+			for _, p in ipairs(existingData.photos or {}) do
+				if p.client_id then
+					existingIds[p.client_id] = true
+				end
+			end
+
+			local overlapping = {}
+			local newOnly = {}
+			for _, photo in ipairs(validation.photos) do
+				local uid = photo:getRawMetadata('uuid')
+				if existingIds[uid] then
+					overlapping[#overlapping + 1] = photo
+				else
+					newOnly[#newOnly + 1] = photo
+				end
+			end
+
+			if #overlapping > 0 then
+				local replaceExisting = true
+				local proceed = false
+
+				LrFunctionContext.callWithContext('ConfirmReplaceDialog', function(ctx)
+					local f = LrView.osFactory()
+					local dlgProps = LrBinding.makePropertyTable(ctx)
+					dlgProps.replaceExisting = true
+
+					local result = LrDialogs.presentModalDialog {
+						title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+						contents = f:column {
+							bind_to_object = dlgProps,
+							spacing = f:control_spacing(),
+							fill_horizontal = 1,
+							width = 420,
+
+							f:static_text {
+								title = LOC("$$$/Photometoria/Upload/ConfirmReplace=^1 of ^2 photos already exist in this task.",
+									tostring(#overlapping), tostring(#validation.photos)),
+								fill_horizontal = 1,
+							},
+
+							f:checkbox {
+								title = LOC "$$$/Photometoria/Upload/ReplaceExisting=Update existing photos",
+								value = bind 'replaceExisting',
+							},
+						},
+						actionVerb = LOC "$$$/Photometoria/Button/Continue=Continue",
+					}
+
+					if result == 'ok' then
+						proceed = true
+						replaceExisting = dlgProps.replaceExisting
+					end
+				end)
+
+				if not proceed then
+					confirmedTaskId = nil
+				elseif not replaceExisting then
+					if #newOnly == 0 then
+						LrDialogs.message(
+							LOC "$$$/Photometoria/AddPhotos/Title=Add Photos",
+							LOC "$$$/Photometoria/Upload/NothingToUpload=All selected photos already exist in the task. No photos to upload.",
+							'info'
+						)
+						confirmedTaskId = nil
+					else
+						photosToUpload = newOnly
+					end
+				end
+			end
+		end
+	end
+
 	if confirmedTaskId then
-		local uploadResult = PhotoUploader.run(host, confirmedTaskId, validation.photos, data.maxPhotosPerRequest, data.maxPhotoSizeBytes)
+		local uploadResult = PhotoUploader.run(host, confirmedTaskId, photosToUpload, data.maxPhotosPerRequest, data.maxPhotoSizeBytes)
 
 		local title = LOC "$$$/Photometoria/AddPhotos/Title=Add Photos"
 		local created = uploadResult.created or 0
@@ -501,7 +586,8 @@ LrTasks.startAsyncTask(function()
 			local action = LrDialogs.confirm(
 				title,
 				body,
-				LOC "$$$/Photometoria/Button/OpenTask=Open Task Window"
+				LOC "$$$/Photometoria/Button/OpenTask=Open Task Window",
+				LOC "$$$/Photometoria/Button/Close=Close"
 			)
 
 			if action == 'ok' then
