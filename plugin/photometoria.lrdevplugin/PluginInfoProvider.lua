@@ -97,9 +97,11 @@ local function sectionsForTopOfDialog(f, propertyTable)
 	hideDetails(propertyTable)
 
 	local lastTypedHost = prefs.serverHost or ''
+	local suppressHostObserver = false
 	local onConnect
 
 	local function onServerHostChanged(propTable, key, value)
+		if suppressHostObserver then return end
 		if value == clearLabel then
 			RecentHosts.clear(lastTypedHost)
 			propTable.recentHostItems = RecentHosts.toComboItems(clearLabel)
@@ -165,6 +167,13 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				showDetails(propertyTable, data)
 				RecentHosts.add(host, data.serverName)
 				propertyTable.recentHostItems = RecentHosts.toComboItems(clearLabel)
+				suppressHostObserver = true
+				if data.serverName and data.serverName ~= '' then
+					propertyTable.serverHost = host .. ' - ' .. data.serverName
+				else
+					propertyTable.serverHost = host
+				end
+				suppressHostObserver = false
 			else
 				local unreachableStr = LOC "$$$/Photometoria/Status/Unreachable=Unreachable"
 				propertyTable.statusText = unreachableStr
@@ -172,7 +181,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				propertyTable.synopsis = unreachableStr
 			end
 
-			if ServerConnection.isValidHostPort(propertyTable.serverHost) then
+			if ServerConnection.isValidHostPort(RecentHosts.extractHost(propertyTable.serverHost)) then
 				propertyTable.connectEnabled = true
 			end
 		end)
