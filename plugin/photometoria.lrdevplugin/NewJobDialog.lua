@@ -95,19 +95,31 @@ local function selectLanguage(languageItems, savedLanguage, defaultLanguage)
 	return languageItems[1].value
 end
 
+--- Returns the saved model name if still available in modelItems, else nil.
+local function resolveSavedModel(modelItems, savedModelName)
+	if not savedModelName then return nil end
+	for _, item in ipairs(modelItems) do
+		if item.value == savedModelName then return savedModelName end
+	end
+	return nil
+end
+
 --- Shows the New Job dialog. Returns {provider, model, language} or nil if cancelled.
 --- providers: array of {name, default_language, models: [{name, description, available, supported_languages}]}
 --- photoCount: number of photos in the task
---- defaultProviderName: optional provider name to pre-select
+--- defaultProviderName: optional provider name to pre-select (falls back to saved prefs)
 function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 	local result = nil
 	local prefs = LrPrefs.prefsForPlugin()
 	local savedLanguage = prefs.lastLanguage
+	local savedProviderName = prefs.lastProviderName
+	local savedModelName = prefs.lastModelName
 
 	local defaultIndex = 1
-	if defaultProviderName then
+	local preferredProviderName = savedProviderName or defaultProviderName
+	if preferredProviderName then
 		for i, p in ipairs(providers) do
-			if p.name == defaultProviderName then
+			if p.name == preferredProviderName then
 				defaultIndex = i
 				break
 			end
@@ -120,19 +132,20 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 
 		local firstProvider = providers[defaultIndex]
 		local modelItems = buildModelItems(firstProvider)
-		local firstModel = firstAvailableModel(firstProvider)
-		local firstModelObj = findModel(firstProvider, firstModel)
+		local initialModel = resolveSavedModel(modelItems, savedModelName)
+			or firstAvailableModel(firstProvider)
+		local firstModelObj = findModel(firstProvider, initialModel)
 		local languageItems = buildLanguageItems(firstModelObj)
 
 		props.providerItems = buildProviderItems(providers)
 		props.selectedProvider = defaultIndex
 		props.modelItems = modelItems
-		props.selectedModel = firstModel
+		props.selectedModel = initialModel
 		props.noModelsVisible = (#modelItems == 0)
 		props.languageItems = languageItems
 		props.selectedLanguage = selectLanguage(languageItems, savedLanguage, firstProvider.default_language)
 		props.languageVisible = (#languageItems > 0)
-		props.confirmEnabled = (firstModel ~= nil)
+		props.confirmEnabled = (initialModel ~= nil)
 		props.photoSummary = string.format(
 			'%d %s',
 			photoCount,
@@ -255,6 +268,8 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 			if language then
 				prefs.lastLanguage = language
 			end
+			prefs.lastProviderName = provider.name
+			prefs.lastModelName = props.selectedModel
 			result = {
 				provider = provider.name,
 				model = props.selectedModel,
