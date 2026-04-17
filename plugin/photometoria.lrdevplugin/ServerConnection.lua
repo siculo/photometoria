@@ -221,11 +221,15 @@ end
 --- On success, data contains job_id, task_id, status, model, photo_count, created_at.
 --- On failure, data contains `message` with the error description.
 --- language: optional language string; omitted from the request when nil.
-function ServerConnection.createJob(host, taskId, provider, model, language)
+--- photoIds: optional array of photo_id strings; omitted when nil (processes all task photos).
+function ServerConnection.createJob(host, taskId, provider, model, language, photoIds)
 	local url = 'http://' .. host .. '/api/tasks/' .. taskId .. '/jobs'
 	local payload = { provider = provider, model = model }
 	if language then
 		payload.language = language
+	end
+	if photoIds then
+		payload.photo_ids = photoIds
 	end
 	local body = JSON.encode(payload)
 
