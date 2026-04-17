@@ -17,6 +17,11 @@ return {
 			file = 'AddPhotosDialog.lua',
 		},
 		{
+			title = LOC "$$$/Photometoria/Menu/RemovePhotos=Remove Photos",
+			file = 'RemovePhotosDialog.lua',
+			enabledWhen = 'photosSelected',
+		},
+		{
 			title = LOC "$$$/Photometoria/Menu/Tasks=Manage Tasks",
 			file = 'TaskDialog.lua',
 		},
