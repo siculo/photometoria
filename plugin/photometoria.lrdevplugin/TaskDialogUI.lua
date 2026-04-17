@@ -16,6 +16,7 @@ local ServerConnection = require 'ServerConnection'
 local TaskUtils = require 'TaskUtils'
 local NewJobDialog = require 'NewJobDialog'
 local ApplyTagsDialog = require 'ApplyTagsDialog'
+local PhotoSelection = require 'PhotoSelection'
 
 local TaskDialogUI = {}
 
@@ -1295,25 +1296,52 @@ local function buildJobsSection(f, props, host, tasks)
 						end
 
 						if #providers == 0 then
-							LrDialogs.message(
-								LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
-								LOC "$$$/Photometoria/Error/NoProviders=No AI providers configured on the server.",
-								'warning'
-							)
-							return
-						end
-
-						local selection = NewJobDialog.showDialog(
-							providers,
-							task.photo_count or 0,
-							defaultProviderName
-						)
-						if not selection then
+							LrTasks.startAsyncTask(function()
+								LrDialogs.message(
+									LOC "$$$/Photometoria/Dialog/Title=Photometoria Tasks",
+									LOC "$$$/Photometoria/Error/NoProviders=No AI providers configured on the server.",
+									'warning'
+								)
+							end)
 							return
 						end
 
 						LrTasks.startAsyncTask(function()
-							local ok, data = ServerConnection.createJob(host, task.task_id, selection.provider, selection.model, selection.language)
+							local selectionPhotoIds = nil
+							local photoOk, photoData = ServerConnection.listTaskPhotos(host, task.task_id)
+							if photoOk and photoData.photos then
+								local catalog = LrApplication.activeCatalog()
+								local lrSelected = catalog:getTargetPhotos()
+								if #lrSelected > 0 then
+									local selectedUuids = {}
+									for _, photo in ipairs(lrSelected) do
+										local uuid = photo:getRawMetadata('uuid')
+										if uuid then
+											selectedUuids[#selectedUuids + 1] = uuid
+										end
+									end
+									local intersection = PhotoSelection.intersect(selectedUuids, photoData.photos)
+									if #intersection > 0 then
+										selectionPhotoIds = intersection
+									end
+								end
+							end
+
+							local selection = NewJobDialog.showDialog(
+								providers,
+								task.photo_count or 0,
+								defaultProviderName,
+								selectionPhotoIds
+							)
+							if not selection then
+								return
+							end
+
+							local ok, data = ServerConnection.createJob(
+								host, task.task_id,
+								selection.provider, selection.model, selection.language,
+								selection.photo_ids
+							)
 							if ok then
 								local newJobId = data.job_id
 								local jOk, jobs = ServerConnection.listTaskJobs(host, task.task_id)

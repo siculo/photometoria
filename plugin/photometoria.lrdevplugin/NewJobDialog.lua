@@ -104,11 +104,13 @@ local function resolveSavedModel(modelItems, savedModelName)
 	return nil
 end
 
---- Shows the New Job dialog. Returns {provider, model, language} or nil if cancelled.
+--- Shows the New Job dialog. Returns {provider, model, language, photo_ids} or nil if cancelled.
 --- providers: array of {name, default_language, models: [{name, description, available, supported_languages}]}
 --- photoCount: number of photos in the task
 --- defaultProviderName: optional provider name to pre-select (falls back to saved prefs)
-function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
+--- selectionPhotoIds: optional array of server-side photo_id strings for the current Lightroom
+---   selection that overlaps the task; nil disables the "selection" scope option.
+function NewJobDialog.showDialog(providers, photoCount, defaultProviderName, selectionPhotoIds)
 	local result = nil
 	local prefs = LrPrefs.prefsForPlugin()
 	local savedLanguage = prefs.lastLanguage
@@ -146,11 +148,20 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 		props.selectedLanguage = selectLanguage(languageItems, savedLanguage, firstProvider.default_language)
 		props.languageVisible = (#languageItems > 0)
 		props.confirmEnabled = (initialModel ~= nil)
-		props.photoSummary = string.format(
-			'%d %s',
-			photoCount,
-			LOC "$$$/Photometoria/NewJob/PhotosToProcess=photos to process"
-		)
+
+		props.jobScope = 'all'
+		props.scopeAllLabel = LOC("$$$/Photometoria/NewJob/ScopeAll=All photos in task (^1)", tostring(photoCount))
+		local selectionCount = selectionPhotoIds and #selectionPhotoIds or 0
+		if selectionCount > 0 and selectionCount < photoCount then
+			props.scopeSelectionLabel = LOC("$$$/Photometoria/NewJob/ScopeSelection=Selected in Lightroom (^1)", tostring(selectionCount))
+			props.scopeSelectionEnabled = true
+		elseif selectionCount == photoCount then
+			props.scopeSelectionLabel = LOC "$$$/Photometoria/NewJob/ScopeSelectionAll=Selected in Lightroom (all task photos)"
+			props.scopeSelectionEnabled = false
+		else
+			props.scopeSelectionLabel = LOC "$$$/Photometoria/NewJob/ScopeSelectionNone=Selected in Lightroom (no overlap)"
+			props.scopeSelectionEnabled = false
+		end
 
 		props:addObserver('selectedProvider', function(propTable, key, value)
 			local provider = providers[value]
@@ -244,9 +255,23 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 				},
 			},
 
-			f:static_text {
-				title = bind 'photoSummary',
+			f:group_box {
+				title = LOC "$$$/Photometoria/NewJob/ScopeSection=Scope",
 				fill_horizontal = 1,
+				spacing = f:control_spacing(),
+
+				f:radio_button {
+					title = bind 'scopeAllLabel',
+					value = bind 'jobScope',
+					checked_value = 'all',
+				},
+
+				f:radio_button {
+					title = bind 'scopeSelectionLabel',
+					value = bind 'jobScope',
+					checked_value = 'selection',
+					enabled = bind 'scopeSelectionEnabled',
+				},
 			},
 		}
 
@@ -274,6 +299,7 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName)
 				provider = provider.name,
 				model = props.selectedModel,
 				language = language,
+				photo_ids = (props.jobScope == 'selection') and selectionPhotoIds or nil,
 			}
 		end
 	end)
