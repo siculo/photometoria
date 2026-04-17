@@ -12,6 +12,7 @@ pub struct InfoResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeneralInfo {
+    pub name: String,
     pub version: String,
 }
 

@@ -5,6 +5,9 @@
 # In production mode, config.toml is required.
 
 [server]
+# Human-readable name for this server instance (shown in the plugin connection panel).
+# Default: "Photometoria Server"
+name = "Photometoria Server"
 host = "0.0.0.0"
 port = 8080
 

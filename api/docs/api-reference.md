@@ -80,6 +80,7 @@ Returns general server information: version, storage usage, available AI provide
 ```json
 {
   "general": {
+    "name": "Photometoria Server",
     "version": "0.3.0"
   },
   "server": {
@@ -101,6 +102,7 @@ Returns general server information: version, storage usage, available AI provide
 }
 ```
 
+- `name` — human-readable name of this server instance (configurable in `[server]`)
 - `allocated_space_bytes` — maximum storage space configured for photos
 - `used_space_bytes` — total size of all uploaded photos across all tasks
 - `available_space_bytes` — remaining storage space (`allocated - used`)

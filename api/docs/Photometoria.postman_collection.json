@@ -80,7 +80,7 @@
                                     "value": "application/json"
                                 }
                             ],
-                            "body": "{\n    \"general\": {\n        \"version\": \"0.3.0\"\n    },\n    \"server\": {\n        \"allocated_space_bytes\": 107374182400,\n        \"used_space_bytes\": 25243074560,\n        \"available_space_bytes\": 82131107840,\n        \"available_providers\": [\n            \"ollama\"\n        ],\n        \"default_provider\": \"ollama\",\n        \"active_tasks_count\": 3,\n        \"running_jobs_count\": 1\n    },\n    \"limits\": {\n        \"max_photos_per_request\": 100,\n        \"max_photo_size_bytes\": 20971520,\n        \"max_context_length\": 2000,\n        \"max_concurrent_jobs\": null,\n        \"allowed_photo_types\": [\n            \"image/jpeg\",\n            \"image/png\"\n        ]\n    }\n}"
+                            "body": "{\n    \"general\": {\n        \"name\": \"Photometoria Server\",\n        \"version\": \"0.3.0\"\n    },\n    \"server\": {\n        \"allocated_space_bytes\": 107374182400,\n        \"used_space_bytes\": 25243074560,\n        \"available_space_bytes\": 82131107840,\n        \"available_providers\": [\n            \"ollama\"\n        ],\n        \"default_provider\": \"ollama\",\n        \"active_tasks_count\": 3,\n        \"running_jobs_count\": 1\n    },\n    \"limits\": {\n        \"max_photos_per_request\": 100,\n        \"max_photo_size_bytes\": 20971520,\n        \"max_context_length\": 2000,\n        \"max_concurrent_jobs\": null,\n        \"allowed_photo_types\": [\n            \"image/jpeg\",\n            \"image/png\"\n        ]\n    }\n}"
                         }
                     ]
                 }
