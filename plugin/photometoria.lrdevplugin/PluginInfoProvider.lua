@@ -120,7 +120,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 			return
 		end
 
-		if ServerConnection.isValidHostPort(value) then
+		if ServerConnection.isValidHostPort(RecentHosts.extractHost(value)) then
 			propTable.connectEnabled = not propTable.connecting
 			propTable.validationMessage = ''
 
@@ -139,7 +139,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 	propertyTable:addObserver('serverHost', onServerHostChanged)
 
 	onConnect = function()
-		local host = propertyTable.serverHost
+		local host = RecentHosts.extractHost(propertyTable.serverHost)
 		if not ServerConnection.isValidHostPort(host) then
 			return
 		end
@@ -163,7 +163,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				propertyTable.statusMessage = LOC("$$$/Photometoria/Status/ConnectedTo=Connected to ^1", host)
 				propertyTable.synopsis = onlineStr
 				showDetails(propertyTable, data)
-				RecentHosts.add(host)
+				RecentHosts.add(host, data.serverName)
 				propertyTable.recentHostItems = RecentHosts.toComboItems(clearLabel)
 			else
 				local unreachableStr = LOC "$$$/Photometoria/Status/Unreachable=Unreachable"
@@ -178,7 +178,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 		end)
 	end
 
-	if ServerConnection.isValidHostPort(propertyTable.serverHost) then
+	if ServerConnection.isValidHostPort(RecentHosts.extractHost(propertyTable.serverHost)) then
 		onConnect()
 	end
 
