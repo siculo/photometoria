@@ -32,6 +32,7 @@ pub async fn info(State(state): State<AppState>) -> Result<Json<InfoResult>, App
 
     let info = InfoResult {
         general: GeneralInfo {
+            name: state.config.server.name.clone(),
             version: version.to_string(),
         },
         server: ServerInfo {
@@ -78,6 +79,7 @@ mod tests {
         assert!(result.is_ok());
         let Json(info_result) = result.unwrap();
 
+        assert_eq!(info_result.general.name, ts.state.config.server.name);
         assert_eq!(info_result.general.version, env!("CARGO_PKG_VERSION"));
         assert_eq!(
             info_result.server.allocated_space_bytes,

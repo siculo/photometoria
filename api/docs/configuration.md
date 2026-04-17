@@ -71,6 +71,12 @@ Server binding and network configuration.
 
 **Options:**
 
+- **name** (string, optional)
+  - Human-readable name for this server instance
+  - Displayed in the Lightroom plugin connection panel to help distinguish multiple servers
+  - Default: `"Photometoria Server"`
+  - Examples: `"Studio NAS"`, `"Home Server"`
+
 - **host** (string, required)
   - Bind address for the HTTP server
   - Default: `"0.0.0.0"` (all interfaces)
@@ -85,6 +91,7 @@ Server binding and network configuration.
 
 ```toml
 [server]
+name = "Studio NAS"
 host = "0.0.0.0"
 port = 8080
 ```

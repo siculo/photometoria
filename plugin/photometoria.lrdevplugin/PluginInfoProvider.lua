@@ -20,6 +20,8 @@ local function hideStatus(propTable)
 end
 
 local function hideDetails(propTable)
+	propTable.detailNameLabel = ''
+	propTable.detailNameValue = ''
 	propTable.detailStorageAllocLabel = ''
 	propTable.detailStorageAllocValue = ''
 	propTable.detailStorageUsedLabel = ''
@@ -39,6 +41,8 @@ local function hideDetails(propTable)
 end
 
 local function showDetails(propTable, data)
+	propTable.detailNameLabel = LOC "$$$/Photometoria/Detail/ServerName=Server name:"
+	propTable.detailNameValue = data.serverName
 	propTable.detailStorageAllocLabel = LOC "$$$/Photometoria/Detail/StorageAllocated=Storage allocated:"
 	propTable.detailStorageAllocValue = data.storageAllocated
 	propTable.detailStorageUsedLabel = LOC "$$$/Photometoria/Detail/StorageUsed=Storage used:"
@@ -93,9 +97,11 @@ local function sectionsForTopOfDialog(f, propertyTable)
 	hideDetails(propertyTable)
 
 	local lastTypedHost = prefs.serverHost or ''
+	local suppressHostObserver = false
 	local onConnect
 
 	local function onServerHostChanged(propTable, key, value)
+		if suppressHostObserver then return end
 		if value == clearLabel then
 			RecentHosts.clear(lastTypedHost)
 			propTable.recentHostItems = RecentHosts.toComboItems(clearLabel)
@@ -116,7 +122,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 			return
 		end
 
-		if ServerConnection.isValidHostPort(value) then
+		if ServerConnection.isValidHostPort(RecentHosts.extractHost(value)) then
 			propTable.connectEnabled = not propTable.connecting
 			propTable.validationMessage = ''
 
@@ -135,7 +141,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 	propertyTable:addObserver('serverHost', onServerHostChanged)
 
 	onConnect = function()
-		local host = propertyTable.serverHost
+		local host = RecentHosts.extractHost(propertyTable.serverHost)
 		if not ServerConnection.isValidHostPort(host) then
 			return
 		end
@@ -159,8 +165,15 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				propertyTable.statusMessage = LOC("$$$/Photometoria/Status/ConnectedTo=Connected to ^1", host)
 				propertyTable.synopsis = onlineStr
 				showDetails(propertyTable, data)
-				RecentHosts.add(host)
+				RecentHosts.add(host, data.serverName)
 				propertyTable.recentHostItems = RecentHosts.toComboItems(clearLabel)
+				suppressHostObserver = true
+				if data.serverName and data.serverName ~= '' then
+					propertyTable.serverHost = host .. ' - ' .. data.serverName
+				else
+					propertyTable.serverHost = host
+				end
+				suppressHostObserver = false
 			else
 				local unreachableStr = LOC "$$$/Photometoria/Status/Unreachable=Unreachable"
 				propertyTable.statusText = unreachableStr
@@ -168,13 +181,13 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				propertyTable.synopsis = unreachableStr
 			end
 
-			if ServerConnection.isValidHostPort(propertyTable.serverHost) then
+			if ServerConnection.isValidHostPort(RecentHosts.extractHost(propertyTable.serverHost)) then
 				propertyTable.connectEnabled = true
 			end
 		end)
 	end
 
-	if ServerConnection.isValidHostPort(propertyTable.serverHost) then
+	if ServerConnection.isValidHostPort(RecentHosts.extractHost(propertyTable.serverHost)) then
 		onConnect()
 	end
 
@@ -254,6 +267,18 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				f:spacer { height = 10 },
 				f:separator { fill_horizontal = 1 },
 				f:spacer { height = 8 },
+
+				f:row {
+					f:static_text {
+						title = bind 'detailNameLabel',
+						alignment = 'right',
+						width = LABEL_WIDTH,
+					},
+					f:static_text {
+						title = bind 'detailNameValue',
+						fill_horizontal = 1,
+					},
+				},
 
 				f:row {
 					f:static_text {
