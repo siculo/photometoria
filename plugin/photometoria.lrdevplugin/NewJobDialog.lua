@@ -151,16 +151,21 @@ function NewJobDialog.showDialog(providers, photoCount, defaultProviderName, sel
 
 		props.jobScope = 'all'
 		props.scopeAllLabel = LOC("$$$/Photometoria/NewJob/ScopeAll=All photos in task (^1)", tostring(photoCount))
-		local selectionCount = selectionPhotoIds and #selectionPhotoIds or 0
-		if selectionCount > 0 and selectionCount < photoCount then
-			props.scopeSelectionLabel = LOC("$$$/Photometoria/NewJob/ScopeSelection=Selected in Lightroom (^1)", tostring(selectionCount))
-			props.scopeSelectionEnabled = true
-		elseif selectionCount == photoCount then
-			props.scopeSelectionLabel = LOC "$$$/Photometoria/NewJob/ScopeSelectionAll=Selected in Lightroom (all task photos)"
+		if selectionPhotoIds == nil then
+			props.scopeSelectionLabel = LOC "$$$/Photometoria/NewJob/ScopeSelectionEmpty=Selected in Lightroom (no photos selected)"
 			props.scopeSelectionEnabled = false
 		else
-			props.scopeSelectionLabel = LOC "$$$/Photometoria/NewJob/ScopeSelectionNone=Selected in Lightroom (no overlap)"
-			props.scopeSelectionEnabled = false
+			local selectionCount = #selectionPhotoIds
+			if selectionCount > 0 and selectionCount < photoCount then
+				props.scopeSelectionLabel = LOC("$$$/Photometoria/NewJob/ScopeSelection=Selected in Lightroom (^1)", tostring(selectionCount))
+				props.scopeSelectionEnabled = true
+			elseif selectionCount == photoCount then
+				props.scopeSelectionLabel = LOC "$$$/Photometoria/NewJob/ScopeSelectionAll=Selected in Lightroom (all task photos)"
+				props.scopeSelectionEnabled = false
+			else
+				props.scopeSelectionLabel = LOC "$$$/Photometoria/NewJob/ScopeSelectionNone=Selected in Lightroom (no overlap)"
+				props.scopeSelectionEnabled = false
+			end
 		end
 
 		props:addObserver('selectedProvider', function(propTable, key, value)

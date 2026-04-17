@@ -1311,7 +1311,7 @@ local function buildJobsSection(f, props, host, tasks)
 							local photoOk, photoData = ServerConnection.listTaskPhotos(host, task.task_id)
 							if photoOk and photoData.photos then
 								local catalog = LrApplication.activeCatalog()
-								local lrSelected = catalog:getTargetPhotos()
+								local lrSelected = catalog:getTargetPhoto() and catalog:getTargetPhotos() or {}
 								if #lrSelected > 0 then
 									local selectedUuids = {}
 									for _, photo in ipairs(lrSelected) do
@@ -1320,10 +1320,7 @@ local function buildJobsSection(f, props, host, tasks)
 											selectedUuids[#selectedUuids + 1] = uuid
 										end
 									end
-									local intersection = PhotoSelection.intersect(selectedUuids, photoData.photos)
-									if #intersection > 0 then
-										selectionPhotoIds = intersection
-									end
+									selectionPhotoIds = PhotoSelection.intersect(selectedUuids, photoData.photos)
 								end
 							end
 
