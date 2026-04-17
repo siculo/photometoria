@@ -20,6 +20,8 @@ local function hideStatus(propTable)
 end
 
 local function hideDetails(propTable)
+	propTable.detailNameLabel = ''
+	propTable.detailNameValue = ''
 	propTable.detailStorageAllocLabel = ''
 	propTable.detailStorageAllocValue = ''
 	propTable.detailStorageUsedLabel = ''
@@ -39,6 +41,8 @@ local function hideDetails(propTable)
 end
 
 local function showDetails(propTable, data)
+	propTable.detailNameLabel = LOC "$$$/Photometoria/Detail/ServerName=Server name:"
+	propTable.detailNameValue = data.serverName
 	propTable.detailStorageAllocLabel = LOC "$$$/Photometoria/Detail/StorageAllocated=Storage allocated:"
 	propTable.detailStorageAllocValue = data.storageAllocated
 	propTable.detailStorageUsedLabel = LOC "$$$/Photometoria/Detail/StorageUsed=Storage used:"
@@ -254,6 +258,18 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				f:spacer { height = 10 },
 				f:separator { fill_horizontal = 1 },
 				f:spacer { height = 8 },
+
+				f:row {
+					f:static_text {
+						title = bind 'detailNameLabel',
+						alignment = 'right',
+						width = LABEL_WIDTH,
+					},
+					f:static_text {
+						title = bind 'detailNameValue',
+						fill_horizontal = 1,
+					},
+				},
 
 				f:row {
 					f:static_text {

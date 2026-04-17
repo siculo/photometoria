@@ -102,6 +102,7 @@ function ServerConnection.info(host)
 	local limits = info.limits or {}
 
 	return true, {
+		serverName          = info.general and info.general.name or '',
 		storageAllocated    = formatBytes(allocated),
 		storageUsed         = formatBytes(used),
 		storageFree         = formatBytes(free),
