@@ -32,6 +32,8 @@ Supported providers include both local (Ollama) and remote providers.
 - **Job**: AI analysis process on a set of photos
 - **Worker**: GPU-bound executor for job processing
 
+> **Terminology migration in progress (issues #91–#93):** `Task` → `Project`, `Job` → `Activity`. `Operation` refers to a single step within an Activity (e.g., tag extraction in English, translation to Italian). The codebase and API are being updated incrementally. You may encounter the old terms in parts of the code, plugin, or docs that haven't been migrated yet — treat them as equivalent to the new terms. **Always use the new terminology when writing GitHub issues.**
+
 ---
 
 ## Code Style & Preferences

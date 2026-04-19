@@ -90,6 +90,33 @@ Photometoria is not a gallery (Immich/PhotoPrism), not an enterprise DAM, not a 
 
 ---
 
+## Direction 4: Text Extraction from Photos
+
+The use case emerged from observing the tags generated for a photo of a billboard: the model described the subject ("billboard", "advertising") but did not capture the text actually visible in the image. Extracting that text would add a qualitatively different layer of metadata.
+
+### What it means
+
+Text extraction differs from semantic tagging: tags describe the *meaning* of what is in the photo, text extraction captures *literal textual content* visible in the image — signage, billboards, menus, labels, street signs, documents photographed, text on buildings.
+
+### Why it fits the existing architecture
+
+The vision models already in use (qwen2-vl and similar) are capable of reading text from images without requiring additional providers or specialized OCR models. Text extraction would be implemented as a new activity type (`text_extraction`), reusing the existing provider and worker infrastructure.
+
+### Output and integration
+
+The extracted text could be stored as:
+- **Keywords/tags** in Lightroom (same flow as tag extraction)
+- **Caption or description field** for longer textual content
+- **Structured fields** if the text has recognizable format (e.g. a sign with a place name)
+
+### Considerations
+
+- Quality varies with image resolution and font legibility — the activity context (see issue #122) could guide the model ("look for billboard text", "extract menu items")
+- Mixed-language text (e.g. foreign signs photographed abroad) is handled naturally by multilingual models
+- The feature complements tag extraction rather than replacing it: the two activity types can be run independently or in sequence on the same project
+
+---
+
 ## Deployment Considerations
 
 Photometoria's target audience includes photographers (both professionals and enthusiasts) who generally aren't technical. Setup complexity is the main barrier to adoption.

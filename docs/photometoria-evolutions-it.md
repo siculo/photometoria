@@ -90,6 +90,33 @@ Photometoria non è una galleria (Immich/PhotoPrism), non è un DAM enterprise, 
 
 ---
 
+## Direzione 4: Estrazione testo dalle foto
+
+Il caso d'uso è emerso osservando i tag generati per una foto di un cartellone pubblicitario: il modello ha descritto il soggetto ("cartellone", "pubblicità") ma non ha catturato il testo effettivamente visibile nell'immagine. Estrarre quel testo aggiungerebbe uno strato di metadati qualitativamente diverso.
+
+### Cosa significa
+
+L'estrazione testo differisce dal tagging semantico: i tag descrivono il *significato* di ciò che è nella foto, l'estrazione testo cattura il *contenuto testuale letterale* visibile nell'immagine — insegne, cartelloni, menu, etichette, segnali stradali, documenti fotografati, testo sugli edifici.
+
+### Perché si integra nell'architettura esistente
+
+I modelli di visione già in uso (qwen2-vl e simili) sono capaci di leggere testo dalle immagini senza richiedere provider aggiuntivi né modelli OCR specializzati. L'estrazione testo si implementerebbe come nuovo tipo di activity (`text_extraction`), riutilizzando l'infrastruttura di provider e worker esistente.
+
+### Output e integrazione
+
+Il testo estratto potrebbe essere salvato come:
+- **Keywords/tag** in Lightroom (stesso flusso del tag extraction)
+- **Campo didascalia o descrizione** per contenuto testuale più lungo
+- **Campi strutturati** se il testo ha un formato riconoscibile (es. un'insegna con un nome di luogo)
+
+### Considerazioni
+
+- La qualità varia con la risoluzione dell'immagine e la leggibilità del font — il contesto dell'activity (vedi issue #122) potrebbe guidare il modello ("cerca il testo del cartellone", "estrai le voci del menu")
+- Il testo in lingue miste (es. insegne straniere fotografate all'estero) è gestito naturalmente dai modelli multilingua
+- La funzione è complementare al tag extraction: i due tipi di activity si possono eseguire indipendentemente o in sequenza sullo stesso progetto
+
+---
+
 ## Considerazioni sul deployment
 
 Il target di Photometoria comprende fotografi (professionisti e appassionati) che generalmente non sono tecnici. La complessità di setup è l'ostacolo principale all'adozione.
