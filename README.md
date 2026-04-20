@@ -16,7 +16,19 @@ The main goal is to automate the photographic keywording process, drastically re
 
 ## Project Status
 
-**Current Version:** 0.2.0
+**Current Version:** 0.3.0
+
+### v0.3.0 — Catalog Identity & Multi-language Support
+
+Catalog-scoped architecture and multi-language AI analysis:
+
+- **Catalog identity** — Projects and activities are now scoped to the Lightroom catalog; the plugin generates and persists a unique catalog UUID; all API endpoints are prefixed with `/api/catalogs/{catalog_id}`
+- **Multi-language support** — Language selection in the New Activity dialog; AI tag generation in English, Italian, Spanish, Arabic, Chinese, and more
+- **Structured JSON tags** — AI models return structured JSON for reliable tag parsing and downstream processing
+- **Storage resilience** — Filesystem consistency checks on startup, quarantine for corrupt data, atomic file writes, partial recovery for malformed entries
+- **Input validations** — Character limits for project context, photo upload constraints (size, MIME type, storage quota), model availability checks, disallow activities without photos
+- **Photo management** — Upsert semantics on re-upload with replace confirmation, photo subset selection for activity creation, Remove Photos command in plugin
+- **UX improvements** — Recent hosts list, real-time ETA for running activities, pre-select last used provider/model, configurable server name display, option to remove existing keywords on apply
 
 ### v0.2.0 — Lightroom Plugin
 
