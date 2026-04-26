@@ -87,6 +87,7 @@ Supported providers include both local (Ollama) and remote providers.
 
 ## Git Workflow
 
+- Must use conventional commit specification for commit messages
 - Imperative mood in commit messages
 - Atomic commits (one logical change per commit)
 - Run quality checks before committing
