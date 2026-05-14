@@ -9,10 +9,11 @@ local LrTasks = import 'LrTasks'
 local CatalogIdentity = require 'CatalogIdentity'
 local ServerConnection = require 'ServerConnection'
 local TaskDialogUI = require 'TaskDialogUI'
+local RecentHosts = require 'RecentHosts'
 
 LrTasks.startAsyncTask(function()
 	local prefs = LrPrefs.prefsForPlugin()
-	local host = prefs.serverHost or ''
+	local host = RecentHosts.extractHost(prefs.serverHost or '')
 
 	if not ServerConnection.isValidHostPort(host) then
 		LrDialogs.message(

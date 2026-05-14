@@ -14,6 +14,7 @@ local CatalogIdentity = require 'CatalogIdentity'
 local ServerConnection = require 'ServerConnection'
 local TaskUtils = require 'TaskUtils'
 local Guard = require 'Guard'
+local RecentHosts = require 'RecentHosts'
 
 local bind = LrView.bind
 
@@ -136,7 +137,7 @@ LrTasks.startAsyncTask(function()
 	end
 
 	local prefs = LrPrefs.prefsForPlugin()
-	local host = prefs.serverHost or ''
+	local host = RecentHosts.extractHost(prefs.serverHost or '')
 
 	if not ServerConnection.isValidHostPort(host) then
 		LrDialogs.message(

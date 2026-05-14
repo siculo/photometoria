@@ -19,6 +19,7 @@ local TaskDialogUI = require 'TaskDialogUI'
 local PhotoUploader = require 'PhotoUploader'
 local Guard = require 'Guard'
 local TaskUtils = require 'TaskUtils'
+local RecentHosts = require 'RecentHosts'
 
 local bind = LrView.bind
 local LABEL_WIDTH = 80
@@ -291,7 +292,7 @@ LrTasks.startAsyncTask(function()
 	end
 
 	local prefs = LrPrefs.prefsForPlugin()
-	local host = prefs.serverHost or ''
+	local host = RecentHosts.extractHost(prefs.serverHost or '')
 
 	if not ServerConnection.isValidHostPort(host) then
 		LrDialogs.message(

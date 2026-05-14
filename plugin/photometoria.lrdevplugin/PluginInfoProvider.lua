@@ -110,7 +110,7 @@ local function sectionsForTopOfDialog(f, propertyTable)
 		end
 
 		lastTypedHost = value
-		prefs.serverHost = value
+		prefs.serverHost = RecentHosts.extractHost(value)
 
 		hideStatus(propTable)
 		hideDetails(propTable)
