@@ -16,7 +16,7 @@ The main goal is to automate the photographic keywording process, drastically re
 
 ## Project Status
 
-**Current Version:** 0.3.0
+**Current Version:** 0.3.1
 
 ### v0.3.0 — Catalog Identity & Multi-language Support
 

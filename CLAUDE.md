@@ -11,7 +11,7 @@ The system is organized into two main components:
 
 Supported providers include both local (Ollama) and remote providers.
 
-**Version:** 0.2.0
+**Version:** 0.3.1
 
 ---
 

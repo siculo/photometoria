@@ -81,7 +81,7 @@ Returns general server information: version, storage usage, available AI provide
 {
   "general": {
     "name": "Photometoria Server",
-    "version": "0.3.0"
+    "version": "0.3.1"
   },
   "server": {
     "allocated_space_bytes": 107374182400,
