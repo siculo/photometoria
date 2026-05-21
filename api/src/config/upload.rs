@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
 use super::ByteSize;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Upload configuration section
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UploadConfig {
     pub max_photos_per_request: usize,
     pub max_photo_size: ByteSize,

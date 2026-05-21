@@ -25,9 +25,9 @@
 
 ```
 api/src/
-├── main.rs           # Entry point, CLI parsing
+├── main.rs           # Entry point, subcommand dispatch (server / config check / config show)
 ├── lib.rs            # Library crate root (re-exports)
-├── cli.rs            # CLI argument definitions (clap)
+├── cli.rs            # CLI definition (clap derive): --config, config check, config show, --version
 ├── startup.rs        # Server initialization and startup logic
 ├── app_state.rs      # Shared application state (AppState)
 ├── config/           # TOML configuration parsing

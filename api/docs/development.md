@@ -110,10 +110,10 @@ cargo run
 
 # Release build (optimized)
 cargo build --release
-cargo run --release
+./target/release/photometoria
 ```
 
-The server will start on `http://localhost:8080` (or the configured port).
+The server will start on `http://localhost:3000` (or the configured port).
 
 ## Testing
 
@@ -241,6 +241,31 @@ cargo test --test '*'
 cargo tarpaulin --out Html
 ```
 
+### CLI Reference
+
+The `photometoria` binary supports the following commands:
+
+```bash
+# Start the server (default behaviour when no command is given)
+photometoria
+photometoria --config /etc/photometoria/config.toml
+
+# Validate the configuration file without starting the server
+# Exits with code 0 if valid, 1 otherwise
+photometoria config check
+photometoria config check --config custom.toml
+
+# Print the effective configuration as valid TOML
+# Includes all default values; output can be saved and used as a config file
+photometoria config show
+photometoria config show --config custom.toml
+
+# Version and help
+photometoria --version
+photometoria --help
+photometoria config --help
+```
+
 ### Debugging HTTP Requests
 
 The API server includes `tower-http` `TraceLayer` middleware that logs every
@@ -252,13 +277,13 @@ To enable HTTP request logging, set the `RUST_LOG` environment variable:
 
 ```bash
 # Show all HTTP requests/responses (method, URI, status, latency)
-RUST_LOG=tower_http=debug cargo run --release
+RUST_LOG=tower_http=debug photometoria
 
 # Maximum verbosity (includes body sizes, header details)
-RUST_LOG=tower_http=trace cargo run --release
+RUST_LOG=tower_http=trace photometoria
 
 # Combine with application logs
-RUST_LOG=photometoria=debug,tower_http=debug cargo run --release
+RUST_LOG=photometoria=debug,tower_http=debug photometoria
 ```
 
 This is useful for diagnosing client issues (e.g., wrong URL paths) where the
@@ -575,6 +600,7 @@ fn calculate_task_size(photos: &[Photo]) -> Option<u64> {
 - **v0.1.0** - Initial REST API server implementation with core functionality
 - **v0.2.0** - Plugin support (endpoint adjustments, response structure updates)
 - **v0.3.0** - Catalog identity support (catalog-scoped tasks, storage per catalog)
+- **v0.3.1** - CLI subcommands: `config check`, `config show`, `--version`
 
 ## See Also
 

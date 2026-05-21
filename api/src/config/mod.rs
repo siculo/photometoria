@@ -21,7 +21,7 @@ use std::fs;
 use std::path::Path;
 
 /// Application configuration.
-#[derive(Debug, Clone, Default, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
 pub struct Config {
     /// Server binding and network configuration.
     pub server: ServerConfig,

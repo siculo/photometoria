@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Task configuration section.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TaskConfig {
     /// Maximum allowed length of a task context in characters.
     pub max_context_length: usize,
