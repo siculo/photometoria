@@ -6,7 +6,13 @@ The Photometoria API server is configured via a TOML file read at startup. This 
 
 ## Configuration File Location
 
-By default, the server looks for `config.toml` in the current working directory. You can specify an alternative path using environment variables or command-line arguments.
+By default, the server looks for `config.toml` in the current working directory. You can specify an alternative path with the `--config` flag, which is available on all commands:
+
+```bash
+photometoria --config /etc/photometoria/config.toml
+photometoria config check --config /etc/photometoria/config.toml
+photometoria config show  --config /etc/photometoria/config.toml
+```
 
 ## Example Configuration
 
@@ -438,6 +444,21 @@ The server validates configuration at startup:
 - Storage paths must be valid and writable
 
 **Startup will fail** if configuration is invalid, with error messages indicating the problem.
+
+To validate the configuration **without starting the server** (useful before deploy):
+
+```bash
+photometoria config check
+photometoria config check --config /etc/photometoria/config.toml
+```
+
+To inspect the **effective configuration** (file values + applied defaults) as valid TOML:
+
+```bash
+photometoria config show
+```
+
+The output of `config show` is valid TOML that can be saved and used directly as a configuration file.
 
 ## See Also
 
