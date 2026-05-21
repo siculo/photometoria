@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
 use super::ByteSize;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Storage configuration section
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct StorageConfig {
     pub path: String,
     pub max_size: ByteSize,

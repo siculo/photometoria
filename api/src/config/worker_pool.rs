@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Worker pool configuration section.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WorkerPoolConfig {
     /// Minimum photos to process before allowing model swap.
     #[serde(default = "WorkerPoolConfig::default_min_photos_before_swap")]

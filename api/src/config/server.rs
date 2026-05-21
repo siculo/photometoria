@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 fn default_server_name() -> String {
     "Photometoria Server".to_string()
 }
 
 /// Server configuration section.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ServerConfig {
     /// Human-readable name for this server instance.
     #[serde(default = "default_server_name")]

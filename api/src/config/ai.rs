@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// AI provider configuration section.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AIConfig {
     /// The default provider to use when none is specified.
     ///
@@ -61,7 +61,7 @@ impl Default for AIConfig {
 }
 
 /// Configuration for a single AI provider.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum ProviderConfig {
     /// Ollama provider configuration.
@@ -70,7 +70,7 @@ pub enum ProviderConfig {
 }
 
 /// Ollama-specific provider configuration.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OllamaProviderConfig {
     /// Base URL for the Ollama API.
     #[serde(default = "OllamaProviderConfig::default_base_url")]
@@ -130,7 +130,7 @@ impl OllamaProviderConfig {
 }
 
 /// Configuration for an Ollama model.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OllamaModelConfig {
     /// The actual Ollama model name (e.g., "qwen3-vl:8b").
     pub ollama_model: String,
