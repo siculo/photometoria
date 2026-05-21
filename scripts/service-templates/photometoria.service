@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 The Photometoria contributors
+#
+# This is the source template used by install-linux.sh.
+# Placeholders are replaced at install time:
+#   @@SERVICE_USER@@  — system user running the service
+#   @@BINARY_PATH@@   — full path to the installed binary
+#   @@STORAGE_DIR@@   — writable storage directory
+#   @@SERVICE_NAME@@  — identifier used in SyslogIdentifier
+
+[Unit]
+Description=Photometoria AI Photo Metadata Server
+Documentation=https://github.com/siculo/photometoria
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=@@SERVICE_USER@@
+Group=@@SERVICE_USER@@
+ExecStart=@@BINARY_PATH@@ --config /etc/photometoria/config.toml
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=@@SERVICE_NAME@@
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=@@STORAGE_DIR@@
+
+[Install]
+WantedBy=multi-user.target
