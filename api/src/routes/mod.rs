@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 The Photometoria contributors
 
+use crate::api_version::{API_VERSION, api_version_middleware};
 use crate::app_state::AppState;
 use crate::handlers::catalogs::list_catalogs;
 use crate::handlers::info::info;
@@ -15,6 +16,7 @@ use crate::handlers::upload_photos::upload_photos;
 use axum::{
     Router,
     extract::DefaultBodyLimit,
+    middleware,
     routing::{get, post},
 };
 use tower_http::trace::TraceLayer;
@@ -57,6 +59,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/jobs/{job_id}/results", get(get_job_results))
         .route("/api/jobs/{job_id}/cancel", post(cancel_job))
         .route("/api/jobs/{job_id}/retry", post(retry_job))
+        .layer(middleware::from_fn(api_version_middleware))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -81,6 +84,7 @@ mod tests {
                 Request::builder()
                     .method("GET")
                     .uri("/api/tasks/not-a-uuid")
+                    .header("X-Api-Version", API_VERSION)
                     .body(Body::empty())
                     .unwrap(),
             )
