@@ -3,6 +3,7 @@
 ## API Workflow
 
 ```
+0. GET  /health                            → Liveness probe (no version header)
 1. GET  /api/info                          → Server info and capabilities
 1b. GET /api/catalogs                      → List all catalogs with task counts
 2. GET  /api/providers                     → List configured AI providers

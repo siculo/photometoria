@@ -4,6 +4,7 @@
 use crate::api_version::{API_VERSION, api_version_middleware};
 use crate::app_state::AppState;
 use crate::handlers::catalogs::list_catalogs;
+use crate::handlers::health::health;
 use crate::handlers::info::info;
 use crate::handlers::jobs::{
     cancel_job, create_job, delete_job, get_job, get_job_results, list_jobs, list_task_jobs,
@@ -60,6 +61,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/jobs/{job_id}/cancel", post(cancel_job))
         .route("/api/jobs/{job_id}/retry", post(retry_job))
         .layer(middleware::from_fn(api_version_middleware))
+        // Registered after the version middleware: liveness probe is exempt from
+        // API version negotiation.
+        .route("/health", get(health))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -97,5 +101,24 @@ mod tests {
         let error: ErrorResponse = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(error.error, "invalid_uuid");
         assert_eq!(error.message, "Invalid UUID format in path parameter");
+    }
+
+    #[tokio::test]
+    async fn test_health_exempt_from_version_middleware() {
+        let ts = create_test_state().await;
+        let app = create_router(ts.state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

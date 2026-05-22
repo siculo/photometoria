@@ -235,7 +235,7 @@ install_service() {
 
 health_check() {
     read_config_values "${CONFIG_DIR}/config.toml"
-    local url="http://localhost:${API_PORT}/api/info"
+    local url="http://localhost:${API_PORT}/health"
     info "Waiting for service to become healthy..."
     local attempt=0
     while [[ "${attempt}" -lt "${HEALTH_CHECK_ATTEMPTS}" ]]; do
@@ -389,10 +389,10 @@ cmd_status() {
     echo ""
     echo "=== API Health ==="
     read_config_values "${CONFIG_DIR}/config.toml"
-    if curl -sf "http://localhost:${API_PORT}/api/info"; then
+    if curl -sf "http://localhost:${API_PORT}/health"; then
         echo ""
     else
-        echo "API not reachable at http://localhost:${API_PORT}/api/info"
+        echo "API not reachable at http://localhost:${API_PORT}/health"
     fi
 
     if [[ -f "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
