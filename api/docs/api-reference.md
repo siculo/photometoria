@@ -12,6 +12,51 @@ http://localhost:8080/api
 
 (Default port is 8080, configurable in `config.toml`)
 
+## API Version Negotiation
+
+Every request **must** include the following header:
+
+```
+X-Api-Version: <major>.<minor>
+```
+
+The server validates the header on every request and includes it in every successful response.
+
+### Compatibility rules
+
+| Client | Server | Compatible | Reason |
+|--------|--------|------------|--------|
+| 0.1    | 0.1    | ✅ Yes     | Exact match |
+| 0.1    | 0.3    | ✅ Yes     | Same major; server supports 0.1 and later |
+| 0.3    | 0.1    | ❌ No      | Client requires features not present on the server |
+| 1.0    | 0.1    | ❌ No      | Different major: breaking change |
+
+### Versioning errors
+
+**Missing header** — `400 Bad Request`
+
+```json
+{
+  "error": "API_VERSION_MISSING",
+  "message": "The X-Api-Version header is required"
+}
+```
+
+**Incompatible version** — `406 Not Acceptable`
+
+```json
+{
+  "error": "API_VERSION_NOT_SUPPORTED",
+  "message": "Server API version 0.1 is not compatible with client version 1.0"
+}
+```
+
+### Current version
+
+The server currently supports API version **`0.1`**.
+
+---
+
 ## Data Flow
 
 ### Complete Workflow Example

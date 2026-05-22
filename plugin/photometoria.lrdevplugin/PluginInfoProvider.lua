@@ -175,10 +175,15 @@ local function sectionsForTopOfDialog(f, propertyTable)
 				end
 				suppressHostObserver = false
 			else
-				local unreachableStr = LOC "$$$/Photometoria/Status/Unreachable=Unreachable"
-				propertyTable.statusText = unreachableStr
+				local statusStr
+				if data.versionMismatch then
+					statusStr = LOC "$$$/Photometoria/Status/Incompatible=Incompatible"
+				else
+					statusStr = LOC "$$$/Photometoria/Status/Unreachable=Unreachable"
+				end
+				propertyTable.statusText = statusStr
 				propertyTable.statusMessage = data.message
-				propertyTable.synopsis = unreachableStr
+				propertyTable.synopsis = statusStr
 			end
 
 			if ServerConnection.isValidHostPort(RecentHosts.extractHost(propertyTable.serverHost)) then
