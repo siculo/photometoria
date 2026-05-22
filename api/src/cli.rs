@@ -31,4 +31,9 @@ pub enum ConfigCommand {
     Check,
     /// Print the effective configuration as valid TOML
     Show,
+    /// Print the value of a single configuration key
+    Get {
+        /// Dotted key path (e.g. server.port, storage.path)
+        key: String,
+    },
 }

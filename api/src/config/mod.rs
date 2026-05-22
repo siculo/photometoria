@@ -39,6 +39,38 @@ pub struct Config {
 }
 
 impl Config {
+    /// Returns the string representation of a single config value identified by a dotted key.
+    ///
+    /// Only scalar values (string, integer, float, boolean) can be retrieved.
+    /// Returns an error if the key is not found or refers to a table or array.
+    pub fn get_value(&self, key: &str) -> anyhow::Result<String> {
+        use anyhow::Context;
+
+        let value = toml::Value::try_from(self).context("Failed to serialize configuration")?;
+
+        let mut current = &value;
+        for segment in key.split('.') {
+            match current {
+                toml::Value::Table(table) => {
+                    current = table
+                        .get(segment)
+                        .with_context(|| format!("Key '{key}' not found in configuration"))?;
+                }
+                _ => anyhow::bail!("Key '{key}' not found in configuration"),
+            }
+        }
+
+        let output = match current {
+            toml::Value::String(s) => s.clone(),
+            toml::Value::Integer(i) => i.to_string(),
+            toml::Value::Float(f) => f.to_string(),
+            toml::Value::Boolean(b) => b.to_string(),
+            _ => anyhow::bail!("Key '{key}' refers to a table or array, not a scalar value"),
+        };
+
+        Ok(output)
+    }
+
     /// Returns the server address as a string suitable for binding.
     pub fn server_addr(&self) -> String {
         format!("{}:{}", self.server.host, self.server.port)
@@ -141,5 +173,37 @@ mod tests {
     fn test_log_summary_does_not_panic() {
         let config = Config::default();
         config.log_summary();
+    }
+
+    #[test]
+    fn test_get_value_server_port() {
+        let config = Config::default();
+        let port = config.get_value("server.port").unwrap();
+        assert_eq!(port, config.server.port.to_string());
+    }
+
+    #[test]
+    fn test_get_value_storage_path() {
+        let config = Config::default();
+        let path = config.get_value("storage.path").unwrap();
+        assert_eq!(path, config.storage.path);
+    }
+
+    #[test]
+    fn test_get_value_not_found() {
+        let config = Config::default();
+        assert!(config.get_value("nonexistent.key").is_err());
+    }
+
+    #[test]
+    fn test_get_value_partial_key_not_found() {
+        let config = Config::default();
+        assert!(config.get_value("server.nonexistent").is_err());
+    }
+
+    #[test]
+    fn test_get_value_table_returns_error() {
+        let config = Config::default();
+        assert!(config.get_value("server").is_err());
     }
 }

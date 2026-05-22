@@ -20,6 +20,7 @@ async fn main() {
         Some(Command::Config { subcommand }) => match subcommand {
             ConfigCommand::Check => config_check(&cli.config),
             ConfigCommand::Show => config_show(&cli.config),
+            ConfigCommand::Get { key } => config_get(&cli.config, &key),
         },
         None => run_server(&cli.config).await,
     }
@@ -28,6 +29,23 @@ async fn main() {
 fn config_check(config_path: &Path) {
     match load_config(config_path) {
         Ok(_) => println!("Configuration is valid."),
+        Err(e) => {
+            eprintln!("Error: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn config_get(config_path: &Path, key: &str) {
+    let config = match load_config(config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            std::process::exit(1);
+        }
+    };
+    match config.get_value(key) {
+        Ok(value) => print!("{value}"),
         Err(e) => {
             eprintln!("Error: {e}");
             std::process::exit(1);
