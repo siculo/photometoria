@@ -9,6 +9,8 @@
 "$$$/Photometoria/Status/Connecting=Connessione..."
 "$$$/Photometoria/Status/Online=Online"
 "$$$/Photometoria/Status/Unreachable=Non raggiungibile"
+"$$$/Photometoria/Status/Incompatible=Incompatibile"
+"$$$/Photometoria/Status/VersionMismatch=Versione API del server non compatibile con il plugin. Versione richiesta: ^1."
 "$$$/Photometoria/Status/ConnectedTo=Connesso a ^1"
 "$$$/Photometoria/Status/CannotReach=Impossibile raggiungere il server ^1"
 "$$$/Photometoria/Status/ServerError=Il server ha risposto con stato ^1"

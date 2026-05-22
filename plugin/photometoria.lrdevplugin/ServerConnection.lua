@@ -11,6 +11,20 @@ local ServerConnection = {}
 local TIMEOUT_SECONDS = 10
 local UPLOAD_TIMEOUT_SECONDS = 120
 
+local PLUGIN_API_VERSION = "0.1"
+local VERSION_HEADER = { field = 'X-Api-Version', value = PLUGIN_API_VERSION }
+
+--- Returns the value of a response header by name (case-insensitive), or nil if absent.
+local function findHeader(headers, name)
+	local nameLower = name:lower()
+	for _, h in ipairs(headers) do
+		if h.field and h.field:lower() == nameLower then
+			return h.value
+		end
+	end
+	return nil
+end
+
 --- Returns the base API path for catalog-scoped endpoints.
 local function catalogBasePath(catalogId)
 	return '/api/catalogs/' .. catalogId
@@ -70,7 +84,7 @@ end
 function ServerConnection.info(host)
 	local url = 'http://' .. host .. '/api/info'
 
-	local body, headers = LrHttp.get(url, nil, TIMEOUT_SECONDS)
+	local body, headers = LrHttp.get(url, { VERSION_HEADER }, TIMEOUT_SECONDS)
 
 	if not body or not headers then
 		return false, {
@@ -78,9 +92,23 @@ function ServerConnection.info(host)
 		}
 	end
 
+	if headers.status == 406 then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/VersionMismatch=Server API version is not compatible with this plugin. Required: ^1.", PLUGIN_API_VERSION),
+			versionMismatch = true,
+		}
+	end
+
 	if headers.status ~= 200 then
 		return false, {
 			message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(headers.status)),
+		}
+	end
+
+	if not findHeader(headers, "x-api-version") then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/VersionMismatch=Server API version is not compatible with this plugin. Required: ^1.", PLUGIN_API_VERSION),
+			versionMismatch = true,
 		}
 	end
 
@@ -128,6 +156,7 @@ function ServerConnection.createTask(host, catalogId, name, context)
 
 	local headers = {
 		{ field = 'Content-Type', value = 'application/json' },
+		VERSION_HEADER,
 	}
 
 	local respBody, respHeaders = LrHttp.post(url, body, headers, 'POST', TIMEOUT_SECONDS)
@@ -160,7 +189,7 @@ end
 local function getJson(host, path)
 	local url = 'http://' .. host .. path
 
-	local body, headers = LrHttp.get(url, nil, TIMEOUT_SECONDS)
+	local body, headers = LrHttp.get(url, { VERSION_HEADER }, TIMEOUT_SECONDS)
 
 	if not body or not headers then
 		return false, {
@@ -168,9 +197,23 @@ local function getJson(host, path)
 		}
 	end
 
+	if headers.status == 406 then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/VersionMismatch=Server API version is not compatible with this plugin. Required: ^1.", PLUGIN_API_VERSION),
+			versionMismatch = true,
+		}
+	end
+
 	if headers.status ~= 200 then
 		return false, {
 			message = LOC("$$$/Photometoria/Status/ServerError=Server responded with status ^1", tostring(headers.status)),
+		}
+	end
+
+	if not findHeader(headers, "x-api-version") then
+		return false, {
+			message = LOC("$$$/Photometoria/Status/VersionMismatch=Server API version is not compatible with this plugin. Required: ^1.", PLUGIN_API_VERSION),
+			versionMismatch = true,
 		}
 	end
 
@@ -235,6 +278,7 @@ function ServerConnection.createJob(host, taskId, provider, model, language, pho
 
 	local headers = {
 		{ field = 'Content-Type', value = 'application/json' },
+		VERSION_HEADER,
 	}
 
 	local respBody, respHeaders = LrHttp.post(url, body, headers, 'POST', TIMEOUT_SECONDS)
@@ -275,6 +319,7 @@ function ServerConnection.deleteTask(host, taskId)
 
 	local headers = {
 		{ field = 'Content-Type', value = 'application/json' },
+		VERSION_HEADER,
 	}
 
 	local respBody, respHeaders = LrHttp.post(url, '', headers, 'DELETE', TIMEOUT_SECONDS)
@@ -308,6 +353,7 @@ function ServerConnection.retryJob(host, jobId)
 
 	local headers = {
 		{ field = 'Content-Type', value = 'application/json' },
+		VERSION_HEADER,
 	}
 
 	local respBody, respHeaders = LrHttp.post(url, '', headers, 'POST', TIMEOUT_SECONDS)
@@ -348,6 +394,7 @@ function ServerConnection.cancelJob(host, jobId)
 
 	local headers = {
 		{ field = 'Content-Type', value = 'application/json' },
+		VERSION_HEADER,
 	}
 
 	local respBody, respHeaders = LrHttp.post(url, '', headers, 'POST', TIMEOUT_SECONDS)
@@ -381,6 +428,7 @@ function ServerConnection.deleteJob(host, jobId)
 
 	local headers = {
 		{ field = 'Content-Type', value = 'application/json' },
+		VERSION_HEADER,
 	}
 
 	local respBody, respHeaders = LrHttp.post(url, '', headers, 'DELETE', TIMEOUT_SECONDS)
@@ -430,7 +478,7 @@ function ServerConnection.uploadPhotos(host, taskId, files)
 		}
 	end
 
-	local respBody, respHeaders = LrHttp.postMultipart(url, content, nil, UPLOAD_TIMEOUT_SECONDS)
+	local respBody, respHeaders = LrHttp.postMultipart(url, content, { VERSION_HEADER }, UPLOAD_TIMEOUT_SECONDS)
 
 	if not respBody or not respHeaders then
 		return false, {
@@ -458,6 +506,7 @@ function ServerConnection.updateTask(host, taskId, name, context)
 
 	local headers = {
 		{ field = 'Content-Type', value = 'application/json' },
+		VERSION_HEADER,
 	}
 
 	local respBody, respHeaders = LrHttp.post(url, body, headers, 'PATCH', TIMEOUT_SECONDS)
@@ -506,6 +555,7 @@ function ServerConnection.deletePhoto(host, photoId)
 
 	local headers = {
 		{ field = 'Content-Type', value = 'application/json' },
+		VERSION_HEADER,
 	}
 
 	local respBody, respHeaders = LrHttp.post(url, '', headers, 'DELETE', TIMEOUT_SECONDS)
