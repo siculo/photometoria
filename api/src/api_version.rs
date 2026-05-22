@@ -11,7 +11,7 @@ use axum::response::{IntoResponse, Response};
 
 use crate::handlers::app_error::ErrorResponse;
 
-pub const API_VERSION: &str = "1.0";
+pub const API_VERSION: &str = "0.1";
 pub const HEADER_NAME: &str = "x-api-version";
 
 fn parse_version(s: &str) -> Option<(u32, u32)> {
