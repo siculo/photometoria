@@ -5,7 +5,27 @@
         "description": "Collection for testing Photometoria REST API endpoints",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    "pm.request.headers.add({",
+                    "    key: 'X-Api-Version',",
+                    "    value: pm.collectionVariables.get('api_version')",
+                    "});"
+                ]
+            }
+        }
+    ],
     "variable": [
+        {
+            "key": "api_version",
+            "value": "0.1",
+            "type": "string",
+            "description": "API version sent in the X-Api-Version request header"
+        },
         {
             "key": "base_url",
             "value": "http://localhost:3000",
