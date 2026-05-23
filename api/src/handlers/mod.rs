@@ -5,6 +5,7 @@
 
 pub mod app_error;
 pub mod catalogs;
+pub mod health;
 pub mod jobs;
 pub mod photos;
 pub mod providers;

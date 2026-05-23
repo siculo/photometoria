@@ -53,31 +53,20 @@ parse_flags() {
 }
 
 # ---------------------------------------------------------------------------
-# Config parsing (requires Python 3.11+)
+# Config parsing (via photometoria binary)
 # ---------------------------------------------------------------------------
-
-check_python() {
-    python3 -c "import tomllib" 2>/dev/null && return
-    error "Python 3.11+ is required to parse config.toml (tomllib not found)"
-    exit 1
-}
 
 read_config_values() {
     local config_file="$1"
+    local binary="${INSTALL_DIR}/${BINARY_NAME}"
     [[ -f "${config_file}" ]] || return
+    [[ -f "${binary}" ]] || return
 
-    local result
-    result="$(python3 - "${config_file}" <<'PYEOF'
-import tomllib, sys
-with open(sys.argv[1], 'rb') as f:
-    c = tomllib.load(f)
-print(c.get('server', {}).get('port', 8080))
-print(c.get('storage', {}).get('path', '/var/photometoria/storage'))
-PYEOF
-)" || return
-
-    API_PORT="$(echo "${result}" | sed -n '1p')"
-    STORAGE_DIR="$(echo "${result}" | sed -n '2p')"
+    local port path
+    port="$("${binary}" config get server.port --config "${config_file}" 2>/dev/null)" \
+        && API_PORT="${port}" || true
+    path="$("${binary}" config get storage.path --config "${config_file}" 2>/dev/null)" \
+        && STORAGE_DIR="${path}" || true
 }
 
 # ---------------------------------------------------------------------------
@@ -202,13 +191,21 @@ install_config() {
     local config_file="${CONFIG_DIR}/config.toml"
 
     if [[ -n "${CONFIG_SOURCE}" ]]; then
+        if [[ -f "${config_file}" ]]; then
+            echo -n "Config already exists at '${config_file}'. Replace with '${CONFIG_SOURCE}'? [y/N] "
+            read -r confirm
+            if [[ "${confirm,,}" != "y" ]]; then
+                info "Keeping existing config at '${config_file}'"
+                return
+            fi
+        fi
         install -m 640 -o root -g "${SERVICE_USER}" "${CONFIG_SOURCE}" "${config_file}"
         info "Config copied from '${CONFIG_SOURCE}' to '${config_file}'"
         return
     fi
 
     if [[ -f "${config_file}" ]]; then
-        info "Config already exists at ${config_file} — not overwriting"
+        info "Config already exists at '${config_file}' — not overwriting"
         return
     fi
 
@@ -238,7 +235,7 @@ install_service() {
 
 health_check() {
     read_config_values "${CONFIG_DIR}/config.toml"
-    local url="http://localhost:${API_PORT}/api/info"
+    local url="http://localhost:${API_PORT}/health"
     info "Waiting for service to become healthy..."
     local attempt=0
     while [[ "${attempt}" -lt "${HEALTH_CHECK_ATTEMPTS}" ]]; do
@@ -263,26 +260,28 @@ cmd_install() {
     [[ -f "${binary}" ]]  || { error "Binary not found: ${binary}"; exit 1; }
 
     require_root
-    check_python
 
     # Fatal checks — run before touching anything
     check_config_source
-    [[ -n "${CONFIG_SOURCE}" ]] && read_config_values "${CONFIG_SOURCE}"
     check_service_name
     check_ollama
 
-    # Warn-and-continue checks
+    info "Installing Photometoria..."
+    create_system_user
+    prepare_dir "${INSTALL_DIR}"  "root:root" "755" "Install directory"
+    prepare_dir "${CONFIG_DIR}"   "root:root" "755" "Config directory"
+    prepare_dir "${BACKUP_DIR}"   "root:root" "755" "Backup directory"
+    install_binary "${binary}"
+    install_config
+
+    # Read effective values from the installed config (binary + config now in place)
+    read_config_values "${CONFIG_DIR}/config.toml"
+
+    # Warn-and-continue checks (STORAGE_DIR now reflects the installed config)
     check_storage_dir
     check_dir_writable "${BACKUP_DIR}" "Backup directory"
 
-    info "Installing Photometoria..."
-    create_system_user
-    prepare_dir "${INSTALL_DIR}"  "root:root"                    "755" "Install directory"
-    prepare_dir "${CONFIG_DIR}"   "root:root"                    "755" "Config directory"
     prepare_dir "${STORAGE_DIR}"  "${SERVICE_USER}:${SERVICE_USER}" "750" "Storage directory"
-    prepare_dir "${BACKUP_DIR}"   "root:root"                    "755" "Backup directory"
-    install_binary "${binary}"
-    install_config
     install_service
     systemctl start "${SERVICE_NAME}"
     health_check || true
@@ -304,7 +303,6 @@ cmd_update() {
     [[ -f "${binary}" ]]  || { error "Binary not found: ${binary}"; exit 1; }
 
     require_root
-    check_python
     info "Updating Photometoria..."
 
     systemctl stop "${SERVICE_NAME}" || true
@@ -391,10 +389,10 @@ cmd_status() {
     echo ""
     echo "=== API Health ==="
     read_config_values "${CONFIG_DIR}/config.toml"
-    if curl -sf "http://localhost:${API_PORT}/api/info"; then
+    if curl -sf "http://localhost:${API_PORT}/health"; then
         echo ""
     else
-        echo "API not reachable at http://localhost:${API_PORT}/api/info"
+        echo "API not reachable at http://localhost:${API_PORT}/health"
     fi
 
     if [[ -f "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
@@ -426,8 +424,7 @@ Options (applicable to all commands):
   --install-dir  <dir>   Directory where the binary is placed   (default: /usr/local/bin)
   --backup-dir   <dir>   Binary backup directory for updates    (default: /var/backups/photometoria)
 
-Storage directory and API port are read from config.toml (keys: storage.path, server.port).
-Requires Python 3.11+ (tomllib). See issue #135 for a planned native alternative.
+Storage directory and API port are read from config.toml via 'photometoria config get'.
 
 Environment variables (lowest precedence, overridden by flags):
   PHOTOMETORIA_CONFIG, PHOTOMETORIA_SERVICE_USER, PHOTOMETORIA_SERVICE_NAME,

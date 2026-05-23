@@ -333,6 +333,13 @@ api/tests/
 
 All endpoints can be tested using curl. Below are examples for common workflows.
 
+**Health check** (liveness probe, no `X-Api-Version` header required):
+
+```bash
+curl http://localhost:3000/health
+# → {"status":"ok"}
+```
+
 **0. List all catalogs:**
 
 ```bash

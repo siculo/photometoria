@@ -22,6 +22,8 @@ X-Api-Version: <major>.<minor>
 
 The server validates the header on every request and includes it in every successful response.
 
+The only exception is `GET /health` (liveness probe), which is exempt from version negotiation so monitoring tools and the install script can check service health without negotiating a version.
+
 ### Compatibility rules
 
 | Client | Server | Compatible | Reason |
@@ -115,6 +117,19 @@ This example demonstrates a typical workflow from task creation to cleanup:
 ```
 
 ## System Endpoints
+
+### GET /health
+
+Liveness probe. Returns `200 OK` as long as the server process is accepting requests.
+This endpoint is **exempt from API version negotiation** — no `X-Api-Version` header is required.
+
+**Response:** `200 OK`
+
+```json
+{
+  "status": "ok"
+}
+```
 
 ### GET /api/info
 
