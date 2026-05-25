@@ -13,7 +13,8 @@ use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
 use crate::services::worker::WorkerPool;
 use crate::storage::{
-    FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore, JobStore, PhotoStore, TaskStore,
+    FileSystemJobStore, FileSystemPhotoStore, FileSystemProjectStore, JobStore, PhotoStore,
+    ProjectStore,
 };
 use tokio::sync::Mutex;
 
@@ -52,15 +53,15 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
 
     let boot_ts = Local::now().format("%Y%m%d_%H%M%S").to_string();
 
-    let task_store: Arc<dyn TaskStore> = Arc::new(
-        FileSystemTaskStore::new_with_boot_ts(storage_path.clone(), boot_ts.clone()).await,
+    let project_store: Arc<dyn ProjectStore> = Arc::new(
+        FileSystemProjectStore::new_with_boot_ts(storage_path.clone(), boot_ts.clone()).await,
     );
-    tracing::info!("Initialized filesystem task store");
+    tracing::info!("Initialized filesystem project store");
 
     let photo_store: Arc<dyn PhotoStore> = Arc::new(
         FileSystemPhotoStore::new_with_boot_ts(
             storage_path.clone(),
-            task_store.clone(),
+            project_store.clone(),
             boot_ts.clone(),
         )
         .await,
@@ -68,7 +69,7 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
     tracing::info!("Initialized filesystem photo store");
 
     let job_store: Arc<dyn JobStore> = Arc::new(
-        FileSystemJobStore::new_with_boot_ts(storage_path, task_store.clone(), boot_ts).await,
+        FileSystemJobStore::new_with_boot_ts(storage_path, project_store.clone(), boot_ts).await,
     );
     tracing::info!("Initialized filesystem job store");
 
@@ -96,7 +97,7 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
         &config,
         job_store.clone(),
         photo_store.clone(),
-        task_store.clone(),
+        project_store.clone(),
         ai_providers.clone(),
     );
     let worker_pool = Arc::new(Mutex::new(worker_pool));
@@ -107,7 +108,7 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
 
     Ok(AppState::new(
         config,
-        task_store,
+        project_store,
         photo_store,
         job_store,
         ai_providers,

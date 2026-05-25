@@ -17,7 +17,7 @@ pub mod fixtures {
         HealthStatus, ModelInfo, ProviderRegistry,
     };
     use crate::services::worker::WorkerPool;
-    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore};
+    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemProjectStore};
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::Mutex;
@@ -204,10 +204,11 @@ pub mod fixtures {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let storage_path = temp_dir.path().to_path_buf();
         let config = Config::default();
-        let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let project_store = Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
         let photo_store =
-            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(storage_path, task_store.clone()).await);
+            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), project_store.clone()).await);
+        let job_store =
+            Arc::new(FileSystemJobStore::new(storage_path, project_store.clone()).await);
 
         let mut registry = ProviderRegistry::new();
         registry.register("test", Arc::new(TestProviderModelNotAvailable));
@@ -218,7 +219,7 @@ pub mod fixtures {
         TestState {
             state: AppState::new(
                 config,
-                task_store,
+                project_store,
                 photo_store,
                 job_store,
                 ai_providers,
@@ -233,10 +234,11 @@ pub mod fixtures {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let storage_path = temp_dir.path().to_path_buf();
         let config = Config::default();
-        let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let project_store = Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
         let photo_store =
-            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(storage_path, task_store.clone()).await);
+            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), project_store.clone()).await);
+        let job_store =
+            Arc::new(FileSystemJobStore::new(storage_path, project_store.clone()).await);
 
         let mut registry = ProviderRegistry::new();
         registry.register("test", Arc::new(TestProviderUnavailable));
@@ -247,7 +249,7 @@ pub mod fixtures {
         TestState {
             state: AppState::new(
                 config,
-                task_store,
+                project_store,
                 photo_store,
                 job_store,
                 ai_providers,
@@ -273,10 +275,11 @@ pub mod fixtures {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let storage_path = temp_dir.path().to_path_buf();
         let config = Config::default();
-        let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+        let project_store = Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
         let photo_store =
-            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), task_store.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(storage_path, task_store.clone()).await);
+            Arc::new(FileSystemPhotoStore::new(storage_path.clone(), project_store.clone()).await);
+        let job_store =
+            Arc::new(FileSystemJobStore::new(storage_path, project_store.clone()).await);
 
         let mut registry = ProviderRegistry::new();
         registry.register("test", Arc::new(TestProvider));
@@ -287,7 +290,7 @@ pub mod fixtures {
         TestState {
             state: AppState::new(
                 config,
-                task_store,
+                project_store,
                 photo_store,
                 job_store,
                 ai_providers,

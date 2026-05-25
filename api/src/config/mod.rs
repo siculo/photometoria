@@ -3,17 +3,17 @@
 
 pub mod ai;
 pub mod byte_size;
+pub mod project;
 pub mod server;
 pub mod storage;
-pub mod task;
 pub mod upload;
 pub mod worker_pool;
 
 pub use ai::{AIConfig, OllamaModelConfig, OllamaProviderConfig, ProviderConfig};
 pub use byte_size::ByteSize;
+pub use project::ProjectConfig;
 pub use server::ServerConfig;
 pub use storage::StorageConfig;
-pub use task::TaskConfig;
 pub use upload::UploadConfig;
 pub use worker_pool::WorkerPoolConfig;
 
@@ -27,9 +27,9 @@ pub struct Config {
     pub server: ServerConfig,
     pub storage: StorageConfig,
     pub upload: UploadConfig,
-    /// Task-related configuration.
-    #[serde(default)]
-    pub task: TaskConfig,
+    /// Project-related configuration.
+    #[serde(rename = "task", default)]
+    pub project: ProjectConfig,
     /// AI provider configuration.
     #[serde(default)]
     pub ai: AIConfig,
@@ -88,7 +88,7 @@ impl Config {
         self.server.format_summary(&mut out);
         self.storage.format_summary(&mut out);
         self.upload.format_summary(&mut out);
-        self.task.format_summary(&mut out);
+        self.project.format_summary(&mut out);
         self.ai.format_summary(&mut out);
         self.worker_pool.format_summary(&mut out);
         tracing::info!("{}", out.trim_end());

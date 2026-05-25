@@ -12,15 +12,17 @@ use chrono::Local;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::models::Job;
 
-use super::utils::{load_json_from_file, parse_uuid_from_dir, try_quarantine, try_scan_task_dirs};
-use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult, TaskStore};
+use super::utils::{
+    load_json_from_file, parse_uuid_from_dir, try_quarantine, try_scan_project_dirs,
+};
+use super::{FileSystemLayout, JobStore, JobStoreError, JobStoreResult, ProjectStore};
 
 fn sorted_jobs(iter: impl Iterator<Item = Job>) -> Vec<Job> {
     let mut jobs: Vec<Job> = iter.collect();
@@ -52,7 +54,7 @@ fn sorted_jobs(iter: impl Iterator<Item = Job>) -> Vec<Job> {
 pub struct FileSystemJobStore {
     jobs: Arc<DashMap<Uuid, Job>>,
     layout: FileSystemLayout,
-    task_store: Arc<dyn TaskStore>,
+    project_store: Arc<dyn ProjectStore>,
 }
 
 impl FileSystemJobStore {
@@ -62,12 +64,12 @@ impl FileSystemJobStore {
     /// Any errors during loading are logged but don't prevent startup.
     ///
     /// # Arguments
-    /// * `storage_path` - Base path for storing task directories
-    /// * `task_store` - Reference to the task store for resolving task-to-catalog relationships
-    pub async fn new(storage_path: PathBuf, task_store: Arc<dyn TaskStore>) -> Self {
+    /// * `storage_path` - Base path for storing project directories
+    /// * `project_store` - Reference to the project store for resolving project-to-catalog relationships
+    pub async fn new(storage_path: PathBuf, project_store: Arc<dyn ProjectStore>) -> Self {
         Self::new_with_boot_ts(
             storage_path,
-            task_store,
+            project_store,
             Local::now().format("%Y%m%d_%H%M%S").to_string(),
         )
         .await
@@ -79,32 +81,34 @@ impl FileSystemJobStore {
     /// a single server boot.
     pub async fn new_with_boot_ts(
         storage_path: PathBuf,
-        task_store: Arc<dyn TaskStore>,
+        project_store: Arc<dyn ProjectStore>,
         boot_ts: String,
     ) -> Self {
         let store = Self {
             jobs: Arc::new(DashMap::new()),
             layout: FileSystemLayout::new_with_boot_ts(storage_path, boot_ts),
-            task_store,
+            project_store,
         };
         store.load_all().await;
         store
     }
 
-    /// Resolves the catalog identity for a given task.
+    /// Resolves the catalog identity for a given project (task).
     async fn resolve_catalog_id(&self, task_id: Uuid) -> JobStoreResult<Uuid> {
-        let task = self
-            .task_store
+        let project = self
+            .project_store
             .get(task_id)
             .await
-            .map_err(|e| JobStoreError::StorageError(format!("Failed to query task store: {}", e)))?
+            .map_err(|e| {
+                JobStoreError::StorageError(format!("Failed to query project store: {}", e))
+            })?
             .ok_or_else(|| {
                 JobStoreError::StorageError(format!(
-                    "Cannot resolve catalog: task {} not found",
+                    "Cannot resolve catalog: project {} not found",
                     task_id
                 ))
             })?;
-        Ok(task.catalog_id)
+        Ok(project.catalog_id)
     }
 
     /// Loads all jobs from the filesystem into memory.
@@ -141,7 +145,7 @@ impl FileSystemJobStore {
     /// Job files with corrupt, inconsistent, or unresolvable data are moved to
     /// the boot-scoped quarantine directory.
     async fn load_catalog_jobs(&self, catalog_id: Uuid) -> (usize, usize) {
-        let Some(task_dirs) = try_scan_task_dirs(&self.layout, catalog_id).await else {
+        let Some(task_dirs) = try_scan_project_dirs(&self.layout, catalog_id).await else {
             return (0, 1);
         };
 
@@ -424,43 +428,43 @@ impl JobStore for FileSystemJobStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{JobStatus, Task};
-    use crate::storage::FileSystemTaskStore;
+    use crate::models::{JobStatus, Project};
+    use crate::storage::FileSystemProjectStore;
     use chrono::{DateTime, Duration, Utc};
     use tempfile::TempDir;
     use uuid::Uuid;
 
     struct TestStore {
         store: FileSystemJobStore,
-        task_store: Arc<dyn TaskStore>,
+        project_store: Arc<dyn ProjectStore>,
         _temp_dir: TempDir,
     }
 
     async fn create_store() -> TestStore {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let storage_path = temp_dir.path().to_path_buf();
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store.clone()).await;
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, project_store.clone()).await;
         TestStore {
             store,
-            task_store,
+            project_store,
             _temp_dir: temp_dir,
         }
     }
 
-    /// Creates a task in the task store so that resolve_catalog_id works.
-    /// Returns the catalog_id assigned to the task.
+    /// Creates a project in the project store so that resolve_catalog_id works.
+    /// Returns the catalog_id assigned to the project.
     async fn setup_task(ts: &TestStore, task_id: Uuid) -> Uuid {
         let catalog_id = Uuid::new_v4();
-        let task = Task {
-            task_id,
+        let project = Project {
+            project_id: task_id,
             catalog_id,
             name: "test".to_string(),
             context: "test context".to_string(),
             created_at: Utc::now(),
         };
-        ts.task_store.create(task).await.unwrap();
+        ts.project_store.create(project).await.unwrap();
         catalog_id
     }
 
@@ -851,25 +855,25 @@ mod tests {
         let job2_id = job2.job_id;
 
         {
-            let task_store: Arc<dyn TaskStore> =
-                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-            let task = Task {
-                task_id,
+            let project_store: Arc<dyn ProjectStore> =
+                Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+            let project = Project {
+                project_id: task_id,
                 catalog_id,
                 name: "test".to_string(),
                 context: "test".to_string(),
                 created_at: Utc::now(),
             };
-            task_store.create(task).await.unwrap();
-            let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
+            project_store.create(project).await.unwrap();
+            let store = FileSystemJobStore::new(storage_path.clone(), project_store).await;
             store.create(job1).await.unwrap();
             store.create(job2).await.unwrap();
             assert_eq!(store.count_by_task(task_id).await.unwrap(), 2);
         }
 
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store).await;
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, project_store).await;
 
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 2);
         assert!(store.exists(job1_id).await.unwrap());
@@ -890,26 +894,26 @@ mod tests {
         let job_id = job.job_id;
 
         {
-            let task_store: Arc<dyn TaskStore> =
-                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-            let task = Task {
-                task_id,
+            let project_store: Arc<dyn ProjectStore> =
+                Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+            let project = Project {
+                project_id: task_id,
                 catalog_id,
                 name: "test".to_string(),
                 context: "test".to_string(),
                 created_at: Utc::now(),
             };
-            task_store.create(task).await.unwrap();
-            let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
+            project_store.create(project).await.unwrap();
+            let store = FileSystemJobStore::new(storage_path.clone(), project_store).await;
             store.create(job.clone()).await.unwrap();
 
             job.start();
             store.update(job.clone()).await.unwrap();
         }
 
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store).await;
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, project_store).await;
         let loaded = store.get(job_id).await.unwrap().unwrap();
         assert_eq!(loaded.status, JobStatus::Processing);
         assert!(loaded.started_at.is_some());
@@ -926,24 +930,24 @@ mod tests {
         let job_id = job.job_id;
 
         {
-            let task_store: Arc<dyn TaskStore> =
-                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-            let task = Task {
-                task_id,
+            let project_store: Arc<dyn ProjectStore> =
+                Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+            let project = Project {
+                project_id: task_id,
                 catalog_id,
                 name: "test".to_string(),
                 context: "test".to_string(),
                 created_at: Utc::now(),
             };
-            task_store.create(task).await.unwrap();
-            let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
+            project_store.create(project).await.unwrap();
+            let store = FileSystemJobStore::new(storage_path.clone(), project_store).await;
             store.create(job).await.unwrap();
             store.delete(job_id).await.unwrap();
         }
 
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store).await;
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, project_store).await;
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
         assert!(!store.exists(job_id).await.unwrap());
     }
@@ -1043,51 +1047,51 @@ mod tests {
         let job4 = create_test_job(task_b, "llava", vec![Uuid::new_v4()]);
 
         {
-            let task_store: Arc<dyn TaskStore> =
-                Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
+            let project_store: Arc<dyn ProjectStore> =
+                Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
             for &tid in &[task_a, task_b] {
-                let task = Task {
-                    task_id: tid,
+                let project = Project {
+                    project_id: tid,
                     catalog_id,
                     name: "test".to_string(),
                     context: "test".to_string(),
                     created_at: Utc::now(),
                 };
-                task_store.create(task).await.unwrap();
+                project_store.create(project).await.unwrap();
             }
-            let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
+            let store = FileSystemJobStore::new(storage_path.clone(), project_store).await;
             store.create(job1).await.unwrap();
             store.create(job2).await.unwrap();
             store.create(job3).await.unwrap();
             store.create(job4).await.unwrap();
         }
 
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store).await;
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, project_store).await;
         assert_eq!(store.list().await.unwrap().len(), 4);
         assert_eq!(store.count_by_task(task_a).await.unwrap(), 2);
         assert_eq!(store.count_by_task(task_b).await.unwrap(), 2);
     }
 
-    /// Sets up a task on disk and returns its catalog_id and the job file path for `job`.
+    /// Sets up a project on disk and returns the job file path for `job`.
     async fn setup_task_and_job(
         storage_path: &PathBuf,
         task_id: Uuid,
         catalog_id: Uuid,
         job: &Job,
     ) -> PathBuf {
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let task = Task {
-            task_id,
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let project = Project {
+            project_id: task_id,
             catalog_id,
             name: "test".to_string(),
             context: "ctx".to_string(),
             created_at: Utc::now(),
         };
-        task_store.create(task).await.unwrap();
-        let store = FileSystemJobStore::new(storage_path.clone(), task_store).await;
+        project_store.create(project).await.unwrap();
+        let store = FileSystemJobStore::new(storage_path.clone(), project_store).await;
         store.create(job.clone()).await.unwrap();
         store.layout.job_file_path(catalog_id, task_id, job.job_id)
     }
@@ -1106,9 +1110,9 @@ mod tests {
             .await
             .unwrap();
 
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store).await;
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, project_store).await;
 
         assert!(!store.exists(job_id).await.unwrap());
         assert!(!job_file.exists());
@@ -1131,9 +1135,9 @@ mod tests {
             .await
             .unwrap();
 
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store).await;
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, project_store).await;
 
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
         assert!(!job_file.exists());
@@ -1156,9 +1160,9 @@ mod tests {
             .await
             .unwrap();
 
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store).await;
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, project_store).await;
 
         assert_eq!(store.count_by_task(task_id).await.unwrap(), 0);
         assert!(!job_file.exists());
@@ -1176,9 +1180,9 @@ mod tests {
 
         setup_task_and_job(&storage_path, task_id, catalog_id, &job).await;
 
-        let task_store: Arc<dyn TaskStore> =
-            Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-        let store = FileSystemJobStore::new(storage_path, task_store).await;
+        let project_store: Arc<dyn ProjectStore> =
+            Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
+        let store = FileSystemJobStore::new(storage_path, project_store).await;
 
         assert!(store.exists(job_id).await.unwrap());
         assert!(!store.layout.quarantine_dir().exists());

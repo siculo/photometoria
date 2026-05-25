@@ -188,7 +188,7 @@ mod tests {
         HealthStatus, ModelInfo,
     };
     use crate::services::worker::queue::PhotoBuffer;
-    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore};
+    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemProjectStore};
 
     // Minimal mock — never called in scheduling tests (only next_photo() is invoked).
     struct NoopProvider;
@@ -234,13 +234,13 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let path = temp.path().to_path_buf();
 
-        let task_store = Arc::new(FileSystemTaskStore::new(path.clone()).await);
+        let project_store = Arc::new(FileSystemProjectStore::new(path.clone()).await);
         let photo_store =
-            Arc::new(FileSystemPhotoStore::new(path.clone(), task_store.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(path, task_store.clone()).await);
+            Arc::new(FileSystemPhotoStore::new(path.clone(), project_store.clone()).await);
+        let job_store = Arc::new(FileSystemJobStore::new(path, project_store.clone()).await);
         let ai_provider: Arc<dyn AIProvider> = Arc::new(NoopProvider);
 
-        let processor = PhotoProcessor::new(ai_provider, job_store, photo_store, task_store);
+        let processor = PhotoProcessor::new(ai_provider, job_store, photo_store, project_store);
         let worker = Worker::new(
             0,
             0,

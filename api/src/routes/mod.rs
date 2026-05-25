@@ -11,8 +11,10 @@ use crate::handlers::jobs::{
     retry_job,
 };
 use crate::handlers::photos::{delete_photo, get_photo, task_photos};
+use crate::handlers::project::{
+    create_project, delete_project, get_project, list_projects, update_project,
+};
 use crate::handlers::providers::{list_providers, provider_details};
-use crate::handlers::tasks::{create_task, delete_task, get_task, list_tasks, update_task};
 use crate::handlers::upload_photos::upload_photos;
 use axum::{
     Router,
@@ -35,11 +37,13 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/providers/{provider_name}", get(provider_details))
         .route(
             "/api/catalogs/{catalog_id}/tasks",
-            post(create_task).get(list_tasks),
+            post(create_project).get(list_projects),
         )
         .route(
             "/api/tasks/{task_id}",
-            get(get_task).patch(update_task).delete(delete_task),
+            get(get_project)
+                .patch(update_project)
+                .delete(delete_project),
         )
         .route(
             "/api/tasks/{task_id}/photos",

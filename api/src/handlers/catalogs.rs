@@ -23,20 +23,20 @@ use crate::models::CatalogSummary;
 pub async fn list_catalogs(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<CatalogSummary>>, AppError> {
-    let tasks = state
-        .task_store
+    let projects = state
+        .project_store
         .list()
         .await
         .map_err(|e| AppError::internal_error(e.to_string()))?;
 
     let mut catalog_map: HashMap<Uuid, (usize, DateTime<Utc>)> = HashMap::new();
-    for task in tasks {
+    for project in projects {
         let entry = catalog_map
-            .entry(task.catalog_id)
-            .or_insert((0, task.created_at));
+            .entry(project.catalog_id)
+            .or_insert((0, project.created_at));
         entry.0 += 1;
-        if task.created_at < entry.1 {
-            entry.1 = task.created_at;
+        if project.created_at < entry.1 {
+            entry.1 = project.created_at;
         }
     }
 
@@ -58,9 +58,9 @@ pub async fn list_catalogs(
 mod tests {
     use super::*;
     use crate::handlers::app_error::{AppJson, AppPath};
-    use crate::handlers::tasks::create_task;
+    use crate::handlers::project::create_project;
     use crate::handlers::test_utils::fixtures::{create_test_state, test_catalog_id};
-    use crate::models::CreateTaskRequest;
+    use crate::models::CreateProjectRequest;
     use axum::extract::State;
 
     #[tokio::test]
@@ -77,20 +77,20 @@ mod tests {
         let ts = create_test_state().await;
         let catalog_id = test_catalog_id();
 
-        let _ = create_task(
+        let _ = create_project(
             State(ts.state.clone()),
             AppPath(catalog_id),
-            AppJson(CreateTaskRequest {
+            AppJson(CreateProjectRequest {
                 name: "Task 1".to_string(),
                 context: "ctx".to_string(),
             }),
         )
         .await
         .unwrap();
-        let _ = create_task(
+        let _ = create_project(
             State(ts.state.clone()),
             AppPath(catalog_id),
-            AppJson(CreateTaskRequest {
+            AppJson(CreateProjectRequest {
                 name: "Task 2".to_string(),
                 context: "ctx".to_string(),
             }),
@@ -111,30 +111,30 @@ mod tests {
         let catalog_a = test_catalog_id();
         let catalog_b = Uuid::new_v4();
 
-        let _ = create_task(
+        let _ = create_project(
             State(ts.state.clone()),
             AppPath(catalog_a),
-            AppJson(CreateTaskRequest {
+            AppJson(CreateProjectRequest {
                 name: "Cat A Task".to_string(),
                 context: "ctx".to_string(),
             }),
         )
         .await
         .unwrap();
-        let _ = create_task(
+        let _ = create_project(
             State(ts.state.clone()),
             AppPath(catalog_b),
-            AppJson(CreateTaskRequest {
+            AppJson(CreateProjectRequest {
                 name: "Cat B Task 1".to_string(),
                 context: "ctx".to_string(),
             }),
         )
         .await
         .unwrap();
-        let _ = create_task(
+        let _ = create_project(
             State(ts.state.clone()),
             AppPath(catalog_b),
-            AppJson(CreateTaskRequest {
+            AppJson(CreateProjectRequest {
                 name: "Cat B Task 2".to_string(),
                 context: "ctx".to_string(),
             }),
@@ -158,20 +158,20 @@ mod tests {
         let ts = create_test_state().await;
         let catalog_id = test_catalog_id();
 
-        let (_, axum::Json(task1)) = create_task(
+        let (_, axum::Json(task1)) = create_project(
             State(ts.state.clone()),
             AppPath(catalog_id),
-            AppJson(CreateTaskRequest {
+            AppJson(CreateProjectRequest {
                 name: "First Task".to_string(),
                 context: "ctx".to_string(),
             }),
         )
         .await
         .unwrap();
-        let (_, axum::Json(task2)) = create_task(
+        let (_, axum::Json(task2)) = create_project(
             State(ts.state.clone()),
             AppPath(catalog_id),
-            AppJson(CreateTaskRequest {
+            AppJson(CreateProjectRequest {
                 name: "Second Task".to_string(),
                 context: "ctx".to_string(),
             }),

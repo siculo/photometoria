@@ -8,8 +8,8 @@ pub mod catalogs;
 pub mod health;
 pub mod jobs;
 pub mod photos;
+pub mod project;
 pub mod providers;
-pub mod tasks;
 pub mod upload_photos;
 
 pub mod info;

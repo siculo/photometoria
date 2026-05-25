@@ -3,7 +3,7 @@
 
 use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
-use crate::handlers::tasks::{check_no_active_jobs, get_existing_task};
+use crate::handlers::project::{check_no_active_jobs, get_existing_project};
 use crate::models::{Photo, PhotoListResponse, PhotoResponse, PhotoSummary};
 use crate::storage::PhotoStore;
 use axum::Json;
@@ -25,7 +25,7 @@ pub async fn task_photos(
     AppPath(task_id): AppPath<Uuid>,
     Query(query): Query<TaskPhotosQuery>,
 ) -> Result<Json<PhotoListResponse>, AppError> {
-    get_existing_task(&state.task_store, task_id).await?;
+    get_existing_project(&state.project_store, task_id).await?;
 
     match query.client_id {
         Some(client_id) => {
@@ -100,7 +100,7 @@ async fn get_existing_photo(
 mod tests {
     use super::*;
     use crate::handlers::test_utils::fixtures::{create_test_state, test_catalog_id};
-    use crate::models::{Photo, Task};
+    use crate::models::{Photo, Project};
     use uuid::Uuid;
 
     // ========================================================================
@@ -112,13 +112,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create a task without photos
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let result = task_photos(
             State(ts.state.clone()),
@@ -138,13 +138,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create a task
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task with photos".to_string(),
             "test task with photos".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         // Create multiple photos
         let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
@@ -203,13 +203,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and photo
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "test.jpg".to_string(), 1_234_567);
         let photo_id = photo.photo_id;
@@ -249,13 +249,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and photo
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "to_delete.jpg".to_string(), 5000);
         let photo_id = photo.photo_id;
@@ -288,9 +288,9 @@ mod tests {
         let ts = create_test_state().await;
 
         let task =
-            crate::models::Task::new(test_catalog_id(), "Task".to_string(), "task".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+            crate::models::Project::new(test_catalog_id(), "Task".to_string(), "task".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         let photo_id = photo.photo_id;
@@ -316,9 +316,9 @@ mod tests {
         let ts = create_test_state().await;
 
         let task =
-            crate::models::Task::new(test_catalog_id(), "Task".to_string(), "task".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+            crate::models::Project::new(test_catalog_id(), "Task".to_string(), "task".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         let photo_id = photo.photo_id;
@@ -345,9 +345,9 @@ mod tests {
         let ts = create_test_state().await;
 
         let task =
-            crate::models::Task::new(test_catalog_id(), "Task".to_string(), "task".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+            crate::models::Project::new(test_catalog_id(), "Task".to_string(), "task".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         let photo_id = photo.photo_id;
@@ -377,13 +377,13 @@ mod tests {
     async fn test_get_photo_returns_client_id() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(
             task_id,
@@ -405,13 +405,13 @@ mod tests {
     async fn test_get_photo_returns_none_client_id() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "test.jpg".to_string(), 1000);
         let photo_id = photo.photo_id;
@@ -428,13 +428,13 @@ mod tests {
     async fn test_task_photos_filter_by_client_id() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo1 = Photo::new(
             task_id,
@@ -476,13 +476,13 @@ mod tests {
     async fn test_task_photos_filter_by_client_id_no_match() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(
             task_id,

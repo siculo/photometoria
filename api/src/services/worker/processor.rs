@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::models::job::{JobStatus, PhotoResult, PhotoResultStatus};
 use crate::services::ai::{AIProvider, AnalyzeImageRequest};
-use crate::storage::{JobStore, PhotoStore, TaskStore};
+use crate::storage::{JobStore, PhotoStore, ProjectStore};
 
 use super::queue::QueuedPhoto;
 
@@ -122,7 +122,7 @@ pub struct PhotoProcessor {
     ai_provider: Arc<dyn AIProvider>,
     job_store: Arc<dyn JobStore>,
     photo_store: Arc<dyn PhotoStore>,
-    task_store: Arc<dyn TaskStore>,
+    project_store: Arc<dyn ProjectStore>,
 }
 
 impl PhotoProcessor {
@@ -130,13 +130,13 @@ impl PhotoProcessor {
         ai_provider: Arc<dyn AIProvider>,
         job_store: Arc<dyn JobStore>,
         photo_store: Arc<dyn PhotoStore>,
-        task_store: Arc<dyn TaskStore>,
+        project_store: Arc<dyn ProjectStore>,
     ) -> Self {
         Self {
             ai_provider,
             job_store,
             photo_store,
-            task_store,
+            project_store,
         }
     }
 
@@ -245,17 +245,17 @@ impl PhotoProcessor {
         }
     }
 
-    /// Loads the task context string.
+    /// Loads the project context string.
     ///
-    /// Returns `Ok(context)` if the task exists (context may be empty if the
-    /// user provided none). Returns `Err` if the task is not found or if the
-    /// store fails — a missing task is a logic error because a job cannot
-    /// outlive its parent task.
+    /// Returns `Ok(context)` if the project exists (context may be empty if the
+    /// user provided none). Returns `Err` if the project is not found or if the
+    /// store fails — a missing project is a logic error because a job cannot
+    /// outlive its parent project.
     async fn load_task_context(&self, task_id: Uuid) -> Result<String, String> {
-        match self.task_store.get(task_id).await {
-            Ok(Some(task)) => Ok(task.context),
-            Ok(None) => Err(format!("Task {} not found", task_id)),
-            Err(e) => Err(format!("Failed to load task {}: {}", task_id, e)),
+        match self.project_store.get(task_id).await {
+            Ok(Some(project)) => Ok(project.context),
+            Ok(None) => Err(format!("Project {} not found", task_id)),
+            Err(e) => Err(format!("Failed to load project {}: {}", task_id, e)),
         }
     }
 
@@ -371,11 +371,11 @@ mod tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    use crate::models::{Job, Task};
+    use crate::models::{Job, Project};
     use crate::services::ai::{
         AIProviderError, AIProviderResult, AnalyzeImageResponse, HealthStatus, ModelInfo,
     };
-    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore};
+    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemProjectStore};
 
     // -----------------------------------------------------------------------
     // Mock AI providers
@@ -493,7 +493,7 @@ mod tests {
         processor: PhotoProcessor,
         job_store: Arc<FileSystemJobStore>,
         photo_store: Arc<FileSystemPhotoStore>,
-        task_store: Arc<FileSystemTaskStore>,
+        project_store: Arc<FileSystemProjectStore>,
         #[allow(dead_code)]
         temp_dir: TempDir,
     }
@@ -501,31 +501,32 @@ mod tests {
     async fn make_fixture(ai_provider: Arc<dyn AIProvider>) -> TestFixture {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_path_buf();
-        let task_store = Arc::new(FileSystemTaskStore::new(path.clone()).await);
+        let project_store = Arc::new(FileSystemProjectStore::new(path.clone()).await);
         let photo_store =
-            Arc::new(FileSystemPhotoStore::new(path.clone(), task_store.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(path.clone(), task_store.clone()).await);
+            Arc::new(FileSystemPhotoStore::new(path.clone(), project_store.clone()).await);
+        let job_store =
+            Arc::new(FileSystemJobStore::new(path.clone(), project_store.clone()).await);
 
         let processor = PhotoProcessor::new(
             ai_provider,
             job_store.clone(),
             photo_store.clone(),
-            task_store.clone(),
+            project_store.clone(),
         );
 
         TestFixture {
             processor,
             job_store,
             photo_store,
-            task_store,
+            project_store,
             temp_dir,
         }
     }
 
     async fn setup_job_and_photo(fixture: &TestFixture) -> (Job, Uuid) {
-        let task = fixture
-            .task_store
-            .create(Task::new(
+        let project = fixture
+            .project_store
+            .create(Project::new(
                 Uuid::new_v4(),
                 "Test".to_string(),
                 "test context".to_string(),
@@ -534,7 +535,8 @@ mod tests {
             .unwrap();
 
         let photo_id = Uuid::new_v4();
-        let photo = crate::models::Photo::new(task.task_id, None, "test.jpg".to_string(), 100);
+        let photo =
+            crate::models::Photo::new(project.project_id, None, "test.jpg".to_string(), 100);
         let photo = crate::models::Photo { photo_id, ..photo };
         fixture.photo_store.create(photo).await.unwrap();
         fixture
@@ -546,7 +548,7 @@ mod tests {
         let job = fixture
             .job_store
             .create(Job::new(
-                task.task_id,
+                project.project_id,
                 "ollama".to_string(),
                 "llava".to_string(),
                 None,
@@ -802,9 +804,9 @@ mod tests {
         });
         let fixture = make_fixture(provider).await;
 
-        let task = fixture
-            .task_store
-            .create(Task::new(
+        let project = fixture
+            .project_store
+            .create(Project::new(
                 Uuid::new_v4(),
                 "Test".to_string(),
                 "context".to_string(),
@@ -816,7 +818,7 @@ mod tests {
         let photo_id_2 = Uuid::new_v4();
 
         for (id, name) in [(photo_id_1, "a.jpg"), (photo_id_2, "b.jpg")] {
-            let photo = crate::models::Photo::new(task.task_id, None, name.to_string(), 100);
+            let photo = crate::models::Photo::new(project.project_id, None, name.to_string(), 100);
             let photo = crate::models::Photo {
                 photo_id: id,
                 ..photo
@@ -828,7 +830,7 @@ mod tests {
         let job = fixture
             .job_store
             .create(Job::new(
-                task.task_id,
+                project.project_id,
                 "ollama".to_string(),
                 "llava".to_string(),
                 None,
@@ -842,7 +844,7 @@ mod tests {
             .process(QueuedPhoto {
                 job_id: job.job_id,
                 photo_id: photo_id_1,
-                task_id: task.task_id,
+                task_id: project.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -858,7 +860,7 @@ mod tests {
             .process(QueuedPhoto {
                 job_id: job.job_id,
                 photo_id: photo_id_2,
-                task_id: task.task_id,
+                task_id: project.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -913,22 +915,26 @@ mod tests {
         });
         let fixture = make_fixture(provider).await;
 
-        let task = fixture
-            .task_store
-            .create(Task::new(Uuid::new_v4(), "Test".to_string(), String::new()))
+        let project = fixture
+            .project_store
+            .create(Project::new(
+                Uuid::new_v4(),
+                "Test".to_string(),
+                String::new(),
+            ))
             .await
             .unwrap();
 
         // Create photo metadata but no binary data
         let photo_id = Uuid::new_v4();
-        let photo = crate::models::Photo::new(task.task_id, None, "ghost.jpg".to_string(), 0);
+        let photo = crate::models::Photo::new(project.project_id, None, "ghost.jpg".to_string(), 0);
         let photo = crate::models::Photo { photo_id, ..photo };
         fixture.photo_store.create(photo).await.unwrap();
 
         let job = fixture
             .job_store
             .create(Job::new(
-                task.task_id,
+                project.project_id,
                 "ollama".to_string(),
                 "llava".to_string(),
                 None,
@@ -942,7 +948,7 @@ mod tests {
             .process(QueuedPhoto {
                 job_id: job.job_id,
                 photo_id,
-                task_id: task.task_id,
+                task_id: project.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -1025,7 +1031,7 @@ mod tests {
         let fixture = make_fixture(provider).await;
 
         let (job, photo_id) = setup_job_and_photo(&fixture).await;
-        fixture.task_store.delete(job.task_id).await.unwrap();
+        fixture.project_store.delete(job.task_id).await.unwrap();
 
         let result = fixture
             .processor

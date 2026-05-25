@@ -31,16 +31,16 @@ pub(super) fn parse_uuid_from_dir(path: &Path) -> Option<Uuid> {
         .and_then(|s| s.parse().ok())
 }
 
-/// Scans task subdirectories for a catalog, logging a warning and returning `None` on failure.
-pub(super) async fn try_scan_task_dirs(
+/// Scans project subdirectories for a catalog, logging a warning and returning `None` on failure.
+pub(super) async fn try_scan_project_dirs(
     layout: &FileSystemLayout,
     catalog_id: Uuid,
 ) -> Option<Vec<PathBuf>> {
-    match layout.scan_task_dirs(catalog_id).await {
+    match layout.scan_project_dirs(catalog_id).await {
         Ok(dirs) => Some(dirs),
         Err(e) => {
             warn!(
-                "Failed to scan task directories for catalog {}: {}",
+                "Failed to scan project directories for catalog {}: {}",
                 catalog_id, e
             );
             None

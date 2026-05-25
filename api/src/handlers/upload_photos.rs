@@ -35,12 +35,12 @@ pub async fn upload_photos(
     debug!("Upload photos request for task_id={}", task_id);
 
     let task_exists = state
-        .task_store
+        .project_store
         .exists(task_id)
         .await
         .map_err(|e| AppError::internal_error(e.to_string()))?;
     if !task_exists {
-        return Err(AppError::task_not_found(task_id));
+        return Err(AppError::project_not_found(task_id));
     }
 
     let (client_ids, files) = extract_multipart_fields(&mut multipart).await?;
@@ -577,7 +577,7 @@ mod tests {
 
     use crate::handlers::app_error::AppPath;
     use crate::handlers::test_utils::fixtures::{create_test_state, test_catalog_id};
-    use crate::models::Task;
+    use crate::models::Project;
     use axum::extract::FromRequest;
     use axum::http::Request;
     use chrono::Utc;
@@ -633,15 +633,17 @@ mod tests {
         Multipart::from_request(request, &()).await.unwrap()
     }
 
-    async fn create_task_in_store(ts: &crate::handlers::test_utils::fixtures::TestState) -> Task {
-        let task = Task {
-            task_id: Uuid::new_v4(),
+    async fn create_task_in_store(
+        ts: &crate::handlers::test_utils::fixtures::TestState,
+    ) -> Project {
+        let task = Project {
+            project_id: Uuid::new_v4(),
             catalog_id: test_catalog_id(),
             name: "test task".to_string(),
             context: "test context".to_string(),
             created_at: Utc::now(),
         };
-        ts.state.task_store.create(task.clone()).await.unwrap();
+        ts.state.project_store.create(task.clone()).await.unwrap();
         task
     }
 
@@ -658,7 +660,7 @@ mod tests {
         let multipart = make_multipart(boundary, body).await;
 
         let (status, Json(response)) =
-            upload_photos(State(ts.state.clone()), AppPath(task.task_id), multipart)
+            upload_photos(State(ts.state.clone()), AppPath(task.project_id), multipart)
                 .await
                 .unwrap();
 
@@ -683,7 +685,7 @@ mod tests {
         );
         upload_photos(
             State(ts.state.clone()),
-            AppPath(task.task_id),
+            AppPath(task.project_id),
             make_multipart("boundary_1", body1).await,
         )
         .await
@@ -692,7 +694,7 @@ mod tests {
         let photos_before = ts
             .state
             .photo_store
-            .list_by_task(task.task_id)
+            .list_by_task(task.project_id)
             .await
             .unwrap();
         assert_eq!(photos_before.len(), 1);
@@ -706,7 +708,7 @@ mod tests {
         );
         let (status, Json(response)) = upload_photos(
             State(ts.state.clone()),
-            AppPath(task.task_id),
+            AppPath(task.project_id),
             make_multipart("boundary_2", body2).await,
         )
         .await
@@ -725,7 +727,7 @@ mod tests {
         let photos_after = ts
             .state
             .photo_store
-            .list_by_task(task.task_id)
+            .list_by_task(task.project_id)
             .await
             .unwrap();
         assert_eq!(photos_after.len(), 1);
@@ -742,7 +744,7 @@ mod tests {
             let body = build_multipart_body("boundary", None, vec![("photo.jpg", jpeg_data())]);
             upload_photos(
                 State(ts.state.clone()),
-                AppPath(task.task_id),
+                AppPath(task.project_id),
                 make_multipart("boundary", body).await,
             )
             .await
@@ -752,7 +754,7 @@ mod tests {
         let photos = ts
             .state
             .photo_store
-            .list_by_task(task.task_id)
+            .list_by_task(task.project_id)
             .await
             .unwrap();
         assert_eq!(photos.len(), 2);
@@ -771,7 +773,7 @@ mod tests {
         );
         upload_photos(
             State(ts.state.clone()),
-            AppPath(task.task_id),
+            AppPath(task.project_id),
             make_multipart("boundary_seed", body1).await,
         )
         .await
@@ -785,7 +787,7 @@ mod tests {
         );
         let (_, Json(response)) = upload_photos(
             State(ts.state.clone()),
-            AppPath(task.task_id),
+            AppPath(task.project_id),
             make_multipart("boundary_batch", body2).await,
         )
         .await
@@ -798,7 +800,7 @@ mod tests {
         let photos = ts
             .state
             .photo_store
-            .list_by_task(task.task_id)
+            .list_by_task(task.project_id)
             .await
             .unwrap();
         assert_eq!(photos.len(), 2);

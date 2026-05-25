@@ -14,7 +14,7 @@ use crate::config::worker_pool::parse_duration;
 use crate::config::{Config, ProviderConfig};
 use crate::models::job::JobStatus;
 use crate::services::ai::ProviderRegistry;
-use crate::storage::{JobStore, PhotoStore, TaskStore};
+use crate::storage::{JobStore, PhotoStore, ProjectStore};
 
 use super::processor::PhotoProcessor;
 use super::queue::PhotoBuffer;
@@ -42,7 +42,7 @@ impl WorkerPool {
         config: &Config,
         job_store: Arc<dyn JobStore>,
         photo_store: Arc<dyn PhotoStore>,
-        task_store: Arc<dyn TaskStore>,
+        project_store: Arc<dyn ProjectStore>,
         ai_providers: Arc<ProviderRegistry>,
     ) -> Self {
         let worker_config = &config.worker_pool;
@@ -80,7 +80,7 @@ impl WorkerPool {
                 ai_provider.clone(),
                 job_store.clone(),
                 photo_store.clone(),
-                task_store.clone(),
+                project_store.clone(),
             );
 
             let worker = Worker::new(

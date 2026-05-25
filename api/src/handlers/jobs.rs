@@ -3,7 +3,7 @@
 
 use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
-use crate::handlers::tasks::get_existing_task;
+use crate::handlers::project::get_existing_project;
 use crate::models::{
     CreateJobRequest, Job, JobDetailResponse, JobResponse, JobResultsResponse, JobSummary, Photo,
     RetryJobResponse,
@@ -25,7 +25,7 @@ pub async fn create_job(
     AppPath(task_id): AppPath<Uuid>,
     Json(request): Json<CreateJobRequest>,
 ) -> Result<(StatusCode, Json<JobResponse>), AppError> {
-    get_existing_task(&state.task_store, task_id).await?;
+    get_existing_project(&state.project_store, task_id).await?;
 
     if !state.ai_providers.contains(&request.provider) {
         return Err(AppError::bad_request(
@@ -139,7 +139,7 @@ pub async fn list_task_jobs(
     State(state): State<AppState>,
     AppPath(task_id): AppPath<Uuid>,
 ) -> Result<Json<Vec<JobSummary>>, AppError> {
-    get_existing_task(&state.task_store, task_id).await?;
+    get_existing_project(&state.project_store, task_id).await?;
 
     match state.job_store.list_by_task(task_id).await {
         Ok(jobs) => {
@@ -309,7 +309,7 @@ mod tests {
         create_test_state, create_test_state_model_not_available,
         create_test_state_provider_unavailable, test_catalog_id,
     };
-    use crate::models::{JobStatus, Photo, Task};
+    use crate::models::{JobStatus, Photo, Project};
     use uuid::Uuid;
 
     // ========================================================================
@@ -321,13 +321,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task with photos
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
         let photo2 = Photo::new(task_id, None, "photo2.jpg".to_string(), 2000);
@@ -373,13 +373,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task with photos
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
         let photo2 = Photo::new(task_id, None, "photo2.jpg".to_string(), 2000);
@@ -425,13 +425,13 @@ mod tests {
     async fn test_create_job_invalid_provider() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let request = CreateJobRequest {
             provider: "nonexistent-provider".to_string(),
@@ -454,13 +454,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task (test state uses an empty ProviderRegistry — no models configured)
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let request = CreateJobRequest {
             provider: "test".to_string(),
@@ -481,13 +481,13 @@ mod tests {
     async fn test_create_job_model_not_available() {
         let ts = create_test_state_model_not_available().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo).await.unwrap();
@@ -512,13 +512,13 @@ mod tests {
     async fn test_create_job_provider_unavailable() {
         let ts = create_test_state_provider_unavailable().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo).await.unwrap();
@@ -573,13 +573,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task with one photo
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo1).await.unwrap();
@@ -607,13 +607,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task without photos
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Empty task".to_string(),
             "empty task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         // Create job for empty task
         let request = CreateJobRequest {
@@ -634,13 +634,13 @@ mod tests {
     async fn test_create_job_explicit_empty_photo_ids() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Task with photos".to_string(),
             "task with photos".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo).await.unwrap();
@@ -680,13 +680,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task with photos
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo1).await.unwrap();
@@ -725,13 +725,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         // Create jobs with different statuses
         let mut job1 = Job::new(
@@ -775,13 +775,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and job
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let job = Job::new(
             task_id,
@@ -809,13 +809,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and job
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let mut job = Job::new(
             task_id,
@@ -862,13 +862,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and job
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let job = Job::new(
             task_id,
@@ -896,13 +896,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and job with results
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
@@ -974,13 +974,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         // Create job with mixed results: photo1 completed, photo2+photo3 failed.
         // Simulate realistic post-processing state: queued_photo_ids is empty,
@@ -1082,13 +1082,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and job that's still processing
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let mut job = Job::new(
             task_id,
@@ -1114,13 +1114,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and completed job with no failures
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo1 = Uuid::new_v4();
         let mut job = Job::new(
@@ -1164,13 +1164,13 @@ mod tests {
     async fn test_retry_cancelled_job_includes_unprocessed_photos() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         // Simulate a job that was partially processed then cancelled:
         // photo1 was processed (failed), photo2 and photo3 were never processed
@@ -1233,13 +1233,13 @@ mod tests {
     async fn test_cancel_job_queued() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let job = Job::new(
             task_id,
@@ -1267,13 +1267,13 @@ mod tests {
     async fn test_cancel_job_processing() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let mut job = Job::new(
             task_id,
@@ -1297,13 +1297,13 @@ mod tests {
     async fn test_cancel_job_already_finished() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let mut job = Job::new(
             task_id,
@@ -1343,13 +1343,13 @@ mod tests {
         let ts = create_test_state().await;
 
         // Create task and job
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let job = Job::new(
             task_id,
@@ -1371,13 +1371,13 @@ mod tests {
     async fn test_delete_job_processing() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let mut job = Job::new(
             task_id,
@@ -1400,13 +1400,13 @@ mod tests {
     async fn test_delete_job_completed() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let mut job = Job::new(
             task_id,
@@ -1432,13 +1432,13 @@ mod tests {
     async fn test_delete_job_cancelled() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let mut job = Job::new(
             task_id,
@@ -1480,13 +1480,13 @@ mod tests {
     async fn test_list_task_jobs_empty() {
         let ts = create_test_state().await;
 
-        let task = Task::new(
+        let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
             "test task".to_string(),
         );
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let result = list_task_jobs(State(ts.state.clone()), AppPath(task_id)).await;
 
@@ -1499,20 +1499,20 @@ mod tests {
     async fn test_list_task_jobs_returns_only_task_jobs() {
         let ts = create_test_state().await;
 
-        let task1 = Task::new(
+        let task1 = Project::new(
             test_catalog_id(),
             "Task 1".to_string(),
             "task 1".to_string(),
         );
-        let task2 = Task::new(
+        let task2 = Project::new(
             test_catalog_id(),
             "Task 2".to_string(),
             "task 2".to_string(),
         );
-        let task1_id = task1.task_id;
-        let task2_id = task2.task_id;
-        ts.state.task_store.create(task1).await.unwrap();
-        ts.state.task_store.create(task2).await.unwrap();
+        let task1_id = task1.project_id;
+        let task2_id = task2.project_id;
+        ts.state.project_store.create(task1).await.unwrap();
+        ts.state.project_store.create(task2).await.unwrap();
 
         let job1 = Job::new(
             task1_id,
@@ -1566,9 +1566,9 @@ mod tests {
     async fn test_list_task_jobs_includes_started_at() {
         let ts = create_test_state().await;
 
-        let task = Task::new(test_catalog_id(), "Task".to_string(), "ctx".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task = Project::new(test_catalog_id(), "Task".to_string(), "ctx".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let queued_job = Job::new(
             task_id,
@@ -1613,9 +1613,9 @@ mod tests {
     async fn test_create_job_with_explicit_language() {
         let ts = create_test_state().await;
 
-        let task = Task::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
@@ -1647,9 +1647,9 @@ mod tests {
         let mut ts = create_test_state().await;
         ts.state.config.ai.default_language = Some("French".to_string());
 
-        let task = Task::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
@@ -1675,9 +1675,9 @@ mod tests {
     async fn test_create_job_without_language_no_config_default() {
         let ts = create_test_state().await;
 
-        let task = Task::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
@@ -1703,9 +1703,9 @@ mod tests {
         let mut ts = create_test_state().await;
         ts.state.config.ai.default_language = Some("French".to_string());
 
-        let task = Task::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
@@ -1731,9 +1731,9 @@ mod tests {
     async fn test_retry_job_preserves_language() {
         let ts = create_test_state().await;
 
-        let task = Task::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         let photo_id = photo.photo_id;
@@ -1768,9 +1768,9 @@ mod tests {
     async fn test_create_job_populates_provider() {
         let ts = create_test_state().await;
 
-        let task = Task::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
@@ -1809,9 +1809,9 @@ mod tests {
     async fn test_retry_job_preserves_provider() {
         let ts = create_test_state().await;
 
-        let task = Task::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
-        let task_id = task.task_id;
-        ts.state.task_store.create(task).await.unwrap();
+        let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
+        let task_id = task.project_id;
+        ts.state.project_store.create(task).await.unwrap();
 
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         let photo_id = photo.photo_id;
