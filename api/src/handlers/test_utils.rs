@@ -17,7 +17,7 @@ pub mod fixtures {
         HealthStatus, ModelInfo, ProviderRegistry,
     };
     use crate::services::worker::WorkerPool;
-    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemProjectStore};
+    use crate::storage::{FileSystemActivityStore, FileSystemPhotoStore, FileSystemProjectStore};
     use std::sync::Arc;
     use tempfile::TempDir;
     use tokio::sync::Mutex;
@@ -207,21 +207,21 @@ pub mod fixtures {
         let project_store = Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
         let photo_store =
             Arc::new(FileSystemPhotoStore::new(storage_path.clone(), project_store.clone()).await);
-        let job_store =
-            Arc::new(FileSystemJobStore::new(storage_path, project_store.clone()).await);
+        let activity_store =
+            Arc::new(FileSystemActivityStore::new(storage_path, project_store.clone()).await);
 
         let mut registry = ProviderRegistry::new();
         registry.register("test", Arc::new(TestProviderModelNotAvailable));
         registry.set_default("test").unwrap();
         let ai_providers = Arc::new(registry);
 
-        let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(job_store.clone())));
+        let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(activity_store.clone())));
         TestState {
             state: AppState::new(
                 config,
                 project_store,
                 photo_store,
-                job_store,
+                activity_store,
                 ai_providers,
                 worker_pool,
             ),
@@ -237,21 +237,21 @@ pub mod fixtures {
         let project_store = Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
         let photo_store =
             Arc::new(FileSystemPhotoStore::new(storage_path.clone(), project_store.clone()).await);
-        let job_store =
-            Arc::new(FileSystemJobStore::new(storage_path, project_store.clone()).await);
+        let activity_store =
+            Arc::new(FileSystemActivityStore::new(storage_path, project_store.clone()).await);
 
         let mut registry = ProviderRegistry::new();
         registry.register("test", Arc::new(TestProviderUnavailable));
         registry.set_default("test").unwrap();
         let ai_providers = Arc::new(registry);
 
-        let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(job_store.clone())));
+        let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(activity_store.clone())));
         TestState {
             state: AppState::new(
                 config,
                 project_store,
                 photo_store,
-                job_store,
+                activity_store,
                 ai_providers,
                 worker_pool,
             ),
@@ -278,21 +278,21 @@ pub mod fixtures {
         let project_store = Arc::new(FileSystemProjectStore::new(storage_path.clone()).await);
         let photo_store =
             Arc::new(FileSystemPhotoStore::new(storage_path.clone(), project_store.clone()).await);
-        let job_store =
-            Arc::new(FileSystemJobStore::new(storage_path, project_store.clone()).await);
+        let activity_store =
+            Arc::new(FileSystemActivityStore::new(storage_path, project_store.clone()).await);
 
         let mut registry = ProviderRegistry::new();
         registry.register("test", Arc::new(TestProvider));
         registry.set_default("test").unwrap();
         let ai_providers = Arc::new(registry);
 
-        let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(job_store.clone())));
+        let worker_pool = Arc::new(Mutex::new(WorkerPool::new_inactive(activity_store.clone())));
         TestState {
             state: AppState::new(
                 config,
                 project_store,
                 photo_store,
-                job_store,
+                activity_store,
                 ai_providers,
                 worker_pool,
             ),

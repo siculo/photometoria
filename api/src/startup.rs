@@ -13,8 +13,8 @@ use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
 use crate::services::worker::WorkerPool;
 use crate::storage::{
-    FileSystemJobStore, FileSystemPhotoStore, FileSystemProjectStore, JobStore, PhotoStore,
-    ProjectStore,
+    ActivityStore, FileSystemActivityStore, FileSystemPhotoStore, FileSystemProjectStore,
+    PhotoStore, ProjectStore,
 };
 use tokio::sync::Mutex;
 
@@ -68,10 +68,11 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
     );
     tracing::info!("Initialized filesystem photo store");
 
-    let job_store: Arc<dyn JobStore> = Arc::new(
-        FileSystemJobStore::new_with_boot_ts(storage_path, project_store.clone(), boot_ts).await,
+    let activity_store: Arc<dyn ActivityStore> = Arc::new(
+        FileSystemActivityStore::new_with_boot_ts(storage_path, project_store.clone(), boot_ts)
+            .await,
     );
-    tracing::info!("Initialized filesystem job store");
+    tracing::info!("Initialized filesystem activity store");
 
     // Initialize AI provider registry
     let ai_providers = Arc::new(
@@ -95,7 +96,7 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
     // Initialize and start the worker pool
     let worker_pool = WorkerPool::new(
         &config,
-        job_store.clone(),
+        activity_store.clone(),
         photo_store.clone(),
         project_store.clone(),
         ai_providers.clone(),
@@ -110,7 +111,7 @@ pub async fn init_app_state(config: Config) -> Result<AppState, String> {
         config,
         project_store,
         photo_store,
-        job_store,
+        activity_store,
         ai_providers,
         worker_pool,
     ))

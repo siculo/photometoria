@@ -6,19 +6,19 @@
 //! This module contains all data structures (entities and DTOs) used throughout
 //! the application.
 
+pub mod activity;
 pub mod catalog;
 pub mod info;
-pub mod job;
 pub mod photo;
 pub mod project;
 
 // Re-export public types for convenient access
-pub use catalog::{Catalog, CatalogSummary};
-pub use job::{
-    CreateJobRequest, Job, JobCancelledResponse, JobDetailResponse, JobProgress, JobResponse,
-    JobResultsResponse, JobStatus, JobSummary, PhotoResult, PhotoResultStatus, ResultSummary,
-    RetryJobResponse,
+pub use activity::{
+    Activity, ActivityDetailResponse, ActivityProgress, ActivityResponse, ActivityResultsResponse,
+    ActivityStatus, ActivitySummary, CreateActivityRequest, PhotoResult, PhotoResultStatus,
+    ResultSummary, RetryActivityResponse,
 };
+pub use catalog::{Catalog, CatalogSummary};
 pub use photo::{
     FailedUpload, Photo, PhotoListResponse, PhotoResponse, PhotoSummary, UploadPhotosResponse,
     UploadedPhoto,

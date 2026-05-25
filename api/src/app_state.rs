@@ -4,7 +4,7 @@
 use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
 use crate::services::worker::WorkerPool;
-use crate::storage::{JobStore, PhotoStore, ProjectStore};
+use crate::storage::{ActivityStore, PhotoStore, ProjectStore};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -21,11 +21,11 @@ pub struct AppState {
     pub project_store: Arc<dyn ProjectStore>,
     /// Thread-safe reference to the photo storage backend.
     pub photo_store: Arc<dyn PhotoStore>,
-    /// Thread-safe reference to the job storage backend.
-    pub job_store: Arc<dyn JobStore>,
+    /// Thread-safe reference to the activity storage backend.
+    pub activity_store: Arc<dyn ActivityStore>,
     /// Registry of AI providers for image analysis.
     pub ai_providers: Arc<ProviderRegistry>,
-    /// Worker pool for background job processing.
+    /// Worker pool for background activity processing.
     pub worker_pool: Arc<Mutex<WorkerPool>>,
 }
 
@@ -37,12 +37,13 @@ impl AppState {
     /// * `config` - Current server configuration
     /// * `project_store` - An Arc-wrapped implementation of ProjectStore
     /// * `photo_store` - An Arc-wrapped implementation of PhotoStore
+    /// * `activity_store` - An Arc-wrapped implementation of ActivityStore
     /// * `ai_providers` - Registry of AI providers for image analysis
     pub fn new(
         config: Config,
         project_store: Arc<dyn ProjectStore>,
         photo_store: Arc<dyn PhotoStore>,
-        job_store: Arc<dyn JobStore>,
+        activity_store: Arc<dyn ActivityStore>,
         ai_providers: Arc<ProviderRegistry>,
         worker_pool: Arc<Mutex<WorkerPool>>,
     ) -> Self {
@@ -51,7 +52,7 @@ impl AppState {
             project_store,
             photo_store,
             ai_providers,
-            job_store,
+            activity_store,
             worker_pool,
         }
     }

@@ -18,7 +18,7 @@ use crate::models::{
     CreateProjectRequest, Project, ProjectDetail, ProjectResponse, ProjectSummary,
     UpdateProjectRequest,
 };
-use crate::storage::{JobStore, PhotoStore, ProjectStoreError};
+use crate::storage::{ActivityStore, PhotoStore, ProjectStoreError};
 
 /// Validates and trims a project name, returning an error if empty.
 fn validate_project_name(name: &str) -> Result<String, AppError> {
@@ -102,7 +102,7 @@ pub async fn list_projects(
             let mut summaries = Vec::with_capacity(projects.len());
             for project in projects {
                 let summary =
-                    get_project_summary(&state.photo_store, &state.job_store, project).await;
+                    get_project_summary(&state.photo_store, &state.activity_store, project).await;
                 summaries.push(summary);
             }
             Ok(Json(summaries))
@@ -113,7 +113,7 @@ pub async fn list_projects(
 
 async fn get_project_summary(
     photo_store: &Arc<dyn PhotoStore>,
-    job_store: &Arc<dyn JobStore>,
+    activity_store: &Arc<dyn ActivityStore>,
     project: Project,
 ) -> ProjectSummary {
     let photo_count = photo_store
@@ -124,7 +124,7 @@ async fn get_project_summary(
         .total_size_by_task(project.project_id)
         .await
         .unwrap_or(0);
-    let job_count = job_store
+    let job_count = activity_store
         .count_by_task(project.project_id)
         .await
         .unwrap_or(0);
@@ -154,16 +154,16 @@ pub(crate) async fn get_existing_project(
     }
 }
 
-/// Returns an error if the project has any active (Queued or Processing) jobs.
+/// Returns an error if the project has any active (Queued or Processing) activities.
 ///
 /// Used to guard delete operations on projects and photos against in-flight processing.
-pub(crate) async fn check_no_active_jobs(
-    job_store: &Arc<dyn JobStore>,
+pub(crate) async fn check_no_active_activities(
+    activity_store: &Arc<dyn ActivityStore>,
     project_id: Uuid,
 ) -> Result<(), AppError> {
-    match job_store.list_by_task(project_id).await {
-        Ok(jobs) => {
-            if jobs.iter().any(|j| !j.is_finished()) {
+    match activity_store.list_by_task(project_id).await {
+        Ok(activities) => {
+            if activities.iter().any(|a| !a.is_finished()) {
                 Err(AppError::conflict(
                     "job_active",
                     format!("Cannot delete: project '{}' has active jobs", project_id),
@@ -196,7 +196,11 @@ pub async fn get_project(
             .total_size_by_task(project_id)
             .await
             .unwrap(),
-        job_count: state.job_store.count_by_task(project_id).await.unwrap_or(0),
+        job_count: state
+            .activity_store
+            .count_by_task(project_id)
+            .await
+            .unwrap_or(0),
     };
     Ok(Json(detail))
 }
@@ -254,9 +258,9 @@ pub async fn delete_project(
     State(state): State<AppState>,
     AppPath(project_id): AppPath<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    check_no_active_jobs(&state.job_store, project_id).await?;
+    check_no_active_activities(&state.activity_store, project_id).await?;
     state
-        .job_store
+        .activity_store
         .delete_by_task(project_id)
         .await
         .map_err(|e| AppError::internal_error(e.to_string()))?;
@@ -280,7 +284,7 @@ pub async fn delete_project(
 mod tests {
     use super::*;
     use crate::handlers::test_utils::fixtures::{create_test_state, test_catalog_id};
-    use crate::models::{Job, Photo};
+    use crate::models::{Activity, Photo};
     use chrono::Utc;
     use uuid::Uuid;
 
@@ -828,14 +832,14 @@ mod tests {
         .await
         .unwrap();
 
-        let job = crate::models::Job::new(
+        let job = crate::models::Activity::new(
             project.project_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        ts.state.job_store.create(job).await.unwrap();
+        ts.state.activity_store.create(job).await.unwrap();
 
         let result = delete_project(State(ts.state.clone()), AppPath(project.project_id)).await;
 
@@ -858,7 +862,7 @@ mod tests {
         .await
         .unwrap();
 
-        let mut job = crate::models::Job::new(
+        let mut job = crate::models::Activity::new(
             project.project_id,
             "ollama".to_string(),
             "llava".to_string(),
@@ -866,7 +870,7 @@ mod tests {
             vec![],
         );
         job.start();
-        ts.state.job_store.create(job).await.unwrap();
+        ts.state.activity_store.create(job).await.unwrap();
 
         let result = delete_project(State(ts.state.clone()), AppPath(project.project_id)).await;
 
@@ -889,7 +893,7 @@ mod tests {
         .await
         .unwrap();
 
-        let mut job = crate::models::Job::new(
+        let mut job = crate::models::Activity::new(
             project.project_id,
             "ollama".to_string(),
             "llava".to_string(),
@@ -898,7 +902,7 @@ mod tests {
         );
         job.start();
         job.complete();
-        ts.state.job_store.create(job).await.unwrap();
+        ts.state.activity_store.create(job).await.unwrap();
 
         let result = delete_project(State(ts.state.clone()), AppPath(project.project_id)).await;
 
@@ -920,7 +924,7 @@ mod tests {
         .await
         .unwrap();
 
-        let mut job = crate::models::Job::new(
+        let mut job = crate::models::Activity::new(
             project.project_id,
             "ollama".to_string(),
             "llava".to_string(),
@@ -928,7 +932,7 @@ mod tests {
             vec![],
         );
         job.cancel();
-        ts.state.job_store.create(job).await.unwrap();
+        ts.state.activity_store.create(job).await.unwrap();
 
         let result = delete_project(State(ts.state.clone()), AppPath(project.project_id)).await;
 
@@ -1096,30 +1100,30 @@ mod tests {
         .await
         .unwrap();
 
-        let job1 = Job::new(
+        let job1 = Activity::new(
             project1.project_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        let job2 = Job::new(
+        let job2 = Activity::new(
             project1.project_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        let job3 = Job::new(
+        let job3 = Activity::new(
             project2.project_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        ts.state.job_store.create(job1).await.unwrap();
-        ts.state.job_store.create(job2).await.unwrap();
-        ts.state.job_store.create(job3).await.unwrap();
+        ts.state.activity_store.create(job1).await.unwrap();
+        ts.state.activity_store.create(job2).await.unwrap();
+        ts.state.activity_store.create(job3).await.unwrap();
 
         let Json(summaries) = list_projects(State(ts.state.clone()), AppPath(test_catalog_id()))
             .await
@@ -1153,29 +1157,29 @@ mod tests {
         .await
         .unwrap();
 
-        let mut job1 = Job::new(
+        let mut activity1 = Activity::new(
             project.project_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        job1.start();
-        job1.complete();
-        let mut job2 = Job::new(
+        activity1.start();
+        activity1.complete();
+        let mut activity2 = Activity::new(
             project.project_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        job2.cancel();
-        ts.state.job_store.create(job1).await.unwrap();
-        ts.state.job_store.create(job2).await.unwrap();
+        activity2.cancel();
+        ts.state.activity_store.create(activity1).await.unwrap();
+        ts.state.activity_store.create(activity2).await.unwrap();
 
         assert_eq!(
             ts.state
-                .job_store
+                .activity_store
                 .count_by_task(project.project_id)
                 .await
                 .unwrap(),
@@ -1187,13 +1191,13 @@ mod tests {
 
         let remaining = ts
             .state
-            .job_store
+            .activity_store
             .count_by_task(project.project_id)
             .await
             .unwrap();
         assert_eq!(
             remaining, 0,
-            "Jobs should be removed when their project is deleted"
+            "Activities should be removed when their project is deleted"
         );
     }
 
@@ -1256,22 +1260,22 @@ mod tests {
         .await
         .unwrap();
 
-        let job1 = Job::new(
+        let job1 = Activity::new(
             project.project_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        let job2 = Job::new(
+        let job2 = Activity::new(
             project.project_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        ts.state.job_store.create(job1).await.unwrap();
-        ts.state.job_store.create(job2).await.unwrap();
+        ts.state.activity_store.create(job1).await.unwrap();
+        ts.state.activity_store.create(job2).await.unwrap();
 
         let Json(detail) = get_project(State(ts.state.clone()), AppPath(project.project_id))
             .await

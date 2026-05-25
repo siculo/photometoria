@@ -5,11 +5,11 @@ use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
 use crate::handlers::project::get_existing_project;
 use crate::models::{
-    CreateJobRequest, Job, JobDetailResponse, JobResponse, JobResultsResponse, JobSummary, Photo,
-    RetryJobResponse,
+    Activity, ActivityDetailResponse, ActivityResponse, ActivityResultsResponse, ActivitySummary,
+    CreateActivityRequest, Photo, RetryActivityResponse,
 };
 use crate::services::ai::AIProviderError;
-use crate::storage::JobStore;
+use crate::storage::ActivityStore;
 use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -19,12 +19,12 @@ use uuid::Uuid;
 
 /// Handler for POST /api/tasks/{task_id}/jobs
 ///
-/// Creates a new job for processing photos with AI analysis.
-pub async fn create_job(
+/// Creates a new activity for processing photos with AI analysis.
+pub async fn create_activity(
     State(state): State<AppState>,
     AppPath(task_id): AppPath<Uuid>,
-    Json(request): Json<CreateJobRequest>,
-) -> Result<(StatusCode, Json<JobResponse>), AppError> {
+    Json(request): Json<CreateActivityRequest>,
+) -> Result<(StatusCode, Json<ActivityResponse>), AppError> {
     get_existing_project(&state.project_store, task_id).await?;
 
     if !state.ai_providers.contains(&request.provider) {
@@ -61,7 +61,7 @@ pub async fn create_job(
 
     match state.photo_store.list_by_task(task_id).await {
         Ok(photos) => {
-            let photo_ids = job_photo_ids(task_id, photos, request.photo_ids)?;
+            let photo_ids = activity_photo_ids(task_id, photos, request.photo_ids)?;
             if photo_ids.is_empty() {
                 return Err(AppError::bad_request(
                     "no_photos",
@@ -71,21 +71,21 @@ pub async fn create_job(
             let language = request
                 .language
                 .or_else(|| state.config.ai.default_language.clone());
-            let job = Job::new(
+            let activity = Activity::new(
                 task_id,
                 request.provider,
                 request.model,
                 language,
                 photo_ids,
             );
-            let job_response = add_job_to_store(&state.job_store, job).await?;
-            Ok((StatusCode::CREATED, Json(job_response)))
+            let activity_response = add_activity_to_store(&state.activity_store, activity).await?;
+            Ok((StatusCode::CREATED, Json(activity_response)))
         }
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
-fn job_photo_ids(
+fn activity_photo_ids(
     task_id: Uuid,
     photos: Vec<Photo>,
     request_photo_ids: Option<Vec<Uuid>>,
@@ -111,39 +111,43 @@ fn job_photo_ids(
     Ok(photo_ids)
 }
 
-async fn add_job_to_store(
-    job_store: &Arc<dyn JobStore>,
-    job: Job,
-) -> Result<JobResponse, AppError> {
-    match job_store.create(job.clone()).await {
-        Ok(job) => Ok(job.into()),
+async fn add_activity_to_store(
+    activity_store: &Arc<dyn ActivityStore>,
+    activity: Activity,
+) -> Result<ActivityResponse, AppError> {
+    match activity_store.create(activity.clone()).await {
+        Ok(activity) => Ok(activity.into()),
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
-/// Helper function to retrieve a job and handle errors.
+/// Helper function to retrieve an activity and handle errors.
 ///
-/// Returns the job if found, or an appropriate AppError otherwise.
-async fn get_existing_job(job_store: &Arc<dyn JobStore>, job_id: Uuid) -> Result<Job, AppError> {
-    match job_store.get(job_id).await {
-        Ok(Some(job)) => Ok(job),
-        Ok(None) => Err(AppError::job_not_found(job_id)),
+/// Returns the activity if found, or an appropriate AppError otherwise.
+async fn get_existing_activity(
+    activity_store: &Arc<dyn ActivityStore>,
+    activity_id: Uuid,
+) -> Result<Activity, AppError> {
+    match activity_store.get(activity_id).await {
+        Ok(Some(activity)) => Ok(activity),
+        Ok(None) => Err(AppError::activity_not_found(activity_id)),
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
 /// Handler for GET /api/tasks/{task_id}/jobs
 ///
-/// Lists all jobs belonging to a specific task with summary information.
-pub async fn list_task_jobs(
+/// Lists all activities belonging to a specific task with summary information.
+pub async fn list_project_activities(
     State(state): State<AppState>,
     AppPath(task_id): AppPath<Uuid>,
-) -> Result<Json<Vec<JobSummary>>, AppError> {
+) -> Result<Json<Vec<ActivitySummary>>, AppError> {
     get_existing_project(&state.project_store, task_id).await?;
 
-    match state.job_store.list_by_task(task_id).await {
-        Ok(jobs) => {
-            let summaries: Vec<JobSummary> = jobs.iter().map(|job| job.into()).collect();
+    match state.activity_store.list_by_task(task_id).await {
+        Ok(activities) => {
+            let summaries: Vec<ActivitySummary> =
+                activities.iter().map(|activity| activity.into()).collect();
             Ok(Json(summaries))
         }
         Err(e) => Err(AppError::internal_error(e.to_string())),
@@ -152,11 +156,14 @@ pub async fn list_task_jobs(
 
 /// Handler for GET /api/jobs
 ///
-/// Lists all jobs with summary information.
-pub async fn list_jobs(State(state): State<AppState>) -> Result<Json<Vec<JobSummary>>, AppError> {
-    match state.job_store.list().await {
-        Ok(jobs) => {
-            let summaries: Vec<JobSummary> = jobs.iter().map(|job| job.into()).collect();
+/// Lists all activities with summary information.
+pub async fn list_activities(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<ActivitySummary>>, AppError> {
+    match state.activity_store.list().await {
+        Ok(activities) => {
+            let summaries: Vec<ActivitySummary> =
+                activities.iter().map(|activity| activity.into()).collect();
             Ok(Json(summaries))
         }
         Err(e) => Err(AppError::internal_error(e.to_string())),
@@ -165,45 +172,45 @@ pub async fn list_jobs(State(state): State<AppState>) -> Result<Json<Vec<JobSumm
 
 /// Handler for GET /api/jobs/{job_id}
 ///
-/// Retrieves detailed information about a specific job, including progress if processing.
-pub async fn get_job(
+/// Retrieves detailed information about a specific activity, including progress if processing.
+pub async fn get_activity(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
-) -> Result<Json<JobDetailResponse>, AppError> {
-    let job = get_existing_job(&state.job_store, job_id).await?;
-    let response: JobDetailResponse = job.into();
+    AppPath(activity_id): AppPath<Uuid>,
+) -> Result<Json<ActivityDetailResponse>, AppError> {
+    let activity = get_existing_activity(&state.activity_store, activity_id).await?;
+    let response: ActivityDetailResponse = activity.into();
     Ok(Json(response))
 }
 
 /// Handler for GET /api/jobs/{job_id}/results
 ///
-/// Retrieves AI analysis results for all processed photos in a job.
-pub async fn get_job_results(
+/// Retrieves AI analysis results for all processed photos in an activity.
+pub async fn get_activity_results(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
-) -> Result<Json<JobResultsResponse>, AppError> {
-    let job = get_existing_job(&state.job_store, job_id).await?;
-    let response: JobResultsResponse = job.into();
+    AppPath(activity_id): AppPath<Uuid>,
+) -> Result<Json<ActivityResultsResponse>, AppError> {
+    let activity = get_existing_activity(&state.activity_store, activity_id).await?;
+    let response: ActivityResultsResponse = activity.into();
     Ok(Json(response))
 }
 
 /// Handler for POST /api/jobs/{job_id}/cancel
 ///
-/// Cancels an active job. Removes any pending photos from the worker buffer
-/// and marks the job as Cancelled. Photos already being processed by a worker
+/// Cancels an active activity. Removes any pending photos from the worker buffer
+/// and marks the activity as Cancelled. Photos already being processed by a worker
 /// will still complete, but their results won't be saved.
-pub async fn cancel_job(
+pub async fn cancel_activity(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
-) -> Result<Json<JobResponse>, AppError> {
-    let mut job = get_existing_job(&state.job_store, job_id).await?;
+    AppPath(activity_id): AppPath<Uuid>,
+) -> Result<Json<ActivityResponse>, AppError> {
+    let mut activity = get_existing_activity(&state.activity_store, activity_id).await?;
 
-    if job.is_finished() {
+    if activity.is_finished() {
         return Err(AppError::conflict(
             "job_already_finished",
             format!(
                 "Cannot cancel job '{}': it has already finished with status '{}'",
-                job_id, job.status
+                activity_id, activity.status
             ),
         ));
     }
@@ -211,69 +218,72 @@ pub async fn cancel_job(
     // Remove any photos still waiting in the worker buffer
     {
         let pool = state.worker_pool.lock().await;
-        pool.cancel_job(job_id).await;
+        pool.cancel_activity(activity_id).await;
     }
 
-    // Mark job as cancelled and persist
-    job.cancel();
-    match state.job_store.update(job).await {
-        Ok(updated_job) => Ok(Json((&updated_job).into())),
+    // Mark activity as cancelled and persist
+    activity.cancel();
+    match state.activity_store.update(activity).await {
+        Ok(updated_activity) => Ok(Json((&updated_activity).into())),
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
 }
 
 /// Handler for POST /api/jobs/{job_id}/retry
 ///
-/// Creates a new job to retry unprocessed or failed photos from an existing job.
+/// Creates a new activity to retry unprocessed or failed photos from an existing activity.
 /// Includes both photos that failed during processing and photos that were never
-/// processed (e.g. because the original job was cancelled).
-pub async fn retry_job(
+/// processed (e.g. because the original activity was cancelled).
+pub async fn retry_activity(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
-) -> Result<Json<RetryJobResponse>, AppError> {
-    let original_job = get_existing_job(&state.job_store, job_id).await?;
+    AppPath(activity_id): AppPath<Uuid>,
+) -> Result<Json<RetryActivityResponse>, AppError> {
+    let original_activity = get_existing_activity(&state.activity_store, activity_id).await?;
 
-    // Validate job is finished
-    if !original_job.is_finished() {
+    // Validate activity is finished
+    if !original_activity.is_finished() {
         return Err(AppError::conflict(
             "job_in_progress",
-            format!("Cannot retry job '{}' while it is still processing", job_id),
+            format!(
+                "Cannot retry job '{}' while it is still processing",
+                activity_id
+            ),
         ));
     }
 
     // Get failed + unprocessed photo IDs
-    let retriable_photo_ids = original_job.retriable_photo_ids();
+    let retriable_photo_ids = original_activity.retriable_photo_ids();
     if retriable_photo_ids.is_empty() {
         return Err(AppError::bad_request(
             "no_failed_photos",
             format!(
                 "Job '{}' has no failed or unprocessed photos to retry",
-                job_id
+                activity_id
             ),
         ));
     }
 
-    // Create new job with retriable photos, preserving the provider and language from the original
-    let new_job = Job::new(
-        original_job.task_id,
-        original_job.provider.clone(),
-        original_job.model.clone(),
-        original_job.language.clone(),
+    // Create new activity with retriable photos, preserving the provider and language from the original
+    let new_activity = Activity::new(
+        original_activity.project_id,
+        original_activity.provider.clone(),
+        original_activity.model.clone(),
+        original_activity.language.clone(),
         retriable_photo_ids,
     );
 
-    // Store the new job
-    match state.job_store.create(new_job.clone()).await {
-        Ok(created_job) => Ok(Json(RetryJobResponse {
-            job_id: created_job.job_id,
-            task_id: created_job.task_id,
-            status: created_job.status,
-            provider: created_job.provider,
-            model: created_job.model,
-            language: created_job.language,
-            photo_count: created_job.photo_ids.len(),
-            created_at: created_job.created_at,
-            parent_job_id: job_id,
+    // Store the new activity
+    match state.activity_store.create(new_activity.clone()).await {
+        Ok(created_activity) => Ok(Json(RetryActivityResponse {
+            activity_id: created_activity.activity_id,
+            project_id: created_activity.project_id,
+            status: created_activity.status,
+            provider: created_activity.provider,
+            model: created_activity.model,
+            language: created_activity.language,
+            photo_count: created_activity.photo_ids.len(),
+            created_at: created_activity.created_at,
+            parent_activity_id: activity_id,
         })),
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
@@ -281,22 +291,22 @@ pub async fn retry_job(
 
 /// Handler for DELETE /api/jobs/{job_id}
 ///
-/// Deletes a job. The job must be in a terminal state (Completed, Failed, Cancelled).
-/// Returns 409 Conflict if the job is still active (Queued or Processing).
-pub async fn delete_job(
+/// Deletes an activity. The activity must be in a terminal state (Completed, Failed, Cancelled).
+/// Returns 409 Conflict if the activity is still active (Queued or Processing).
+pub async fn delete_activity(
     State(state): State<AppState>,
-    AppPath(job_id): AppPath<Uuid>,
+    AppPath(activity_id): AppPath<Uuid>,
 ) -> Result<axum::http::StatusCode, AppError> {
-    let job = get_existing_job(&state.job_store, job_id).await?;
+    let activity = get_existing_activity(&state.activity_store, activity_id).await?;
 
-    if !job.is_finished() {
+    if !activity.is_finished() {
         return Err(AppError::conflict(
             "job_not_finished",
-            format!("Cannot delete job '{}': it is still active", job_id),
+            format!("Cannot delete job '{}': it is still active", activity_id),
         ));
     }
 
-    match state.job_store.delete(job_id).await {
+    match state.activity_store.delete(activity_id).await {
         Ok(_) => Ok(axum::http::StatusCode::NO_CONTENT),
         Err(e) => Err(AppError::internal_error(e.to_string())),
     }
@@ -309,15 +319,15 @@ mod tests {
         create_test_state, create_test_state_model_not_available,
         create_test_state_provider_unavailable, test_catalog_id,
     };
-    use crate::models::{JobStatus, Photo, Project};
+    use crate::models::{ActivityStatus, Photo, Project};
     use uuid::Uuid;
 
     // ========================================================================
-    // Tests for create_job handler
+    // Tests for create_activity handler
     // ========================================================================
 
     #[tokio::test]
-    async fn test_create_job_all_photos() {
+    async fn test_create_activity_all_photos() {
         let ts = create_test_state().await;
 
         // Create task with photos
@@ -337,39 +347,40 @@ mod tests {
         ts.state.photo_store.create(photo1).await.unwrap();
         ts.state.photo_store.create(photo2).await.unwrap();
 
-        // Create job with all photos (photo_ids = None)
-        let request = CreateJobRequest {
+        // Create activity with all photos (photo_ids = None)
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_ok());
-        let (status, Json(job_response)) = result.unwrap();
+        let (status, Json(activity_response)) = result.unwrap();
         assert_eq!(status, StatusCode::CREATED);
-        assert_eq!(job_response.task_id, task_id);
-        assert_eq!(job_response.model, "qwen3-vl:8b");
-        assert_eq!(job_response.photo_count, 2);
-        assert_eq!(job_response.status, JobStatus::Queued);
+        assert_eq!(activity_response.project_id, task_id);
+        assert_eq!(activity_response.model, "qwen3-vl:8b");
+        assert_eq!(activity_response.photo_count, 2);
+        assert_eq!(activity_response.status, ActivityStatus::Queued);
 
-        // Verify the job was stored and contains all photos
-        let stored_job = ts
+        // Verify the activity was stored and contains all photos
+        let stored_activity = ts
             .state
-            .job_store
-            .get(job_response.job_id)
+            .activity_store
+            .get(activity_response.activity_id)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(stored_job.photo_ids.len(), 2);
-        assert!(stored_job.photo_ids.contains(&photo1_id));
-        assert!(stored_job.photo_ids.contains(&photo2_id));
+        assert_eq!(stored_activity.photo_ids.len(), 2);
+        assert!(stored_activity.photo_ids.contains(&photo1_id));
+        assert!(stored_activity.photo_ids.contains(&photo2_id));
     }
 
     #[tokio::test]
-    async fn test_create_job_specific_photos() {
+    async fn test_create_activity_specific_photos() {
         let ts = create_test_state().await;
 
         // Create task with photos
@@ -391,38 +402,39 @@ mod tests {
         ts.state.photo_store.create(photo2).await.unwrap();
         ts.state.photo_store.create(photo3).await.unwrap();
 
-        // Create job with only photo1 and photo2
-        let request = CreateJobRequest {
+        // Create activity with only photo1 and photo2
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "llava".to_string(),
             language: None,
             photo_ids: Some(vec![photo1_id, photo2_id]),
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_ok());
-        let (status, Json(job_response)) = result.unwrap();
+        let (status, Json(activity_response)) = result.unwrap();
         assert_eq!(status, StatusCode::CREATED);
-        assert_eq!(job_response.task_id, task_id);
-        assert_eq!(job_response.model, "llava");
-        assert_eq!(job_response.photo_count, 2);
+        assert_eq!(activity_response.project_id, task_id);
+        assert_eq!(activity_response.model, "llava");
+        assert_eq!(activity_response.photo_count, 2);
 
-        // Verify the job contains only the specified photos
-        let stored_job = ts
+        // Verify the activity contains only the specified photos
+        let stored_activity = ts
             .state
-            .job_store
-            .get(job_response.job_id)
+            .activity_store
+            .get(activity_response.activity_id)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(stored_job.photo_ids.len(), 2);
-        assert!(stored_job.photo_ids.contains(&photo1_id));
-        assert!(stored_job.photo_ids.contains(&photo2_id));
+        assert_eq!(stored_activity.photo_ids.len(), 2);
+        assert!(stored_activity.photo_ids.contains(&photo1_id));
+        assert!(stored_activity.photo_ids.contains(&photo2_id));
     }
 
     #[tokio::test]
-    async fn test_create_job_invalid_provider() {
+    async fn test_create_activity_invalid_provider() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -433,14 +445,15 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "nonexistent-provider".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -450,10 +463,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_invalid_model() {
+    async fn test_create_activity_invalid_model() {
         let ts = create_test_state().await;
 
-        // Create task (test state uses an empty ProviderRegistry — no models configured)
         let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
@@ -462,14 +474,15 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "nonexistent-model".to_string(),
             language: None,
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -478,7 +491,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_model_not_available() {
+    async fn test_create_activity_model_not_available() {
         let ts = create_test_state_model_not_available().await;
 
         let task = Project::new(
@@ -492,14 +505,15 @@ mod tests {
         let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -509,7 +523,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_provider_unavailable() {
+    async fn test_create_activity_provider_unavailable() {
         let ts = create_test_state_provider_unavailable().await;
 
         let task = Project::new(
@@ -523,14 +537,15 @@ mod tests {
         let photo = Photo::new(task_id, None, "photo.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -539,18 +554,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_task_not_found() {
+    async fn test_create_activity_task_not_found() {
         let ts = create_test_state().await;
         let nonexistent_task_id = Uuid::new_v4();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
         };
 
-        let result = create_job(
+        let result = create_activity(
             State(ts.state.clone()),
             AppPath(nonexistent_task_id),
             Json(request),
@@ -569,7 +584,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_invalid_photo_id() {
+    async fn test_create_activity_invalid_photo_id() {
         let ts = create_test_state().await;
 
         // Create task with one photo
@@ -584,16 +599,17 @@ mod tests {
         let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo1).await.unwrap();
 
-        // Try to create job with a photo_id that doesn't belong to this task
+        // Try to create activity with a photo_id that doesn't belong to this task
         let invalid_photo_id = Uuid::new_v4();
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: Some(vec![invalid_photo_id]),
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -603,7 +619,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_empty_task() {
+    async fn test_create_activity_empty_task() {
         let ts = create_test_state().await;
 
         // Create task without photos
@@ -615,15 +631,16 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        // Create job for empty task
-        let request = CreateJobRequest {
+        // Create activity for empty task
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -631,7 +648,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_explicit_empty_photo_ids() {
+    async fn test_create_activity_explicit_empty_photo_ids() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -646,14 +663,15 @@ mod tests {
         ts.state.photo_store.create(photo).await.unwrap();
 
         // Explicitly pass an empty photo_ids list
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: Some(vec![]),
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -661,22 +679,22 @@ mod tests {
     }
 
     // ========================================================================
-    // Tests for list_jobs handler
+    // Tests for list_activities handler
     // ========================================================================
 
     #[tokio::test]
-    async fn test_list_jobs_empty() {
+    async fn test_list_activities_empty() {
         let ts = create_test_state().await;
 
-        let result = list_jobs(State(ts.state.clone())).await;
+        let result = list_activities(State(ts.state.clone())).await;
 
         assert!(result.is_ok());
-        let Json(jobs) = result.unwrap();
-        assert!(jobs.is_empty());
+        let Json(activities) = result.unwrap();
+        assert!(activities.is_empty());
     }
 
     #[tokio::test]
-    async fn test_list_jobs_multiple() {
+    async fn test_list_activities_multiple() {
         let ts = create_test_state().await;
 
         // Create task with photos
@@ -691,37 +709,45 @@ mod tests {
         let photo1 = Photo::new(task_id, None, "photo1.jpg".to_string(), 1000);
         ts.state.photo_store.create(photo1).await.unwrap();
 
-        // Create multiple jobs
-        let job1 = Job::new(
+        // Create multiple activities
+        let activity1 = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![],
         );
-        let job2 = Job::new(
+        let activity2 = Activity::new(
             task_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        ts.state.job_store.create(job1.clone()).await.unwrap();
-        ts.state.job_store.create(job2.clone()).await.unwrap();
+        ts.state
+            .activity_store
+            .create(activity1.clone())
+            .await
+            .unwrap();
+        ts.state
+            .activity_store
+            .create(activity2.clone())
+            .await
+            .unwrap();
 
-        let result = list_jobs(State(ts.state.clone())).await;
+        let result = list_activities(State(ts.state.clone())).await;
 
         assert!(result.is_ok());
-        let Json(jobs) = result.unwrap();
-        assert_eq!(jobs.len(), 2);
-        assert_eq!(jobs[0].task_id, task_id);
-        assert_eq!(jobs[1].task_id, task_id);
-        assert_eq!(jobs[0].status, JobStatus::Queued);
-        assert_eq!(jobs[1].status, JobStatus::Queued);
+        let Json(activities) = result.unwrap();
+        assert_eq!(activities.len(), 2);
+        assert_eq!(activities[0].project_id, task_id);
+        assert_eq!(activities[1].project_id, task_id);
+        assert_eq!(activities[0].status, ActivityStatus::Queued);
+        assert_eq!(activities[1].status, ActivityStatus::Queued);
     }
 
     #[tokio::test]
-    async fn test_list_jobs_mixed_statuses() {
+    async fn test_list_activities_mixed_statuses() {
         let ts = create_test_state().await;
 
         // Create task
@@ -733,48 +759,56 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        // Create jobs with different statuses
-        let mut job1 = Job::new(
+        // Create activities with different statuses
+        let mut activity1 = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![],
         );
-        job1.start();
-        let mut job2 = Job::new(
+        activity1.start();
+        let mut activity2 = Activity::new(
             task_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        job2.start();
-        job2.complete();
+        activity2.start();
+        activity2.complete();
 
-        ts.state.job_store.create(job1.clone()).await.unwrap();
-        ts.state.job_store.create(job2.clone()).await.unwrap();
+        ts.state
+            .activity_store
+            .create(activity1.clone())
+            .await
+            .unwrap();
+        ts.state
+            .activity_store
+            .create(activity2.clone())
+            .await
+            .unwrap();
 
-        let result = list_jobs(State(ts.state.clone())).await;
+        let result = list_activities(State(ts.state.clone())).await;
 
         assert!(result.is_ok());
-        let Json(jobs) = result.unwrap();
-        assert_eq!(jobs.len(), 2);
+        let Json(activities) = result.unwrap();
+        assert_eq!(activities.len(), 2);
         // Check that we have both processing and completed
-        let statuses: Vec<JobStatus> = jobs.iter().map(|j| j.status).collect();
-        assert!(statuses.contains(&JobStatus::Processing));
-        assert!(statuses.contains(&JobStatus::Completed));
+        let statuses: Vec<ActivityStatus> = activities.iter().map(|a| a.status).collect();
+        assert!(statuses.contains(&ActivityStatus::Processing));
+        assert!(statuses.contains(&ActivityStatus::Completed));
     }
 
     // ========================================================================
-    // Tests for get_job handler
+    // Tests for get_activity handler
     // ========================================================================
 
     #[tokio::test]
-    async fn test_get_job_found() {
+    async fn test_get_activity_found() {
         let ts = create_test_state().await;
 
-        // Create task and job
+        // Create task and activity
         let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
@@ -783,32 +817,32 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let job = Job::new(
+        let activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = get_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = get_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
-        assert_eq!(response.job_id, job_id);
-        assert_eq!(response.task_id, task_id);
-        assert_eq!(response.status, JobStatus::Queued);
+        assert_eq!(response.activity_id, activity_id);
+        assert_eq!(response.project_id, task_id);
+        assert_eq!(response.status, ActivityStatus::Queued);
         assert_eq!(response.photo_count, 2);
         assert!(response.progress.is_none()); // No progress when queued
     }
 
     #[tokio::test]
-    async fn test_get_job_with_progress() {
+    async fn test_get_activity_with_progress() {
         let ts = create_test_state().await;
 
-        // Create task and job
+        // Create task and activity
         let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
@@ -817,22 +851,22 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
-        job.start();
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        activity.start();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = get_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = get_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
-        assert_eq!(response.status, JobStatus::Processing);
+        assert_eq!(response.status, ActivityStatus::Processing);
         assert!(response.progress.is_some()); // Should have progress when processing
         let progress = response.progress.unwrap();
         assert_eq!(progress.completed, 0);
@@ -841,27 +875,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_job_not_found() {
+    async fn test_get_activity_not_found() {
         let ts = create_test_state().await;
-        let nonexistent_job_id = Uuid::new_v4();
+        let nonexistent_activity_id = Uuid::new_v4();
 
-        let result = get_job(State(ts.state.clone()), AppPath(nonexistent_job_id)).await;
+        let result = get_activity(State(ts.state.clone()), AppPath(nonexistent_activity_id)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert_eq!(error.body.error, "not_found");
-        assert!(error.body.message.contains(&nonexistent_job_id.to_string()));
+        assert!(
+            error
+                .body
+                .message
+                .contains(&nonexistent_activity_id.to_string())
+        );
     }
 
     // ========================================================================
-    // Tests for get_job_results handler
+    // Tests for get_activity_results handler
     // ========================================================================
 
     #[tokio::test]
-    async fn test_get_job_results_empty() {
+    async fn test_get_activity_results_empty() {
         let ts = create_test_state().await;
 
-        // Create task and job
+        // Create task and activity
         let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
@@ -870,21 +909,21 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let job = Job::new(
+        let activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4(), Uuid::new_v4()],
         );
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = get_job_results(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = get_activity_results(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
-        assert_eq!(response.job_id, job_id);
+        assert_eq!(response.activity_id, activity_id);
         assert!(response.results.is_empty());
         assert_eq!(response.summary.total, 2);
         assert_eq!(response.summary.completed, 0);
@@ -892,10 +931,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_job_results_with_results() {
+    async fn test_get_activity_results_with_results() {
         let ts = create_test_state().await;
 
-        // Create task and job with results
+        // Create task and activity with results
         let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
@@ -906,7 +945,7 @@ mod tests {
 
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
@@ -915,7 +954,7 @@ mod tests {
         );
 
         // Add results
-        job.results.insert(
+        activity.results.insert(
             photo1,
             crate::models::PhotoResult {
                 photo_id: photo1,
@@ -927,7 +966,7 @@ mod tests {
             },
         );
 
-        job.results.insert(
+        activity.results.insert(
             photo2,
             crate::models::PhotoResult {
                 photo_id: photo2,
@@ -939,14 +978,14 @@ mod tests {
             },
         );
 
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = get_job_results(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = get_activity_results(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
-        assert_eq!(response.job_id, job_id);
+        assert_eq!(response.activity_id, activity_id);
         assert_eq!(response.results.len(), 2);
         assert_eq!(response.summary.total, 2);
         assert_eq!(response.summary.completed, 1);
@@ -954,11 +993,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_job_results_not_found() {
+    async fn test_get_activity_results_not_found() {
         let ts = create_test_state().await;
-        let nonexistent_job_id = Uuid::new_v4();
+        let nonexistent_activity_id = Uuid::new_v4();
 
-        let result = get_job_results(State(ts.state.clone()), AppPath(nonexistent_job_id)).await;
+        let result =
+            get_activity_results(State(ts.state.clone()), AppPath(nonexistent_activity_id)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -966,11 +1006,11 @@ mod tests {
     }
 
     // ========================================================================
-    // Tests for retry_job handler
+    // Tests for retry_activity handler
     // ========================================================================
 
     #[tokio::test]
-    async fn test_retry_job_success() {
+    async fn test_retry_activity_success() {
         let ts = create_test_state().await;
 
         // Create task
@@ -982,27 +1022,27 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        // Create job with mixed results: photo1 completed, photo2+photo3 failed.
+        // Create activity with mixed results: photo1 completed, photo2+photo3 failed.
         // Simulate realistic post-processing state: queued_photo_ids is empty,
         // all photos are in processed_photo_ids.
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
         let photo3 = Uuid::new_v4();
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2, photo3],
         );
-        job.start();
+        activity.start();
         // Simulate all photos having been processed
-        job.queued_photo_ids.clear();
-        job.processed_photo_ids = vec![photo1, photo2, photo3];
-        job.complete();
+        activity.queued_photo_ids.clear();
+        activity.processed_photo_ids = vec![photo1, photo2, photo3];
+        activity.complete();
 
         // Add mixed results
-        job.results.insert(
+        activity.results.insert(
             photo1,
             crate::models::PhotoResult {
                 photo_id: photo1,
@@ -1014,7 +1054,7 @@ mod tests {
             },
         );
 
-        job.results.insert(
+        activity.results.insert(
             photo2,
             crate::models::PhotoResult {
                 photo_id: photo2,
@@ -1026,7 +1066,7 @@ mod tests {
             },
         );
 
-        job.results.insert(
+        activity.results.insert(
             photo3,
             crate::models::PhotoResult {
                 photo_id: photo3,
@@ -1038,39 +1078,40 @@ mod tests {
             },
         );
 
-        let original_job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        let original_activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(original_job_id)).await;
+        let result = retry_activity(State(ts.state.clone()), AppPath(original_activity_id)).await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
-        assert_ne!(response.job_id, original_job_id); // New job ID
-        assert_eq!(response.task_id, task_id);
-        assert_eq!(response.status, JobStatus::Queued);
+        assert_ne!(response.activity_id, original_activity_id); // New activity ID
+        assert_eq!(response.project_id, task_id);
+        assert_eq!(response.status, ActivityStatus::Queued);
         assert_eq!(response.model, "qwen3-vl:8b");
         assert_eq!(response.photo_count, 2); // Only failed photos
-        assert_eq!(response.parent_job_id, original_job_id);
+        assert_eq!(response.parent_activity_id, original_activity_id);
 
-        // Verify the new job was created in storage
-        let new_job = ts
+        // Verify the new activity was created in storage
+        let new_activity = ts
             .state
-            .job_store
-            .get(response.job_id)
+            .activity_store
+            .get(response.activity_id)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(new_job.photo_ids.len(), 2);
-        assert!(new_job.photo_ids.contains(&photo2));
-        assert!(new_job.photo_ids.contains(&photo3));
+        assert_eq!(new_activity.photo_ids.len(), 2);
+        assert!(new_activity.photo_ids.contains(&photo2));
+        assert!(new_activity.photo_ids.contains(&photo3));
     }
 
     #[tokio::test]
-    async fn test_retry_job_not_found() {
+    async fn test_retry_activity_not_found() {
         let ts = create_test_state().await;
-        let nonexistent_job_id = Uuid::new_v4();
+        let nonexistent_activity_id = Uuid::new_v4();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(nonexistent_job_id)).await;
+        let result =
+            retry_activity(State(ts.state.clone()), AppPath(nonexistent_activity_id)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
@@ -1078,10 +1119,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_retry_job_still_processing() {
+    async fn test_retry_activity_still_processing() {
         let ts = create_test_state().await;
 
-        // Create task and job that's still processing
+        // Create task and activity that's still processing
         let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
@@ -1090,30 +1131,30 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
         );
-        job.start(); // Start but don't complete
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        activity.start(); // Start but don't complete
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = retry_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert_eq!(error.body.error, "job_in_progress");
-        assert!(error.body.message.contains(&job_id.to_string()));
+        assert!(error.body.message.contains(&activity_id.to_string()));
     }
 
     #[tokio::test]
-    async fn test_retry_job_no_failures() {
+    async fn test_retry_activity_no_failures() {
         let ts = create_test_state().await;
 
-        // Create task and completed job with no failures
+        // Create task and completed activity with no failures
         let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
@@ -1123,21 +1164,21 @@ mod tests {
         ts.state.project_store.create(task).await.unwrap();
 
         let photo1 = Uuid::new_v4();
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1],
         );
-        job.start();
+        activity.start();
         // Simulate photo1 having been processed
-        job.queued_photo_ids.clear();
-        job.processed_photo_ids = vec![photo1];
-        job.complete();
+        activity.queued_photo_ids.clear();
+        activity.processed_photo_ids = vec![photo1];
+        activity.complete();
 
         // Add only successful result
-        job.results.insert(
+        activity.results.insert(
             photo1,
             crate::models::PhotoResult {
                 photo_id: photo1,
@@ -1149,19 +1190,19 @@ mod tests {
             },
         );
 
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = retry_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert_eq!(error.body.error, "no_failed_photos");
-        assert!(error.body.message.contains(&job_id.to_string()));
+        assert!(error.body.message.contains(&activity_id.to_string()));
     }
 
     #[tokio::test]
-    async fn test_retry_cancelled_job_includes_unprocessed_photos() {
+    async fn test_retry_cancelled_activity_includes_unprocessed_photos() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -1172,24 +1213,24 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        // Simulate a job that was partially processed then cancelled:
+        // Simulate an activity that was partially processed then cancelled:
         // photo1 was processed (failed), photo2 and photo3 were never processed
         let photo1 = Uuid::new_v4();
         let photo2 = Uuid::new_v4();
         let photo3 = Uuid::new_v4();
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo1, photo2, photo3],
         );
-        job.start();
+        activity.start();
 
         // Mark photo1 as failed (processed), leave photo2 and photo3 in queued_photo_ids
-        job.queued_photo_ids.retain(|id| id != &photo1);
-        job.processed_photo_ids.push(photo1);
-        job.results.insert(
+        activity.queued_photo_ids.retain(|id| id != &photo1);
+        activity.processed_photo_ids.push(photo1);
+        activity.results.insert(
             photo1,
             crate::models::PhotoResult {
                 photo_id: photo1,
@@ -1201,36 +1242,36 @@ mod tests {
             },
         );
 
-        job.cancel();
-        let original_job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        activity.cancel();
+        let original_activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(original_job_id)).await;
+        let result = retry_activity(State(ts.state.clone()), AppPath(original_activity_id)).await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
         // All 3 photos: 1 failed + 2 never processed
         assert_eq!(response.photo_count, 3);
-        assert_eq!(response.parent_job_id, original_job_id);
+        assert_eq!(response.parent_activity_id, original_activity_id);
 
-        let new_job = ts
+        let new_activity = ts
             .state
-            .job_store
-            .get(response.job_id)
+            .activity_store
+            .get(response.activity_id)
             .await
             .unwrap()
             .unwrap();
-        assert!(new_job.photo_ids.contains(&photo1));
-        assert!(new_job.photo_ids.contains(&photo2));
-        assert!(new_job.photo_ids.contains(&photo3));
+        assert!(new_activity.photo_ids.contains(&photo1));
+        assert!(new_activity.photo_ids.contains(&photo2));
+        assert!(new_activity.photo_ids.contains(&photo3));
     }
 
     // ========================================================================
-    // Tests for cancel_job handler
+    // Tests for cancel_activity handler
     // ========================================================================
 
     #[tokio::test]
-    async fn test_cancel_job_queued() {
+    async fn test_cancel_activity_queued() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -1241,30 +1282,36 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let job = Job::new(
+        let activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
         );
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = cancel_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = cancel_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
-        assert_eq!(response.job_id, job_id);
-        assert_eq!(response.status, JobStatus::Cancelled);
+        assert_eq!(response.activity_id, activity_id);
+        assert_eq!(response.status, ActivityStatus::Cancelled);
 
-        // Verify the job is cancelled in storage
-        let stored_job = ts.state.job_store.get(job_id).await.unwrap().unwrap();
-        assert_eq!(stored_job.status, JobStatus::Cancelled);
+        // Verify the activity is cancelled in storage
+        let stored_activity = ts
+            .state
+            .activity_store
+            .get(activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored_activity.status, ActivityStatus::Cancelled);
     }
 
     #[tokio::test]
-    async fn test_cancel_job_processing() {
+    async fn test_cancel_activity_processing() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -1275,26 +1322,26 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
         );
-        job.start();
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        activity.start();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = cancel_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = cancel_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_ok());
         let Json(response) = result.unwrap();
-        assert_eq!(response.status, JobStatus::Cancelled);
+        assert_eq!(response.status, ActivityStatus::Cancelled);
     }
 
     #[tokio::test]
-    async fn test_cancel_job_already_finished() {
+    async fn test_cancel_activity_already_finished() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -1305,44 +1352,44 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
         );
-        job.start();
-        job.complete();
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        activity.start();
+        activity.complete();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = cancel_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = cancel_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_already_finished");
     }
 
     #[tokio::test]
-    async fn test_cancel_job_not_found() {
+    async fn test_cancel_activity_not_found() {
         let ts = create_test_state().await;
         let nonexistent_id = Uuid::new_v4();
 
-        let result = cancel_job(State(ts.state.clone()), AppPath(nonexistent_id)).await;
+        let result = cancel_activity(State(ts.state.clone()), AppPath(nonexistent_id)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "not_found");
     }
 
     // ========================================================================
-    // Tests for delete_job handler
+    // Tests for delete_activity handler
     // ========================================================================
 
     #[tokio::test]
-    async fn test_delete_job_queued() {
+    async fn test_delete_activity_queued() {
         let ts = create_test_state().await;
 
-        // Create task and job
+        // Create task and activity
         let task = Project::new(
             test_catalog_id(),
             "Test task".to_string(),
@@ -1351,24 +1398,24 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let job = Job::new(
+        let activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
         );
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = delete_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_not_finished");
     }
 
     #[tokio::test]
-    async fn test_delete_job_processing() {
+    async fn test_delete_activity_processing() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -1379,25 +1426,25 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
         );
-        job.start();
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        activity.start();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = delete_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "job_not_finished");
     }
 
     #[tokio::test]
-    async fn test_delete_job_completed() {
+    async fn test_delete_activity_completed() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -1408,28 +1455,28 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
         );
-        job.start();
-        job.complete();
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        activity.start();
+        activity.complete();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = delete_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert_eq!(result, Ok(axum::http::StatusCode::NO_CONTENT));
 
-        let deleted_job = ts.state.job_store.get(job_id).await.unwrap();
-        assert!(deleted_job.is_none());
+        let deleted_activity = ts.state.activity_store.get(activity_id).await.unwrap();
+        assert!(deleted_activity.is_none());
     }
 
     #[tokio::test]
-    async fn test_delete_job_cancelled() {
+    async fn test_delete_activity_cancelled() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -1440,44 +1487,50 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![Uuid::new_v4()],
         );
-        job.cancel();
-        let job_id = job.job_id;
-        ts.state.job_store.create(job).await.unwrap();
+        activity.cancel();
+        let activity_id = activity.activity_id;
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(job_id)).await;
+        let result = delete_activity(State(ts.state.clone()), AppPath(activity_id)).await;
 
         assert_eq!(result, Ok(axum::http::StatusCode::NO_CONTENT));
 
-        let deleted_job = ts.state.job_store.get(job_id).await.unwrap();
-        assert!(deleted_job.is_none());
+        let deleted_activity = ts.state.activity_store.get(activity_id).await.unwrap();
+        assert!(deleted_activity.is_none());
     }
 
     #[tokio::test]
-    async fn test_delete_job_not_found() {
+    async fn test_delete_activity_not_found() {
         let ts = create_test_state().await;
-        let nonexistent_job_id = Uuid::new_v4();
+        let nonexistent_activity_id = Uuid::new_v4();
 
-        let result = delete_job(State(ts.state.clone()), AppPath(nonexistent_job_id)).await;
+        let result =
+            delete_activity(State(ts.state.clone()), AppPath(nonexistent_activity_id)).await;
 
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert_eq!(error.body.error, "not_found");
-        assert!(error.body.message.contains(&nonexistent_job_id.to_string()));
+        assert!(
+            error
+                .body
+                .message
+                .contains(&nonexistent_activity_id.to_string())
+        );
     }
 
     // ========================================================================
-    // Tests for list_task_jobs handler
+    // Tests for list_project_activities handler
     // ========================================================================
 
     #[tokio::test]
-    async fn test_list_task_jobs_empty() {
+    async fn test_list_project_activities_empty() {
         let ts = create_test_state().await;
 
         let task = Project::new(
@@ -1488,15 +1541,15 @@ mod tests {
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let result = list_task_jobs(State(ts.state.clone()), AppPath(task_id)).await;
+        let result = list_project_activities(State(ts.state.clone()), AppPath(task_id)).await;
 
         assert!(result.is_ok());
-        let Json(jobs) = result.unwrap();
-        assert!(jobs.is_empty());
+        let Json(activities) = result.unwrap();
+        assert!(activities.is_empty());
     }
 
     #[tokio::test]
-    async fn test_list_task_jobs_returns_only_task_jobs() {
+    async fn test_list_project_activities_returns_only_task_activities() {
         let ts = create_test_state().await;
 
         let task1 = Project::new(
@@ -1514,91 +1567,103 @@ mod tests {
         ts.state.project_store.create(task1).await.unwrap();
         ts.state.project_store.create(task2).await.unwrap();
 
-        let job1 = Job::new(
+        let activity1 = Activity::new(
             task1_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        let job2 = Job::new(
+        let activity2 = Activity::new(
             task1_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        let job3 = Job::new(
+        let activity3 = Activity::new(
             task2_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        let job1_id = job1.job_id;
-        let job2_id = job2.job_id;
-        ts.state.job_store.create(job1).await.unwrap();
-        ts.state.job_store.create(job2).await.unwrap();
-        ts.state.job_store.create(job3).await.unwrap();
+        let activity1_id = activity1.activity_id;
+        let activity2_id = activity2.activity_id;
+        ts.state.activity_store.create(activity1).await.unwrap();
+        ts.state.activity_store.create(activity2).await.unwrap();
+        ts.state.activity_store.create(activity3).await.unwrap();
 
-        let Json(jobs) = list_task_jobs(State(ts.state.clone()), AppPath(task1_id))
+        let Json(activities) = list_project_activities(State(ts.state.clone()), AppPath(task1_id))
             .await
             .unwrap();
 
-        assert_eq!(jobs.len(), 2);
-        let job_ids: Vec<Uuid> = jobs.iter().map(|j| j.job_id).collect();
-        assert!(job_ids.contains(&job1_id));
-        assert!(job_ids.contains(&job2_id));
+        assert_eq!(activities.len(), 2);
+        let activity_ids: Vec<Uuid> = activities.iter().map(|a| a.activity_id).collect();
+        assert!(activity_ids.contains(&activity1_id));
+        assert!(activity_ids.contains(&activity2_id));
     }
 
     #[tokio::test]
-    async fn test_list_task_jobs_task_not_found() {
+    async fn test_list_project_activities_task_not_found() {
         let ts = create_test_state().await;
         let nonexistent_task_id = Uuid::new_v4();
 
-        let result = list_task_jobs(State(ts.state.clone()), AppPath(nonexistent_task_id)).await;
+        let result =
+            list_project_activities(State(ts.state.clone()), AppPath(nonexistent_task_id)).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().body.error, "not_found");
     }
 
     #[tokio::test]
-    async fn test_list_task_jobs_includes_started_at() {
+    async fn test_list_project_activities_includes_started_at() {
         let ts = create_test_state().await;
 
         let task = Project::new(test_catalog_id(), "Task".to_string(), "ctx".to_string());
         let task_id = task.project_id;
         ts.state.project_store.create(task).await.unwrap();
 
-        let queued_job = Job::new(
+        let queued_activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        let mut processing_job = Job::new(
+        let mut processing_activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![],
         );
-        processing_job.start();
+        processing_activity.start();
 
-        ts.state.job_store.create(queued_job).await.unwrap();
-        ts.state.job_store.create(processing_job).await.unwrap();
-
-        let Json(jobs) = list_task_jobs(State(ts.state.clone()), AppPath(task_id))
+        ts.state
+            .activity_store
+            .create(queued_activity)
+            .await
+            .unwrap();
+        ts.state
+            .activity_store
+            .create(processing_activity)
             .await
             .unwrap();
 
-        assert_eq!(jobs.len(), 2);
+        let Json(activities) = list_project_activities(State(ts.state.clone()), AppPath(task_id))
+            .await
+            .unwrap();
 
-        let queued = jobs.iter().find(|j| j.status == JobStatus::Queued).unwrap();
-        let processing = jobs
+        assert_eq!(activities.len(), 2);
+
+        let queued = activities
             .iter()
-            .find(|j| j.status == JobStatus::Processing)
+            .find(|a| a.status == ActivityStatus::Queued)
+            .unwrap();
+        let processing = activities
+            .iter()
+            .find(|a| a.status == ActivityStatus::Processing)
             .unwrap();
 
         assert!(queued.started_at.is_none());
@@ -1610,7 +1675,7 @@ mod tests {
     // ========================================================================
 
     #[tokio::test]
-    async fn test_create_job_with_explicit_language() {
+    async fn test_create_activity_with_explicit_language() {
         let ts = create_test_state().await;
 
         let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
@@ -1620,22 +1685,23 @@ mod tests {
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: Some("Italian".to_string()),
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         let (_, Json(response)) = result.unwrap();
         assert_eq!(response.language.as_deref(), Some("Italian"));
 
         let stored = ts
             .state
-            .job_store
-            .get(response.job_id)
+            .activity_store
+            .get(response.activity_id)
             .await
             .unwrap()
             .unwrap();
@@ -1643,7 +1709,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_without_language_uses_config_default() {
+    async fn test_create_activity_without_language_uses_config_default() {
         let mut ts = create_test_state().await;
         ts.state.config.ai.default_language = Some("French".to_string());
 
@@ -1654,14 +1720,15 @@ mod tests {
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         let (_, Json(response)) = result.unwrap();
         assert_eq!(
@@ -1672,7 +1739,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_without_language_no_config_default() {
+    async fn test_create_activity_without_language_no_config_default() {
         let ts = create_test_state().await;
 
         let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
@@ -1682,14 +1749,15 @@ mod tests {
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         let (_, Json(response)) = result.unwrap();
         assert!(
@@ -1699,7 +1767,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_job_explicit_language_overrides_config_default() {
+    async fn test_create_activity_explicit_language_overrides_config_default() {
         let mut ts = create_test_state().await;
         ts.state.config.ai.default_language = Some("French".to_string());
 
@@ -1710,14 +1778,15 @@ mod tests {
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: Some("German".to_string()),
             photo_ids: None,
         };
 
-        let result = create_job(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
+        let result =
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request)).await;
 
         let (_, Json(response)) = result.unwrap();
         assert_eq!(
@@ -1728,7 +1797,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_retry_job_preserves_language() {
+    async fn test_retry_activity_preserves_language() {
         let ts = create_test_state().await;
 
         let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
@@ -1739,24 +1808,32 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "ollama".to_string(),
             "qwen3-vl:8b".to_string(),
             Some("Italian".to_string()),
             vec![photo_id],
         );
-        job.fail();
-        ts.state.job_store.create(job.clone()).await.unwrap();
-        ts.state.job_store.update(job.clone()).await.unwrap();
+        activity.fail();
+        ts.state
+            .activity_store
+            .create(activity.clone())
+            .await
+            .unwrap();
+        ts.state
+            .activity_store
+            .update(activity.clone())
+            .await
+            .unwrap();
 
-        let result = retry_job(State(ts.state.clone()), AppPath(job.job_id)).await;
+        let result = retry_activity(State(ts.state.clone()), AppPath(activity.activity_id)).await;
         let Json(retry_response) = result.unwrap();
 
         assert_eq!(
             retry_response.language.as_deref(),
             Some("Italian"),
-            "Retry job should preserve language from original job"
+            "Retry activity should preserve language from original activity"
         );
     }
 
@@ -1765,7 +1842,7 @@ mod tests {
     // ========================================================================
 
     #[tokio::test]
-    async fn test_create_job_populates_provider() {
+    async fn test_create_activity_populates_provider() {
         let ts = create_test_state().await;
 
         let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
@@ -1775,7 +1852,7 @@ mod tests {
         let photo = Photo::new(task_id, None, "p.jpg".to_string(), 100);
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let request = CreateJobRequest {
+        let request = CreateActivityRequest {
             provider: "test".to_string(),
             model: "qwen3-vl:8b".to_string(),
             language: None,
@@ -1783,30 +1860,30 @@ mod tests {
         };
 
         let (_, Json(response)) =
-            create_job(State(ts.state.clone()), AppPath(task_id), Json(request))
+            create_activity(State(ts.state.clone()), AppPath(task_id), Json(request))
                 .await
                 .unwrap();
 
         assert_eq!(
             response.provider, "test",
-            "JobResponse should record the explicitly requested provider"
+            "ActivityResponse should record the explicitly requested provider"
         );
 
         let stored = ts
             .state
-            .job_store
-            .get(response.job_id)
+            .activity_store
+            .get(response.activity_id)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(
             stored.provider, "test",
-            "Persisted job should record the explicitly requested provider"
+            "Persisted activity should record the explicitly requested provider"
         );
     }
 
     #[tokio::test]
-    async fn test_retry_job_preserves_provider() {
+    async fn test_retry_activity_preserves_provider() {
         let ts = create_test_state().await;
 
         let task = Project::new(test_catalog_id(), "Test".to_string(), "ctx".to_string());
@@ -1817,36 +1894,45 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let mut job = Job::new(
+        let mut activity = Activity::new(
             task_id,
             "custom-provider".to_string(),
             "qwen3-vl:8b".to_string(),
             None,
             vec![photo_id],
         );
-        job.fail();
-        ts.state.job_store.create(job.clone()).await.unwrap();
-        ts.state.job_store.update(job.clone()).await.unwrap();
-
-        let Json(retry_response) = retry_job(State(ts.state.clone()), AppPath(job.job_id))
+        activity.fail();
+        ts.state
+            .activity_store
+            .create(activity.clone())
+            .await
+            .unwrap();
+        ts.state
+            .activity_store
+            .update(activity.clone())
             .await
             .unwrap();
 
+        let Json(retry_response) =
+            retry_activity(State(ts.state.clone()), AppPath(activity.activity_id))
+                .await
+                .unwrap();
+
         assert_eq!(
             retry_response.provider, "custom-provider",
-            "Retry job should preserve provider from the original job"
+            "Retry activity should preserve provider from the original activity"
         );
 
         let stored = ts
             .state
-            .job_store
-            .get(retry_response.job_id)
+            .activity_store
+            .get(retry_response.activity_id)
             .await
             .unwrap()
             .unwrap();
         assert_eq!(
             stored.provider, "custom-provider",
-            "Persisted retry job should preserve provider from the original job"
+            "Persisted retry activity should preserve provider from the original activity"
         );
     }
 }

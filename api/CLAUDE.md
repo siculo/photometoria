@@ -46,7 +46,7 @@ api/src/
 │   ├── project.rs    #   CRUD projects (formerly tasks)
 │   ├── photos.rs     #   get/delete/list photos
 │   ├── upload_photos.rs # Multipart upload handling
-│   ├── jobs.rs       #   CRUD jobs + cancel/retry
+│   ├── activities.rs #   CRUD activities + cancel/retry (formerly jobs.rs)
 │   ├── providers.rs  #   Provider listing, model discovery
 │   ├── info.rs       #   Server info endpoint
 │   ├── app_error.rs  #   AppError → HTTP response mapping
@@ -54,7 +54,7 @@ api/src/
 ├── models/           # Domain structs
 │   ├── project.rs    #   Project (formerly Task)
 │   ├── photo.rs
-│   ├── job.rs
+│   ├── activity.rs   #   Activity (formerly job.rs)
 │   └── info.rs       #   ServerInfo response struct
 ├── services/         # External services
 │   ├── ai/           #   AI provider abstraction
@@ -66,20 +66,20 @@ api/src/
 │   │       ├── mod.rs
 │   │       ├── provider.rs
 │   │       └── types.rs
-│   └── worker/       #   Job processing
+│   └── worker/       #   Activity processing
 │       ├── mod.rs
 │       ├── pool.rs   #     WorkerPool
 │       ├── processor.rs #  Photo analysis logic
-│       ├── queue.rs  #     Job queue
+│       ├── queue.rs  #     Activity queue
 │       └── worker.rs #     Individual worker
 └── storage/          # Persistence layer (filesystem)
     ├── mod.rs        #   Store traits + re-exports
     ├── project_store.rs
     ├── photo_store.rs
-    ├── job_store.rs
+    ├── activity_store.rs         #   ActivityStore trait (formerly job_store.rs)
     ├── filesystem_project_store.rs
     ├── filesystem_photo_store.rs
-    ├── filesystem_job_store.rs
+    ├── filesystem_activity_store.rs  #   FileSystemActivityStore (formerly filesystem_job_store.rs)
     └── filesystem_layout.rs
 ```
 
@@ -87,10 +87,10 @@ api/src/
 
 ## Implemented Guardrails
 
-- Tasks/photos not deletable while any job is active
-- Jobs deletable only if in terminal state
-- Job transitions to `processing` BEFORE AI analysis starts
-- Cancel removes pending photos from buffer, marks job `cancelled`
+- Projects/photos not deletable while any activity is active
+- Activities deletable only if in terminal state
+- Activity transitions to `processing` BEFORE AI analysis starts
+- Cancel removes pending photos from buffer, marks activity `cancelled`
 
 ---
 

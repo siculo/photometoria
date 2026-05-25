@@ -3,7 +3,7 @@
 
 use crate::app_state::AppState;
 use crate::handlers::app_error::{AppError, AppPath};
-use crate::handlers::project::{check_no_active_jobs, get_existing_project};
+use crate::handlers::project::{check_no_active_activities, get_existing_project};
 use crate::models::{Photo, PhotoListResponse, PhotoResponse, PhotoSummary};
 use crate::storage::PhotoStore;
 use axum::Json;
@@ -58,7 +58,7 @@ pub async fn delete_photo(
     AppPath(photo_id): AppPath<Uuid>,
 ) -> Result<StatusCode, AppError> {
     let photo = get_existing_photo(&state.photo_store, photo_id).await?;
-    check_no_active_jobs(&state.job_store, photo.task_id).await?;
+    check_no_active_activities(&state.activity_store, photo.task_id).await?;
     match state.photo_store.delete(photo_id).await {
         Ok(_) => Ok(StatusCode::NO_CONTENT),
         Err(error) => Err(AppError::internal_error(error.to_string())),
@@ -296,14 +296,14 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let job = crate::models::Job::new(
+        let job = crate::models::Activity::new(
             task_id,
             "ollama".to_string(),
             "llava".to_string(),
             None,
             vec![photo_id],
         );
-        ts.state.job_store.create(job).await.unwrap();
+        ts.state.activity_store.create(job).await.unwrap();
 
         let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
 
@@ -324,7 +324,7 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let mut job = crate::models::Job::new(
+        let mut job = crate::models::Activity::new(
             task_id,
             "ollama".to_string(),
             "llava".to_string(),
@@ -332,7 +332,7 @@ mod tests {
             vec![photo_id],
         );
         job.start();
-        ts.state.job_store.create(job).await.unwrap();
+        ts.state.activity_store.create(job).await.unwrap();
 
         let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
 
@@ -353,7 +353,7 @@ mod tests {
         let photo_id = photo.photo_id;
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let mut job = crate::models::Job::new(
+        let mut job = crate::models::Activity::new(
             task_id,
             "ollama".to_string(),
             "llava".to_string(),
@@ -362,7 +362,7 @@ mod tests {
         );
         job.start();
         job.complete();
-        ts.state.job_store.create(job).await.unwrap();
+        ts.state.activity_store.create(job).await.unwrap();
 
         let result = delete_photo(State(ts.state.clone()), AppPath(photo_id)).await;
 

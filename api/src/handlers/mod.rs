@@ -3,10 +3,10 @@
 
 //! HTTP request handlers
 
+pub mod activities;
 pub mod app_error;
 pub mod catalogs;
 pub mod health;
-pub mod jobs;
 pub mod photos;
 pub mod project;
 pub mod providers;

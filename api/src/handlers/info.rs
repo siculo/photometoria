@@ -5,7 +5,7 @@ use crate::app_state::AppState;
 use crate::handlers::app_error::AppError;
 use crate::handlers::upload_photos::ALLOWED_MIME_TYPES;
 use crate::models::info::{GeneralInfo, InfoResult, LimitsInfo, ServerInfo};
-use crate::storage::JobStore;
+use crate::storage::ActivityStore;
 use axum::Json;
 use axum::extract::State;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ pub async fn info(State(state): State<AppState>) -> Result<Json<InfoResult>, App
         .count()
         .await
         .map_err(|e| AppError::internal_error(e.to_string()))?;
-    let running_jobs_count = count_active_jobs(&state.job_store).await?;
+    let running_jobs_count = count_active_activities(&state.activity_store).await?;
 
     let available_space_bytes = allocated_space_bytes.saturating_sub(used_space_bytes);
 
@@ -55,19 +55,21 @@ pub async fn info(State(state): State<AppState>) -> Result<Json<InfoResult>, App
     Ok(Json(info))
 }
 
-async fn count_active_jobs(job_store: &Arc<dyn JobStore>) -> Result<usize, AppError> {
-    let jobs = job_store
+async fn count_active_activities(
+    activity_store: &Arc<dyn ActivityStore>,
+) -> Result<usize, AppError> {
+    let activities = activity_store
         .list()
         .await
         .map_err(|e| AppError::internal_error(e.to_string()))?;
-    Ok(jobs.iter().filter(|j| !j.is_finished()).count())
+    Ok(activities.iter().filter(|a| !a.is_finished()).count())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::handlers::test_utils::fixtures::create_test_state;
-    use crate::models::{Job, Photo, Project};
+    use crate::models::{Activity, Photo, Project};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -132,35 +134,43 @@ mod tests {
         let photo = Photo::new(task1_id, None, "photo1.jpg".to_string(), 5000);
         ts.state.photo_store.create(photo).await.unwrap();
 
-        let job = Job::new(
+        let activity = Activity::new(
             task1_id,
             "ollama".to_string(),
             "test".to_string(),
             None,
             vec![],
         );
-        ts.state.job_store.create(job).await.unwrap();
+        ts.state.activity_store.create(activity).await.unwrap();
 
-        let mut processing_job = Job::new(
+        let mut processing_activity = Activity::new(
             task1_id,
             "ollama".to_string(),
             "test".to_string(),
             None,
             vec![],
         );
-        processing_job.start();
-        ts.state.job_store.create(processing_job).await.unwrap();
+        processing_activity.start();
+        ts.state
+            .activity_store
+            .create(processing_activity)
+            .await
+            .unwrap();
 
-        let mut finished_job = Job::new(
+        let mut finished_activity = Activity::new(
             task1_id,
             "ollama".to_string(),
             "test".to_string(),
             None,
             vec![],
         );
-        finished_job.start();
-        finished_job.complete();
-        ts.state.job_store.create(finished_job).await.unwrap();
+        finished_activity.start();
+        finished_activity.complete();
+        ts.state
+            .activity_store
+            .create(finished_activity)
+            .await
+            .unwrap();
 
         let result = info(State(ts.state.clone())).await;
 

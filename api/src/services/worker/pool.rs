@@ -12,9 +12,9 @@ use uuid::Uuid;
 
 use crate::config::worker_pool::parse_duration;
 use crate::config::{Config, ProviderConfig};
-use crate::models::job::JobStatus;
+use crate::models::activity::ActivityStatus;
 use crate::services::ai::ProviderRegistry;
-use crate::storage::{JobStore, PhotoStore, ProjectStore};
+use crate::storage::{ActivityStore, PhotoStore, ProjectStore};
 
 use super::processor::PhotoProcessor;
 use super::queue::PhotoBuffer;
@@ -27,20 +27,20 @@ pub struct WorkerPool {
     /// Single shared photo buffer — all workers pull from here
     buffer: Arc<Mutex<PhotoBuffer>>,
 
-    /// Job store for polling
-    job_store: Arc<dyn JobStore>,
+    /// Activity store for polling
+    activity_store: Arc<dyn ActivityStore>,
 
-    /// How often the discovery loop polls for new queued jobs.
+    /// How often the discovery loop polls for new queued activities.
     discovery_poll_interval: Duration,
 
-    /// Job discovery task handle
+    /// Activity discovery task handle
     discovery_task: Option<JoinHandle<()>>,
 }
 
 impl WorkerPool {
     pub fn new(
         config: &Config,
-        job_store: Arc<dyn JobStore>,
+        activity_store: Arc<dyn ActivityStore>,
         photo_store: Arc<dyn PhotoStore>,
         project_store: Arc<dyn ProjectStore>,
         ai_providers: Arc<ProviderRegistry>,
@@ -78,7 +78,7 @@ impl WorkerPool {
         for (id, &gpu_device) in gpu_assignments.iter().enumerate() {
             let processor = PhotoProcessor::new(
                 ai_provider.clone(),
-                job_store.clone(),
+                activity_store.clone(),
                 photo_store.clone(),
                 project_store.clone(),
             );
@@ -103,7 +103,7 @@ impl WorkerPool {
         Self {
             workers,
             buffer,
-            job_store,
+            activity_store,
             discovery_poll_interval,
             discovery_task: None,
         }
@@ -120,72 +120,72 @@ impl WorkerPool {
     }
 
     /// Creates a pool with no workers and no discovery task.
-    /// For use in tests where job processing should not run.
+    /// For use in tests where activity processing should not run.
     #[cfg(test)]
-    pub fn new_inactive(job_store: Arc<dyn JobStore>) -> Self {
+    pub fn new_inactive(activity_store: Arc<dyn ActivityStore>) -> Self {
         Self {
             workers: Vec::new(),
             buffer: Arc::new(Mutex::new(PhotoBuffer::new())),
-            job_store,
+            activity_store,
             discovery_poll_interval: Duration::from_secs(5),
             discovery_task: None,
         }
     }
 
-    /// Start the worker pool: recover stale jobs, then begin job discovery.
+    /// Start the worker pool: recover stale activities, then begin activity discovery.
     pub async fn start(&mut self) {
-        Self::recover_stale_jobs(self.job_store.clone()).await;
+        Self::recover_stale_activities(self.activity_store.clone()).await;
 
         let buffer = self.buffer.clone();
-        let job_store = self.job_store.clone();
+        let activity_store = self.activity_store.clone();
         let poll_interval = self.discovery_poll_interval;
 
         let handle = tokio::spawn(async move {
-            Self::job_discovery_loop(buffer, job_store, poll_interval).await;
+            Self::activity_discovery_loop(buffer, activity_store, poll_interval).await;
         });
 
         self.discovery_task = Some(handle);
         info!("Worker pool started");
     }
 
-    /// Reset jobs that were in `Processing` state from a previous run.
+    /// Reset activities that were in `Processing` state from a previous run.
     ///
-    /// These are stale (server crashed/shutdown mid-processing). Jobs with
-    /// remaining photos are reset to `Queued`; jobs with all photos processed
+    /// These are stale (server crashed/shutdown mid-processing). Activities with
+    /// remaining photos are reset to `Queued`; activities with all photos processed
     /// are marked `Completed`.
-    async fn recover_stale_jobs(job_store: Arc<dyn JobStore>) {
-        info!("Checking for stale jobs to recover");
+    async fn recover_stale_activities(activity_store: Arc<dyn ActivityStore>) {
+        info!("Checking for stale activities to recover");
 
-        match job_store.list().await {
-            Ok(jobs) => {
+        match activity_store.list().await {
+            Ok(activities) => {
                 let mut recovered_count = 0;
 
-                for mut job in jobs {
-                    if job.status == JobStatus::Processing {
+                for mut activity in activities {
+                    if activity.status == ActivityStatus::Processing {
                         info!(
-                            job_id = %job.job_id,
-                            queued = job.queued_photo_ids.len(),
-                            processed = job.processed_photo_ids.len(),
-                            "Recovering stale job from previous run"
+                            activity_id = %activity.activity_id,
+                            queued = activity.queued_photo_ids.len(),
+                            processed = activity.processed_photo_ids.len(),
+                            "Recovering stale activity from previous run"
                         );
 
-                        if !job.queued_photo_ids.is_empty() {
-                            job.status = JobStatus::Queued;
-                            job.started_at = None;
+                        if !activity.queued_photo_ids.is_empty() {
+                            activity.status = ActivityStatus::Queued;
+                            activity.started_at = None;
 
-                            if let Err(e) = job_store.update(job).await {
-                                error!(error = %e, "Failed to recover stale job");
+                            if let Err(e) = activity_store.update(activity).await {
+                                error!(error = %e, "Failed to recover stale activity");
                             } else {
                                 recovered_count += 1;
                             }
                         } else {
                             // All photos were already processed; just mark completed
-                            job.complete();
+                            activity.complete();
 
-                            if let Err(e) = job_store.update(job).await {
-                                error!(error = %e, "Failed to complete recovered job");
+                            if let Err(e) = activity_store.update(activity).await {
+                                error!(error = %e, "Failed to complete recovered activity");
                             } else {
-                                info!("Recovered job marked as completed");
+                                info!("Recovered activity marked as completed");
                                 recovered_count += 1;
                             }
                         }
@@ -193,57 +193,57 @@ impl WorkerPool {
                 }
 
                 if recovered_count > 0 {
-                    info!(count = recovered_count, "Recovered stale jobs");
+                    info!(count = recovered_count, "Recovered stale activities");
                 } else {
-                    info!("No stale jobs found");
+                    info!("No stale activities found");
                 }
             }
             Err(e) => {
-                error!(error = %e, "Failed to list jobs for recovery");
+                error!(error = %e, "Failed to list activities for recovery");
             }
         }
     }
 
-    /// Polls the JobStore every 5 seconds for `Queued` jobs and enqueues their
-    /// photos into the shared buffer. Each job is only enqueued once.
-    async fn job_discovery_loop(
+    /// Polls the ActivityStore every N seconds for `Queued` activities and enqueues their
+    /// photos into the shared buffer. Each activity is only enqueued once.
+    async fn activity_discovery_loop(
         buffer: Arc<Mutex<PhotoBuffer>>,
-        job_store: Arc<dyn JobStore>,
+        activity_store: Arc<dyn ActivityStore>,
         poll_interval: Duration,
     ) {
-        // Track jobs already enqueued to avoid duplicate photos in the buffer
-        let mut enqueued_job_ids: HashSet<Uuid> = HashSet::new();
+        // Track activities already enqueued to avoid duplicate photos in the buffer
+        let mut enqueued_activity_ids: HashSet<Uuid> = HashSet::new();
 
         loop {
-            match job_store.list().await {
-                Ok(jobs) => {
-                    // Clean up finished jobs so their IDs can be reused (edge case)
-                    for job in &jobs {
-                        if job.is_finished() {
-                            enqueued_job_ids.remove(&job.job_id);
+            match activity_store.list().await {
+                Ok(activities) => {
+                    // Clean up finished activities so their IDs can be reused (edge case)
+                    for activity in &activities {
+                        if activity.is_finished() {
+                            enqueued_activity_ids.remove(&activity.activity_id);
                         }
                     }
 
-                    for job in jobs {
-                        if job.status == JobStatus::Queued
-                            && !job.queued_photo_ids.is_empty()
-                            && !enqueued_job_ids.contains(&job.job_id)
+                    for activity in activities {
+                        if activity.status == ActivityStatus::Queued
+                            && !activity.queued_photo_ids.is_empty()
+                            && !enqueued_activity_ids.contains(&activity.activity_id)
                         {
                             let mut buf = buffer.lock().await;
-                            buf.enqueue_job(&job);
-                            enqueued_job_ids.insert(job.job_id);
+                            buf.enqueue_activity(&activity);
+                            enqueued_activity_ids.insert(activity.activity_id);
 
                             info!(
-                                job_id = %job.job_id,
-                                photo_count = job.queued_photo_ids.len(),
-                                model = %job.model,
-                                "Enqueued job photos into shared buffer"
+                                activity_id = %activity.activity_id,
+                                photo_count = activity.queued_photo_ids.len(),
+                                model = %activity.model,
+                                "Enqueued activity photos into shared buffer"
                             );
                         }
                     }
                 }
                 Err(e) => {
-                    warn!(error = %e, "Failed to list jobs for discovery");
+                    warn!(error = %e, "Failed to list activities for discovery");
                 }
             }
 
@@ -251,22 +251,22 @@ impl WorkerPool {
         }
     }
 
-    /// Remove all pending photos for a job from the shared buffer.
+    /// Remove all pending photos for an activity from the shared buffer.
     ///
-    /// Called when a job is cancelled: any photos still waiting in the queue
+    /// Called when an activity is cancelled: any photos still waiting in the queue
     /// are discarded so workers will not process them. Photos already picked
-    /// up by a worker will still complete, but `update_job` will detect the
+    /// up by a worker will still complete, but `update_activity` will detect the
     /// terminal state and skip the update.
     ///
     /// Returns the number of photos removed from the buffer.
-    pub async fn cancel_job(&self, job_id: Uuid) -> usize {
+    pub async fn cancel_activity(&self, activity_id: Uuid) -> usize {
         let mut buf = self.buffer.lock().await;
-        buf.remove_job(job_id)
+        buf.remove_activity(activity_id)
     }
 
     /// Abort all workers and the discovery task immediately.
     ///
-    /// Jobs in `Processing` state will be recovered at next startup.
+    /// Activities in `Processing` state will be recovered at next startup.
     pub async fn shutdown(&mut self) {
         info!("Shutting down worker pool");
 
