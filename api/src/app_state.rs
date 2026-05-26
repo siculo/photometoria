@@ -4,7 +4,7 @@
 use crate::config::Config;
 use crate::services::ai::ProviderRegistry;
 use crate::services::worker::WorkerPool;
-use crate::storage::{JobStore, PhotoStore, TaskStore};
+use crate::storage::{ActivityStore, PhotoStore, ProjectStore};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -17,15 +17,15 @@ use tokio::sync::Mutex;
 pub struct AppState {
     /// Application configuration
     pub config: Config,
-    /// Thread-safe reference to the task storage backend.
-    pub task_store: Arc<dyn TaskStore>,
+    /// Thread-safe reference to the project storage backend.
+    pub project_store: Arc<dyn ProjectStore>,
     /// Thread-safe reference to the photo storage backend.
     pub photo_store: Arc<dyn PhotoStore>,
-    /// Thread-safe reference to the job storage backend.
-    pub job_store: Arc<dyn JobStore>,
+    /// Thread-safe reference to the activity storage backend.
+    pub activity_store: Arc<dyn ActivityStore>,
     /// Registry of AI providers for image analysis.
     pub ai_providers: Arc<ProviderRegistry>,
-    /// Worker pool for background job processing.
+    /// Worker pool for background activity processing.
     pub worker_pool: Arc<Mutex<WorkerPool>>,
 }
 
@@ -35,34 +35,24 @@ impl AppState {
     /// # Arguments
     ///
     /// * `config` - Current server configuration
-    /// * `task_store` - An Arc-wrapped implementation of TaskStore
+    /// * `project_store` - An Arc-wrapped implementation of ProjectStore
     /// * `photo_store` - An Arc-wrapped implementation of PhotoStore
+    /// * `activity_store` - An Arc-wrapped implementation of ActivityStore
     /// * `ai_providers` - Registry of AI providers for image analysis
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let config = Config::default();
-    /// let storage_path = PathBuf::from(&config.storage.path);
-    /// let task_store = Arc::new(FileSystemTaskStore::new(storage_path.clone()).await);
-    /// let photo_store = Arc::new(FileSystemPhotoStore::new(storage_path, task_store.clone()).await);
-    /// let ai_providers = Arc::new(ProviderRegistry::from_config(&config.ai)?);
-    /// let state = AppState::new(config, task_store, photo_store, ai_providers);
-    /// ```
     pub fn new(
         config: Config,
-        task_store: Arc<dyn TaskStore>,
+        project_store: Arc<dyn ProjectStore>,
         photo_store: Arc<dyn PhotoStore>,
-        job_store: Arc<dyn JobStore>,
+        activity_store: Arc<dyn ActivityStore>,
         ai_providers: Arc<ProviderRegistry>,
         worker_pool: Arc<Mutex<WorkerPool>>,
     ) -> Self {
         Self {
             config,
-            task_store,
+            project_store,
             photo_store,
             ai_providers,
-            job_store,
+            activity_store,
             worker_pool,
         }
     }

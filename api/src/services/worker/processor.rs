@@ -9,9 +9,9 @@ use serde::Deserialize;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::models::job::{JobStatus, PhotoResult, PhotoResultStatus};
+use crate::models::activity::{ActivityStatus, PhotoResult, PhotoResultStatus};
 use crate::services::ai::{AIProvider, AnalyzeImageRequest};
-use crate::storage::{JobStore, PhotoStore, TaskStore};
+use crate::storage::{ActivityStore, PhotoStore, ProjectStore};
 
 use super::queue::QueuedPhoto;
 
@@ -93,16 +93,16 @@ fn strip_code_fences(text: &str) -> &str {
 /// Outcome of the processing pipeline for a single photo.
 #[derive(Debug)]
 pub enum Outcome {
-    /// AI analysis succeeded and job state was persisted correctly.
+    /// AI analysis succeeded and activity state was persisted correctly.
     Success { tags: String },
 
-    /// AI analysis succeeded but persisting the updated job state failed.
-    /// The tags are returned so the caller can log them; the job in the store
+    /// AI analysis succeeded but persisting the updated activity state failed.
+    /// The tags are returned so the caller can log them; the activity in the store
     /// may still reflect the previous state.
     SuccessWithPersistenceError { tags: String, error: String },
 
-    /// AI analysis failed (photo data missing, task not found, AI error, etc.).
-    /// The job state has been updated to mark the photo as failed when possible.
+    /// AI analysis failed (photo data missing, project not found, AI error, etc.).
+    /// The activity state has been updated to mark the photo as failed when possible.
     AnalysisFailed { error: String },
 }
 
@@ -117,64 +117,64 @@ pub struct ProcessingResult {
 // PhotoProcessor
 // ============================================================================
 
-/// Handles the AI analysis and job state update for a single photo.
+/// Handles the AI analysis and activity state update for a single photo.
 pub struct PhotoProcessor {
     ai_provider: Arc<dyn AIProvider>,
-    job_store: Arc<dyn JobStore>,
+    activity_store: Arc<dyn ActivityStore>,
     photo_store: Arc<dyn PhotoStore>,
-    task_store: Arc<dyn TaskStore>,
+    project_store: Arc<dyn ProjectStore>,
 }
 
 impl PhotoProcessor {
     pub fn new(
         ai_provider: Arc<dyn AIProvider>,
-        job_store: Arc<dyn JobStore>,
+        activity_store: Arc<dyn ActivityStore>,
         photo_store: Arc<dyn PhotoStore>,
-        task_store: Arc<dyn TaskStore>,
+        project_store: Arc<dyn ProjectStore>,
     ) -> Self {
         Self {
             ai_provider,
-            job_store,
+            activity_store,
             photo_store,
-            task_store,
+            project_store,
         }
     }
 
-    /// Process a single photo: load data, call AI, update job state.
+    /// Process a single photo: load data, call AI, update activity state.
     pub async fn process(&self, photo: QueuedPhoto) -> ProcessingResult {
         debug!(
             photo_id = %photo.photo_id,
-            job_id = %photo.job_id,
+            activity_id = %photo.activity_id,
             model = %photo.model,
             "Processing photo"
         );
 
-        // Transition the job to Processing before analysis begins, so the status
+        // Transition the activity to Processing before analysis begins, so the status
         // reflects that work is underway even while the first photo is still running.
-        self.start_job_if_queued(photo.job_id).await;
+        self.start_activity_if_queued(photo.activity_id).await;
 
         let photo_id = photo.photo_id;
 
         let outcome = match self.analyze(&photo).await {
-            Ok(tags) => match self.update_job(&photo, Ok(&tags)).await {
+            Ok(tags) => match self.update_activity(&photo, Ok(&tags)).await {
                 Ok(()) => Outcome::Success { tags },
                 Err(e) => {
                     error!(
                         photo_id = %photo.photo_id,
-                        job_id = %photo.job_id,
+                        activity_id = %photo.activity_id,
                         error = %e,
-                        "Analysis succeeded but job state could not be persisted"
+                        "Analysis succeeded but activity state could not be persisted"
                     );
                     Outcome::SuccessWithPersistenceError { tags, error: e }
                 }
             },
             Err(error) => {
-                if let Err(e) = self.update_job(&photo, Err(&error)).await {
+                if let Err(e) = self.update_activity(&photo, Err(&error)).await {
                     error!(
                         photo_id = %photo.photo_id,
-                        job_id = %photo.job_id,
+                        activity_id = %photo.activity_id,
                         error = %e,
-                        "Analysis failed and job state could not be persisted either"
+                        "Analysis failed and activity state could not be persisted either"
                     );
                 }
                 Outcome::AnalysisFailed { error }
@@ -196,15 +196,15 @@ impl PhotoProcessor {
             }
         };
 
-        // Load task context — task must exist: a job cannot outlive its task
-        let context = match self.load_task_context(photo.task_id).await {
+        // Load project context — project must exist: an activity cannot outlive its project
+        let context = match self.load_project_context(photo.project_id).await {
             Ok(ctx) => ctx,
             Err(e) => {
                 error!(
                     photo_id = %photo.photo_id,
-                    task_id = %photo.task_id,
+                    project_id = %photo.project_id,
                     error = %e,
-                    "Task not found or unavailable — cannot process photo"
+                    "Project not found or unavailable — cannot process photo"
                 );
                 return Err(e);
             }
@@ -245,66 +245,69 @@ impl PhotoProcessor {
         }
     }
 
-    /// Loads the task context string.
+    /// Loads the project context string.
     ///
-    /// Returns `Ok(context)` if the task exists (context may be empty if the
-    /// user provided none). Returns `Err` if the task is not found or if the
-    /// store fails — a missing task is a logic error because a job cannot
-    /// outlive its parent task.
-    async fn load_task_context(&self, task_id: Uuid) -> Result<String, String> {
-        match self.task_store.get(task_id).await {
-            Ok(Some(task)) => Ok(task.context),
-            Ok(None) => Err(format!("Task {} not found", task_id)),
-            Err(e) => Err(format!("Failed to load task {}: {}", task_id, e)),
+    /// Returns `Ok(context)` if the project exists (context may be empty if the
+    /// user provided none). Returns `Err` if the project is not found or if the
+    /// store fails — a missing project is a logic error because an activity cannot
+    /// outlive its parent project.
+    async fn load_project_context(&self, project_id: Uuid) -> Result<String, String> {
+        match self.project_store.get(project_id).await {
+            Ok(Some(project)) => Ok(project.context),
+            Ok(None) => Err(format!("Project {} not found", project_id)),
+            Err(e) => Err(format!("Failed to load project {}: {}", project_id, e)),
         }
     }
 
-    /// Transition the job from Queued to Processing if it hasn't started yet.
+    /// Transition the activity from Queued to Processing if it hasn't started yet.
     ///
-    /// Called at the start of photo processing so the job status reflects
+    /// Called at the start of photo processing so the activity status reflects
     /// that work is underway before the first AI call completes.
-    /// No-op if the job is already Processing or in a terminal state.
-    async fn start_job_if_queued(&self, job_id: Uuid) {
-        match self.job_store.get(job_id).await {
-            Ok(Some(mut job)) if job.status == JobStatus::Queued => {
-                job.start();
-                if let Err(e) = self.job_store.update(job).await {
-                    error!(job_id = %job_id, error = %e, "Failed to mark job as processing");
+    /// No-op if the activity is already Processing or in a terminal state.
+    async fn start_activity_if_queued(&self, activity_id: Uuid) {
+        match self.activity_store.get(activity_id).await {
+            Ok(Some(mut activity)) if activity.status == ActivityStatus::Queued => {
+                activity.start();
+                if let Err(e) = self.activity_store.update(activity).await {
+                    error!(activity_id = %activity_id, error = %e, "Failed to mark activity as processing");
                 }
             }
             _ => {}
         }
     }
 
-    /// Update job state after processing a photo.
+    /// Update activity state after processing a photo.
     ///
     /// `analysis` is `Ok(tags)` when the AI succeeded, `Err(error)` when it failed.
-    /// Returns `Err` if the job state could not be persisted to the store.
-    async fn update_job(
+    /// Returns `Err` if the activity state could not be persisted to the store.
+    async fn update_activity(
         &self,
         photo: &QueuedPhoto,
         analysis: Result<&str, &str>,
     ) -> Result<(), String> {
-        let mut job = match self.job_store.get(photo.job_id).await {
-            Ok(Some(job)) => job,
+        let mut activity = match self.activity_store.get(photo.activity_id).await {
+            Ok(Some(activity)) => activity,
             Ok(None) => {
-                return Err(format!("Job {} not found", photo.job_id));
+                return Err(format!("Activity {} not found", photo.activity_id));
             }
             Err(e) => {
-                return Err(format!("Failed to load job {}: {}", photo.job_id, e));
+                return Err(format!(
+                    "Failed to load activity {}: {}",
+                    photo.activity_id, e
+                ));
             }
         };
 
-        // If the job was cancelled (or finished by another path) while this
+        // If the activity was cancelled (or finished by another path) while this
         // photo was in-flight, skip the update to avoid overwriting the
         // terminal state.
-        if job.is_finished() {
+        if activity.is_finished() {
             return Ok(());
         }
 
         // Move photo from queued to processed
-        job.queued_photo_ids.retain(|id| id != &photo.photo_id);
-        job.processed_photo_ids.push(photo.photo_id);
+        activity.queued_photo_ids.retain(|id| id != &photo.photo_id);
+        activity.processed_photo_ids.push(photo.photo_id);
 
         // Retrieve client_id from the photo store
         let client_id = match self.photo_store.get(photo.photo_id).await {
@@ -313,22 +316,22 @@ impl PhotoProcessor {
         };
 
         // Store result
-        job.results.insert(
+        activity.results.insert(
             photo.photo_id,
             Self::build_photo_result(photo.photo_id, client_id, analysis),
         );
 
-        // Complete job when all photos have been processed
-        if job.queued_photo_ids.is_empty() {
-            job.complete();
-            info!(job_id = %photo.job_id, "Job completed");
+        // Complete activity when all photos have been processed
+        if activity.queued_photo_ids.is_empty() {
+            activity.complete();
+            info!(activity_id = %photo.activity_id, "Activity completed");
         }
 
-        self.job_store
-            .update(job)
+        self.activity_store
+            .update(activity)
             .await
             .map(|_| ())
-            .map_err(|e| format!("Failed to persist job {}: {}", photo.job_id, e))
+            .map_err(|e| format!("Failed to persist activity {}: {}", photo.activity_id, e))
     }
 
     fn build_photo_result(
@@ -371,11 +374,11 @@ mod tests {
     use tempfile::TempDir;
     use uuid::Uuid;
 
-    use crate::models::{Job, Task};
+    use crate::models::{Activity, Project};
     use crate::services::ai::{
         AIProviderError, AIProviderResult, AnalyzeImageResponse, HealthStatus, ModelInfo,
     };
-    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore};
+    use crate::storage::{FileSystemActivityStore, FileSystemPhotoStore, FileSystemProjectStore};
 
     // -----------------------------------------------------------------------
     // Mock AI providers
@@ -491,9 +494,9 @@ mod tests {
 
     struct TestFixture {
         processor: PhotoProcessor,
-        job_store: Arc<FileSystemJobStore>,
+        activity_store: Arc<FileSystemActivityStore>,
         photo_store: Arc<FileSystemPhotoStore>,
-        task_store: Arc<FileSystemTaskStore>,
+        project_store: Arc<FileSystemProjectStore>,
         #[allow(dead_code)]
         temp_dir: TempDir,
     }
@@ -501,31 +504,32 @@ mod tests {
     async fn make_fixture(ai_provider: Arc<dyn AIProvider>) -> TestFixture {
         let temp_dir = TempDir::new().unwrap();
         let path = temp_dir.path().to_path_buf();
-        let task_store = Arc::new(FileSystemTaskStore::new(path.clone()).await);
+        let project_store = Arc::new(FileSystemProjectStore::new(path.clone()).await);
         let photo_store =
-            Arc::new(FileSystemPhotoStore::new(path.clone(), task_store.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(path.clone(), task_store.clone()).await);
+            Arc::new(FileSystemPhotoStore::new(path.clone(), project_store.clone()).await);
+        let activity_store =
+            Arc::new(FileSystemActivityStore::new(path.clone(), project_store.clone()).await);
 
         let processor = PhotoProcessor::new(
             ai_provider,
-            job_store.clone(),
+            activity_store.clone(),
             photo_store.clone(),
-            task_store.clone(),
+            project_store.clone(),
         );
 
         TestFixture {
             processor,
-            job_store,
+            activity_store,
             photo_store,
-            task_store,
+            project_store,
             temp_dir,
         }
     }
 
-    async fn setup_job_and_photo(fixture: &TestFixture) -> (Job, Uuid) {
-        let task = fixture
-            .task_store
-            .create(Task::new(
+    async fn setup_activity_and_photo(fixture: &TestFixture) -> (Activity, Uuid) {
+        let project = fixture
+            .project_store
+            .create(Project::new(
                 Uuid::new_v4(),
                 "Test".to_string(),
                 "test context".to_string(),
@@ -534,7 +538,8 @@ mod tests {
             .unwrap();
 
         let photo_id = Uuid::new_v4();
-        let photo = crate::models::Photo::new(task.task_id, None, "test.jpg".to_string(), 100);
+        let photo =
+            crate::models::Photo::new(project.project_id, None, "test.jpg".to_string(), 100);
         let photo = crate::models::Photo { photo_id, ..photo };
         fixture.photo_store.create(photo).await.unwrap();
         fixture
@@ -543,10 +548,10 @@ mod tests {
             .await
             .unwrap();
 
-        let job = fixture
-            .job_store
-            .create(Job::new(
-                task.task_id,
+        let activity = fixture
+            .activity_store
+            .create(Activity::new(
+                project.project_id,
                 "ollama".to_string(),
                 "llava".to_string(),
                 None,
@@ -555,7 +560,7 @@ mod tests {
             .await
             .unwrap();
 
-        (job, photo_id)
+        (activity, photo_id)
     }
 
     // -----------------------------------------------------------------------
@@ -673,19 +678,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_process_success_updates_job_to_completed() {
+    async fn test_process_success_updates_activity_to_completed() {
         let provider = Arc::new(SuccessProvider {
             response_text: json_tags(&["landscape", "mountain", "sunset"]),
         });
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
         let result = fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -696,11 +701,16 @@ mod tests {
             assert_eq!(tags, "landscape, mountain, sunset");
         }
 
-        let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        assert_eq!(updated_job.status, JobStatus::Completed);
-        assert!(updated_job.queued_photo_ids.is_empty());
-        assert!(updated_job.processed_photo_ids.contains(&photo_id));
-        let photo_result = updated_job.results.get(&photo_id).unwrap();
+        let updated = fixture
+            .activity_store
+            .get(activity.activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.status, ActivityStatus::Completed);
+        assert!(updated.queued_photo_ids.is_empty());
+        assert!(updated.processed_photo_ids.contains(&photo_id));
+        let photo_result = updated.results.get(&photo_id).unwrap();
         assert_eq!(photo_result.status, PhotoResultStatus::Completed);
         assert_eq!(
             photo_result.tags.as_deref(),
@@ -714,14 +724,14 @@ mod tests {
             error_message: "model timeout".to_string(),
         });
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
         let result = fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -729,10 +739,15 @@ mod tests {
 
         assert!(matches!(result.outcome, Outcome::AnalysisFailed { .. }));
 
-        let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        assert_eq!(updated_job.status, JobStatus::Completed);
-        assert!(updated_job.queued_photo_ids.is_empty());
-        let photo_result = updated_job.results.get(&photo_id).unwrap();
+        let updated = fixture
+            .activity_store
+            .get(activity.activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.status, ActivityStatus::Completed);
+        assert!(updated.queued_photo_ids.is_empty());
+        let photo_result = updated.results.get(&photo_id).unwrap();
         assert_eq!(photo_result.status, PhotoResultStatus::Failed);
         assert!(photo_result.error.is_some());
     }
@@ -743,17 +758,21 @@ mod tests {
             response_text: json_tags(&["ocean", "wave", "blue"]),
         });
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
-        // Delete the job to make update_job fail with NotFound
-        fixture.job_store.delete(job.job_id).await.unwrap();
+        // Delete the activity to make update_activity fail with NotFound
+        fixture
+            .activity_store
+            .delete(activity.activity_id)
+            .await
+            .unwrap();
 
         let result = fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -774,37 +793,42 @@ mod tests {
             response_text: json_tags(&["street", "city"]),
         });
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
-        assert_eq!(job.status, JobStatus::Queued);
+        assert_eq!(activity.status, ActivityStatus::Queued);
 
         fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
             .await;
 
-        let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        assert_eq!(updated_job.status, JobStatus::Completed);
-        assert!(updated_job.started_at.is_some());
-        assert!(updated_job.completed_at.is_some());
+        let updated = fixture
+            .activity_store
+            .get(activity.activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.status, ActivityStatus::Completed);
+        assert!(updated.started_at.is_some());
+        assert!(updated.completed_at.is_some());
     }
 
     #[tokio::test]
-    async fn test_process_multi_photo_job_not_completed_until_last_photo() {
+    async fn test_process_multi_photo_activity_not_completed_until_last_photo() {
         let provider = Arc::new(SuccessProvider {
             response_text: json_tags(&["test"]),
         });
         let fixture = make_fixture(provider).await;
 
-        let task = fixture
-            .task_store
-            .create(Task::new(
+        let project = fixture
+            .project_store
+            .create(Project::new(
                 Uuid::new_v4(),
                 "Test".to_string(),
                 "context".to_string(),
@@ -816,7 +840,7 @@ mod tests {
         let photo_id_2 = Uuid::new_v4();
 
         for (id, name) in [(photo_id_1, "a.jpg"), (photo_id_2, "b.jpg")] {
-            let photo = crate::models::Photo::new(task.task_id, None, name.to_string(), 100);
+            let photo = crate::models::Photo::new(project.project_id, None, name.to_string(), 100);
             let photo = crate::models::Photo {
                 photo_id: id,
                 ..photo
@@ -825,10 +849,10 @@ mod tests {
             fixture.photo_store.save_data(id, b"bytes").await.unwrap();
         }
 
-        let job = fixture
-            .job_store
-            .create(Job::new(
-                task.task_id,
+        let activity = fixture
+            .activity_store
+            .create(Activity::new(
+                project.project_id,
                 "ollama".to_string(),
                 "llava".to_string(),
                 None,
@@ -840,34 +864,44 @@ mod tests {
         fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id: photo_id_1,
-                task_id: task.task_id,
+                project_id: project.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
             .await;
 
-        let job_after_first = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        assert_eq!(job_after_first.status, JobStatus::Processing);
-        assert_eq!(job_after_first.queued_photo_ids.len(), 1);
-        assert_eq!(job_after_first.processed_photo_ids.len(), 1);
+        let after_first = fixture
+            .activity_store
+            .get(activity.activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after_first.status, ActivityStatus::Processing);
+        assert_eq!(after_first.queued_photo_ids.len(), 1);
+        assert_eq!(after_first.processed_photo_ids.len(), 1);
 
         fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id: photo_id_2,
-                task_id: task.task_id,
+                project_id: project.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
             .await;
 
-        let job_after_second = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        assert_eq!(job_after_second.status, JobStatus::Completed);
-        assert!(job_after_second.queued_photo_ids.is_empty());
-        assert_eq!(job_after_second.processed_photo_ids.len(), 2);
+        let after_second = fixture
+            .activity_store
+            .get(activity.activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(after_second.status, ActivityStatus::Completed);
+        assert!(after_second.queued_photo_ids.is_empty());
+        assert_eq!(after_second.processed_photo_ids.len(), 2);
     }
 
     #[tokio::test]
@@ -876,14 +910,14 @@ mod tests {
             response_text: "This is a description, not JSON tags".to_string(),
         });
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
         let result = fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -894,8 +928,13 @@ mod tests {
             assert!(error.contains("Tag validation failed"));
         }
 
-        let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        let photo_result = updated_job.results.get(&photo_id).unwrap();
+        let updated = fixture
+            .activity_store
+            .get(activity.activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let photo_result = updated.results.get(&photo_id).unwrap();
         assert_eq!(photo_result.status, PhotoResultStatus::Failed);
         assert!(
             photo_result
@@ -913,22 +952,26 @@ mod tests {
         });
         let fixture = make_fixture(provider).await;
 
-        let task = fixture
-            .task_store
-            .create(Task::new(Uuid::new_v4(), "Test".to_string(), String::new()))
+        let project = fixture
+            .project_store
+            .create(Project::new(
+                Uuid::new_v4(),
+                "Test".to_string(),
+                String::new(),
+            ))
             .await
             .unwrap();
 
         // Create photo metadata but no binary data
         let photo_id = Uuid::new_v4();
-        let photo = crate::models::Photo::new(task.task_id, None, "ghost.jpg".to_string(), 0);
+        let photo = crate::models::Photo::new(project.project_id, None, "ghost.jpg".to_string(), 0);
         let photo = crate::models::Photo { photo_id, ..photo };
         fixture.photo_store.create(photo).await.unwrap();
 
-        let job = fixture
-            .job_store
-            .create(Job::new(
-                task.task_id,
+        let activity = fixture
+            .activity_store
+            .create(Activity::new(
+                project.project_id,
                 "ollama".to_string(),
                 "llava".to_string(),
                 None,
@@ -940,9 +983,9 @@ mod tests {
         let result = fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: task.task_id,
+                project_id: project.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -952,87 +995,105 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_process_marks_job_processing_before_analysis() {
+    async fn test_process_marks_activity_processing_before_analysis() {
         let provider = Arc::new(SuccessProvider {
             response_text: json_tags(&["portrait", "indoor"]),
         });
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
-        assert_eq!(job.status, JobStatus::Queued);
-        assert!(job.started_at.is_none());
+        assert_eq!(activity.status, ActivityStatus::Queued);
+        assert!(activity.started_at.is_none());
 
         fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
             .await;
 
-        let updated_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        // started_at must be set (was set by start_job_if_queued BEFORE analysis)
-        assert!(updated_job.started_at.is_some());
-        // Job completed normally after analysis
-        assert_eq!(updated_job.status, JobStatus::Completed);
+        let updated = fixture
+            .activity_store
+            .get(activity.activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        // started_at must be set (was set by start_activity_if_queued BEFORE analysis)
+        assert!(updated.started_at.is_some());
+        // Activity completed normally after analysis
+        assert_eq!(updated.status, ActivityStatus::Completed);
     }
 
     #[tokio::test]
-    async fn test_process_cancelled_job_skips_update() {
+    async fn test_process_cancelled_activity_skips_update() {
         let provider = Arc::new(SuccessProvider {
             response_text: json_tags(&["landscape", "mountain"]),
         });
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
-        // Cancel the job before processing completes
-        let mut cancelled_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        cancelled_job.cancel();
-        fixture.job_store.update(cancelled_job).await.unwrap();
+        // Cancel the activity before processing completes
+        let mut cancelled = fixture
+            .activity_store
+            .get(activity.activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        cancelled.cancel();
+        fixture.activity_store.update(cancelled).await.unwrap();
 
-        // Process the photo — the job is already cancelled, so update_job should bail early
+        // Process the photo — the activity is already cancelled, so update_activity should bail early
         let result = fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
             .await;
 
-        // Analysis succeeds but persistence is skipped (job already finished)
-        // This manifests as Success (from analyze) but the job state stays Cancelled
+        // Analysis succeeds but persistence is skipped (activity already finished)
         assert!(matches!(
             result.outcome,
             Outcome::Success { .. } | Outcome::SuccessWithPersistenceError { .. }
         ));
 
-        // Job must still be Cancelled — update_job must not have overwritten it
-        let final_job = fixture.job_store.get(job.job_id).await.unwrap().unwrap();
-        assert_eq!(final_job.status, JobStatus::Cancelled);
+        // Activity must still be Cancelled — update_activity must not have overwritten it
+        let final_activity = fixture
+            .activity_store
+            .get(activity.activity_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(final_activity.status, ActivityStatus::Cancelled);
     }
 
     #[tokio::test]
-    async fn test_process_missing_task_returns_analysis_failed() {
+    async fn test_process_missing_project_returns_analysis_failed() {
         let provider = Arc::new(SuccessProvider {
             response_text: json_tags(&["should", "not", "reach"]),
         });
         let fixture = make_fixture(provider).await;
 
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
-        fixture.task_store.delete(job.task_id).await.unwrap();
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
+        fixture
+            .project_store
+            .delete(activity.project_id)
+            .await
+            .unwrap();
 
         let result = fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -1057,14 +1118,14 @@ mod tests {
         });
         let provider_ref = provider.clone();
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
         fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: Some("Italian".to_string()),
             })
@@ -1093,14 +1154,14 @@ mod tests {
         });
         let provider_ref = provider.clone();
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
         fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: None,
             })
@@ -1129,14 +1190,14 @@ mod tests {
         });
         let provider_ref = provider.clone();
         let fixture = make_fixture(provider).await;
-        let (job, photo_id) = setup_job_and_photo(&fixture).await;
+        let (activity, photo_id) = setup_activity_and_photo(&fixture).await;
 
         fixture
             .processor
             .process(QueuedPhoto {
-                job_id: job.job_id,
+                activity_id: activity.activity_id,
                 photo_id,
-                task_id: job.task_id,
+                project_id: activity.project_id,
                 model: "llava".to_string(),
                 language: Some("French".to_string()),
             })

@@ -182,13 +182,13 @@ mod tests {
     use tokio::sync::Mutex;
     use uuid::Uuid;
 
-    use crate::models::Job;
+    use crate::models::Activity;
     use crate::services::ai::{
         AIProvider, AIProviderError, AIProviderResult, AnalyzeImageRequest, AnalyzeImageResponse,
         HealthStatus, ModelInfo,
     };
     use crate::services::worker::queue::PhotoBuffer;
-    use crate::storage::{FileSystemJobStore, FileSystemPhotoStore, FileSystemTaskStore};
+    use crate::storage::{FileSystemActivityStore, FileSystemPhotoStore, FileSystemProjectStore};
 
     // Minimal mock — never called in scheduling tests (only next_photo() is invoked).
     struct NoopProvider;
@@ -234,13 +234,15 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let path = temp.path().to_path_buf();
 
-        let task_store = Arc::new(FileSystemTaskStore::new(path.clone()).await);
+        let project_store = Arc::new(FileSystemProjectStore::new(path.clone()).await);
         let photo_store =
-            Arc::new(FileSystemPhotoStore::new(path.clone(), task_store.clone()).await);
-        let job_store = Arc::new(FileSystemJobStore::new(path, task_store.clone()).await);
+            Arc::new(FileSystemPhotoStore::new(path.clone(), project_store.clone()).await);
+        let activity_store =
+            Arc::new(FileSystemActivityStore::new(path, project_store.clone()).await);
         let ai_provider: Arc<dyn AIProvider> = Arc::new(NoopProvider);
 
-        let processor = PhotoProcessor::new(ai_provider, job_store, photo_store, task_store);
+        let processor =
+            PhotoProcessor::new(ai_provider, activity_store, photo_store, project_store);
         let worker = Worker::new(
             0,
             0,
@@ -256,24 +258,24 @@ mod tests {
     fn buffer_with_two_models(count_a: usize, count_b: usize) -> Arc<Mutex<PhotoBuffer>> {
         let mut buf = PhotoBuffer::new();
         if count_a > 0 {
-            let job = Job::new(
+            let activity = Activity::new(
                 Uuid::new_v4(),
                 "ollama".to_string(),
                 "modelA".to_string(),
                 None,
                 (0..count_a).map(|_| Uuid::new_v4()).collect(),
             );
-            buf.enqueue_job(&job);
+            buf.enqueue_activity(&activity);
         }
         if count_b > 0 {
-            let job = Job::new(
+            let activity = Activity::new(
                 Uuid::new_v4(),
                 "ollama".to_string(),
                 "modelB".to_string(),
                 None,
                 (0..count_b).map(|_| Uuid::new_v4()).collect(),
             );
-            buf.enqueue_job(&job);
+            buf.enqueue_activity(&activity);
         }
         Arc::new(Mutex::new(buf))
     }
@@ -359,14 +361,14 @@ mod tests {
     async fn test_stays_on_current_model_when_no_other_available() {
         // Only one model available
         let mut buf = PhotoBuffer::new();
-        let job = Job::new(
+        let activity = Activity::new(
             Uuid::new_v4(),
             "ollama".to_string(),
             "solo".to_string(),
             None,
             (0..3).map(|_| Uuid::new_v4()).collect(),
         );
-        buf.enqueue_job(&job);
+        buf.enqueue_activity(&activity);
         let buf = Arc::new(Mutex::new(buf));
 
         // Thresholds already exceeded

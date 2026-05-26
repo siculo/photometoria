@@ -54,14 +54,14 @@ impl AppError {
         Self::new(StatusCode::NOT_FOUND, "not_found", message)
     }
 
-    pub fn task_not_found(task_id: Uuid) -> Self {
-        let message = format!("Task with id '{}' not found", task_id);
+    pub fn project_not_found(project_id: Uuid) -> Self {
+        let message = format!("Project with id '{}' not found", project_id);
         warn!(message);
         Self::new(StatusCode::NOT_FOUND, "not_found", message)
     }
 
-    pub fn job_not_found(job_id: Uuid) -> Self {
-        let message = format!("Job with id '{}' not found", job_id);
+    pub fn activity_not_found(activity_id: Uuid) -> Self {
+        let message = format!("Activity with id '{}' not found", activity_id);
         warn!(message);
         Self::new(StatusCode::NOT_FOUND, "not_found", message)
     }

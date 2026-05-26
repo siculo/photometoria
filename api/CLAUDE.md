@@ -5,14 +5,14 @@
 ```
 0. GET  /health                            → Liveness probe (no version header)
 1. GET  /api/info                          → Server info and capabilities
-1b. GET /api/catalogs                      → List all catalogs with task counts
+1b. GET /api/catalogs                      → List all catalogs with project counts
 2. GET  /api/providers                     → List configured AI providers
 3. GET  /api/providers/{provider_name}     → Provider details and models
-4. POST /api/catalogs/{catalog_id}/tasks   → Create task (working session)
-   GET  /api/catalogs/{catalog_id}/tasks   → List tasks by catalog
+4. POST /api/catalogs/{catalog_id}/tasks   → Create project (working session)  [URL path uses "tasks" — wire format unchanged]
+   GET  /api/catalogs/{catalog_id}/tasks   → List projects by catalog
 5. POST /api/tasks/{id}/photos             → Upload photos (multipart)
 6. POST /api/tasks/{id}/jobs               → Start job (choose AI model, optional language)
-7. GET  /api/tasks/{id}/jobs               → List jobs for a task
+7. GET  /api/tasks/{id}/jobs               → List jobs for a project
 8. [TODO #11] SSE streaming                → Monitor progress
 9. POST /api/jobs/{id}/cancel              → Cancel job (optional)
 10. GET /api/jobs/{id}/results             → Retrieve generated metadata
@@ -43,18 +43,18 @@ api/src/
 │   └── mod.rs        #   create_router() — all route mappings
 ├── handlers/         # Business logic (TEST LOGIC HERE)
 │   ├── mod.rs
-│   ├── tasks.rs      #   CRUD tasks
+│   ├── project.rs    #   CRUD projects (formerly tasks)
 │   ├── photos.rs     #   get/delete/list photos
 │   ├── upload_photos.rs # Multipart upload handling
-│   ├── jobs.rs       #   CRUD jobs + cancel/retry
+│   ├── activities.rs #   CRUD activities + cancel/retry (formerly jobs.rs)
 │   ├── providers.rs  #   Provider listing, model discovery
 │   ├── info.rs       #   Server info endpoint
 │   ├── app_error.rs  #   AppError → HTTP response mapping
 │   └── test_utils.rs #   Test fixtures and helpers
 ├── models/           # Domain structs
-│   ├── task.rs
+│   ├── project.rs    #   Project (formerly Task)
 │   ├── photo.rs
-│   ├── job.rs
+│   ├── activity.rs   #   Activity (formerly job.rs)
 │   └── info.rs       #   ServerInfo response struct
 ├── services/         # External services
 │   ├── ai/           #   AI provider abstraction
@@ -66,20 +66,20 @@ api/src/
 │   │       ├── mod.rs
 │   │       ├── provider.rs
 │   │       └── types.rs
-│   └── worker/       #   Job processing
+│   └── worker/       #   Activity processing
 │       ├── mod.rs
 │       ├── pool.rs   #     WorkerPool
 │       ├── processor.rs #  Photo analysis logic
-│       ├── queue.rs  #     Job queue
+│       ├── queue.rs  #     Activity queue
 │       └── worker.rs #     Individual worker
 └── storage/          # Persistence layer (filesystem)
     ├── mod.rs        #   Store traits + re-exports
-    ├── task_store.rs
+    ├── project_store.rs
     ├── photo_store.rs
-    ├── job_store.rs
-    ├── filesystem_task_store.rs
+    ├── activity_store.rs         #   ActivityStore trait (formerly job_store.rs)
+    ├── filesystem_project_store.rs
     ├── filesystem_photo_store.rs
-    ├── filesystem_job_store.rs
+    ├── filesystem_activity_store.rs  #   FileSystemActivityStore (formerly filesystem_job_store.rs)
     └── filesystem_layout.rs
 ```
 
@@ -87,10 +87,10 @@ api/src/
 
 ## Implemented Guardrails
 
-- Tasks/photos not deletable while any job is active
-- Jobs deletable only if in terminal state
-- Job transitions to `processing` BEFORE AI analysis starts
-- Cancel removes pending photos from buffer, marks job `cancelled`
+- Projects/photos not deletable while any activity is active
+- Activities deletable only if in terminal state
+- Activity transitions to `processing` BEFORE AI analysis starts
+- Cancel removes pending photos from buffer, marks activity `cancelled`
 
 ---
 

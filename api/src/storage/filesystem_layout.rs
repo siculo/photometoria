@@ -117,50 +117,50 @@ impl FileSystemLayout {
     // Task Paths
     // ========================================================================
 
-    /// Returns the root directory for tasks within a catalog.
+    /// Returns the root directory for projects within a catalog.
     ///
     /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/`
-    pub fn tasks_root(&self, catalog_id: Uuid) -> PathBuf {
+    pub fn projects_root(&self, catalog_id: Uuid) -> PathBuf {
         self.catalog_dir(catalog_id).join("tasks")
     }
 
-    /// Returns the directory path for a task.
+    /// Returns the directory path for a project.
     ///
-    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/`
-    pub fn task_dir(&self, catalog_id: Uuid, task_id: Uuid) -> PathBuf {
-        self.tasks_root(catalog_id).join(task_id.to_string())
+    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{project_id}/`
+    pub fn project_dir(&self, catalog_id: Uuid, project_id: Uuid) -> PathBuf {
+        self.projects_root(catalog_id).join(project_id.to_string())
     }
 
-    /// Returns the path to a task's metadata file.
+    /// Returns the path to a project's metadata file.
     ///
-    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/task.json`
-    pub fn task_json_path(&self, catalog_id: Uuid, task_id: Uuid) -> PathBuf {
-        self.task_dir(catalog_id, task_id).join("task.json")
+    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{project_id}/task.json`
+    pub fn project_json_path(&self, catalog_id: Uuid, project_id: Uuid) -> PathBuf {
+        self.project_dir(catalog_id, project_id).join("task.json")
     }
 
     // ========================================================================
     // Photo Paths
     // ========================================================================
 
-    /// Returns the directory where photo binary files are stored for a task.
+    /// Returns the directory where photo binary files are stored for a project.
     ///
-    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/imgs/`
-    pub fn photos_dir(&self, catalog_id: Uuid, task_id: Uuid) -> PathBuf {
-        self.task_dir(catalog_id, task_id).join("imgs")
+    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{project_id}/imgs/`
+    pub fn photos_dir(&self, catalog_id: Uuid, project_id: Uuid) -> PathBuf {
+        self.project_dir(catalog_id, project_id).join("imgs")
     }
 
-    /// Returns the path to a task's photos metadata file.
+    /// Returns the path to a project's photos metadata file.
     ///
-    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/photos.json`
-    pub fn photos_json_path(&self, catalog_id: Uuid, task_id: Uuid) -> PathBuf {
-        self.task_dir(catalog_id, task_id).join("photos.json")
+    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{project_id}/photos.json`
+    pub fn photos_json_path(&self, catalog_id: Uuid, project_id: Uuid) -> PathBuf {
+        self.project_dir(catalog_id, project_id).join("photos.json")
     }
 
     /// Returns the path to a photo's binary data file.
     ///
-    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/imgs/{photo_id}`
-    pub fn photo_file_path(&self, catalog_id: Uuid, task_id: Uuid, photo_id: Uuid) -> PathBuf {
-        self.photos_dir(catalog_id, task_id)
+    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{project_id}/imgs/{photo_id}`
+    pub fn photo_file_path(&self, catalog_id: Uuid, project_id: Uuid, photo_id: Uuid) -> PathBuf {
+        self.photos_dir(catalog_id, project_id)
             .join(photo_id.to_string())
     }
 
@@ -168,18 +168,18 @@ impl FileSystemLayout {
     // Job Paths
     // ========================================================================
 
-    /// Returns the directory where job files are stored for a task.
+    /// Returns the directory where job files are stored for a project.
     ///
-    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/jobs/`
-    pub fn jobs_dir(&self, catalog_id: Uuid, task_id: Uuid) -> PathBuf {
-        self.task_dir(catalog_id, task_id).join("jobs")
+    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{project_id}/jobs/`
+    pub fn jobs_dir(&self, catalog_id: Uuid, project_id: Uuid) -> PathBuf {
+        self.project_dir(catalog_id, project_id).join("jobs")
     }
 
     /// Returns the path to a job's metadata file.
     ///
-    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{task_id}/jobs/{job_id}.json`
-    pub fn job_file_path(&self, catalog_id: Uuid, task_id: Uuid, job_id: Uuid) -> PathBuf {
-        self.jobs_dir(catalog_id, task_id)
+    /// Example: `{storage_path}/catalogs/{catalog_id}/tasks/{project_id}/jobs/{job_id}.json`
+    pub fn job_file_path(&self, catalog_id: Uuid, project_id: Uuid, job_id: Uuid) -> PathBuf {
+        self.jobs_dir(catalog_id, project_id)
             .join(format!("{}.json", job_id))
     }
 
@@ -196,11 +196,15 @@ impl FileSystemLayout {
         Ok(path)
     }
 
-    /// Ensures the task directory exists, creating it if necessary.
+    /// Ensures the project directory exists, creating it if necessary.
     ///
     /// Returns the path to the created directory.
-    pub async fn ensure_task_dir(&self, catalog_id: Uuid, task_id: Uuid) -> io::Result<PathBuf> {
-        let path = self.task_dir(catalog_id, task_id);
+    pub async fn ensure_project_dir(
+        &self,
+        catalog_id: Uuid,
+        project_id: Uuid,
+    ) -> io::Result<PathBuf> {
+        let path = self.project_dir(catalog_id, project_id);
         tokio::fs::create_dir_all(&path).await?;
         Ok(path)
     }
@@ -208,8 +212,12 @@ impl FileSystemLayout {
     /// Ensures the photos (imgs) directory exists for a task.
     ///
     /// Returns the path to the created directory.
-    pub async fn ensure_photos_dir(&self, catalog_id: Uuid, task_id: Uuid) -> io::Result<PathBuf> {
-        let path = self.photos_dir(catalog_id, task_id);
+    pub async fn ensure_photos_dir(
+        &self,
+        catalog_id: Uuid,
+        project_id: Uuid,
+    ) -> io::Result<PathBuf> {
+        let path = self.photos_dir(catalog_id, project_id);
         tokio::fs::create_dir_all(&path).await?;
         Ok(path)
     }
@@ -217,8 +225,8 @@ impl FileSystemLayout {
     /// Ensures the jobs directory exists for a task.
     ///
     /// Returns the path to the created directory.
-    pub async fn ensure_jobs_dir(&self, catalog_id: Uuid, task_id: Uuid) -> io::Result<PathBuf> {
-        let path = self.jobs_dir(catalog_id, task_id);
+    pub async fn ensure_jobs_dir(&self, catalog_id: Uuid, project_id: Uuid) -> io::Result<PathBuf> {
+        let path = self.jobs_dir(catalog_id, project_id);
         tokio::fs::create_dir_all(&path).await?;
         Ok(path)
     }
@@ -251,12 +259,12 @@ impl FileSystemLayout {
         Ok(result)
     }
 
-    /// Scans the filesystem and returns paths to all task directories within a catalog.
+    /// Scans the filesystem and returns paths to all project directories within a catalog.
     ///
     /// Returns all subdirectories under `tasks/`, regardless of their contents.
     /// Used as the base primitive for more specific scan methods.
-    pub async fn scan_task_dirs(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
-        let tasks_dir = self.tasks_root(catalog_id);
+    pub async fn scan_project_dirs(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
+        let tasks_dir = self.projects_root(catalog_id);
 
         if !tasks_dir.exists() {
             return Ok(Vec::new());
@@ -277,9 +285,9 @@ impl FileSystemLayout {
 
     /// Scans the filesystem and returns paths to all task.json files within a catalog.
     ///
-    /// Used by TaskStore during initialization to load existing tasks.
-    pub async fn scan_task_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
-        let dirs = self.scan_task_dirs(catalog_id).await?;
+    /// Used by ProjectStore during initialization to load existing projects.
+    pub async fn scan_project_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
+        let dirs = self.scan_project_dirs(catalog_id).await?;
         Ok(dirs
             .into_iter()
             .map(|d| d.join("task.json"))
@@ -291,7 +299,7 @@ impl FileSystemLayout {
     ///
     /// Used by PhotoStore during initialization to load existing photos.
     pub async fn scan_photos_json_files(&self, catalog_id: Uuid) -> io::Result<Vec<PathBuf>> {
-        let dirs = self.scan_task_dirs(catalog_id).await?;
+        let dirs = self.scan_project_dirs(catalog_id).await?;
         Ok(dirs
             .into_iter()
             .map(|d| d.join("photos.json"))
@@ -299,11 +307,11 @@ impl FileSystemLayout {
             .collect())
     }
 
-    /// Checks if a photos.json file exists for a given task.
+    /// Checks if a photos.json file exists for a given project.
     ///
     /// Returns Some(path) if the file exists, None otherwise.
-    pub fn photos_json_exists(&self, catalog_id: Uuid, task_id: Uuid) -> Option<PathBuf> {
-        let path = self.photos_json_path(catalog_id, task_id);
+    pub fn photos_json_exists(&self, catalog_id: Uuid, project_id: Uuid) -> Option<PathBuf> {
+        let path = self.photos_json_path(catalog_id, project_id);
         if path.exists() { Some(path) } else { None }
     }
 
@@ -314,9 +322,9 @@ impl FileSystemLayout {
     pub async fn scan_job_files(
         &self,
         catalog_id: Uuid,
-        task_id: Uuid,
+        project_id: Uuid,
     ) -> io::Result<Vec<PathBuf>> {
-        let jobs_dir = self.jobs_dir(catalog_id, task_id);
+        let jobs_dir = self.jobs_dir(catalog_id, project_id);
 
         if !jobs_dir.exists() {
             return Ok(Vec::new());
@@ -468,13 +476,13 @@ mod tests {
     }
 
     #[test]
-    fn test_tasks_root() {
+    fn test_projects_root() {
         let storage_path = PathBuf::from("/tmp/storage");
         let layout = FileSystemLayout::new(storage_path.clone());
         let catalog_id = Uuid::new_v4();
 
         assert_eq!(
-            layout.tasks_root(catalog_id),
+            layout.projects_root(catalog_id),
             storage_path
                 .join("catalogs")
                 .join(catalog_id.to_string())
@@ -483,24 +491,24 @@ mod tests {
     }
 
     #[test]
-    fn test_task_paths() {
+    fn test_project_paths() {
         let storage_path = PathBuf::from("/tmp/storage");
         let layout = FileSystemLayout::new(storage_path.clone());
         let catalog_id = Uuid::new_v4();
-        let task_id = Uuid::new_v4();
+        let project_id = Uuid::new_v4();
 
-        let task_dir = layout.task_dir(catalog_id, task_id);
+        let project_dir = layout.project_dir(catalog_id, project_id);
         assert_eq!(
-            task_dir,
+            project_dir,
             storage_path
                 .join("catalogs")
                 .join(catalog_id.to_string())
                 .join("tasks")
-                .join(task_id.to_string())
+                .join(project_id.to_string())
         );
 
-        let task_json = layout.task_json_path(catalog_id, task_id);
-        assert_eq!(task_json, task_dir.join("task.json"));
+        let project_json = layout.project_json_path(catalog_id, project_id);
+        assert_eq!(project_json, project_dir.join("task.json"));
     }
 
     #[test]
@@ -573,16 +581,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_ensure_task_dir() {
+    async fn test_ensure_project_dir() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
         let catalog_id = Uuid::new_v4();
-        let task_id = Uuid::new_v4();
+        let project_id = Uuid::new_v4();
 
-        let path = layout.ensure_task_dir(catalog_id, task_id).await.unwrap();
+        let path = layout
+            .ensure_project_dir(catalog_id, project_id)
+            .await
+            .unwrap();
         assert!(path.exists());
         assert!(path.is_dir());
-        assert_eq!(path, layout.task_dir(catalog_id, task_id));
+        assert_eq!(path, layout.project_dir(catalog_id, project_id));
     }
 
     #[tokio::test]
@@ -641,28 +652,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_scan_task_dirs_empty() {
+    async fn test_scan_project_dirs_empty() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
         let catalog_id = Uuid::new_v4();
 
-        let dirs = layout.scan_task_dirs(catalog_id).await.unwrap();
+        let dirs = layout.scan_project_dirs(catalog_id).await.unwrap();
         assert!(dirs.is_empty());
     }
 
     #[tokio::test]
-    async fn test_scan_task_dirs() {
+    async fn test_scan_project_dirs() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
         let catalog_id = Uuid::new_v4();
 
-        let task1_id = Uuid::new_v4();
-        let task2_id = Uuid::new_v4();
+        let project1_id = Uuid::new_v4();
+        let project2_id = Uuid::new_v4();
 
-        layout.ensure_task_dir(catalog_id, task1_id).await.unwrap();
-        layout.ensure_task_dir(catalog_id, task2_id).await.unwrap();
+        layout
+            .ensure_project_dir(catalog_id, project1_id)
+            .await
+            .unwrap();
+        layout
+            .ensure_project_dir(catalog_id, project2_id)
+            .await
+            .unwrap();
 
-        let dirs = layout.scan_task_dirs(catalog_id).await.unwrap();
+        let dirs = layout.scan_project_dirs(catalog_id).await.unwrap();
         assert_eq!(dirs.len(), 2);
 
         for dir in &dirs {
@@ -672,40 +689,49 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_scan_task_json_files_empty() {
+    async fn test_scan_project_json_files_empty() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
         let catalog_id = Uuid::new_v4();
 
-        let files = layout.scan_task_json_files(catalog_id).await.unwrap();
+        let files = layout.scan_project_json_files(catalog_id).await.unwrap();
         assert!(files.is_empty());
     }
 
     #[tokio::test]
-    async fn test_scan_task_json_files() {
+    async fn test_scan_project_json_files() {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let layout = FileSystemLayout::new(temp_dir.path().to_path_buf());
         let catalog_id = Uuid::new_v4();
 
-        let task1_id = Uuid::new_v4();
-        let task2_id = Uuid::new_v4();
-        let task3_id = Uuid::new_v4();
+        let project1_id = Uuid::new_v4();
+        let project2_id = Uuid::new_v4();
+        let project3_id = Uuid::new_v4();
 
-        layout.ensure_task_dir(catalog_id, task1_id).await.unwrap();
-        layout.ensure_task_dir(catalog_id, task2_id).await.unwrap();
-        layout.ensure_task_dir(catalog_id, task3_id).await.unwrap();
-
-        tokio::fs::write(layout.task_json_path(catalog_id, task1_id), b"{}")
+        layout
+            .ensure_project_dir(catalog_id, project1_id)
             .await
             .unwrap();
-        tokio::fs::write(layout.task_json_path(catalog_id, task2_id), b"{}")
+        layout
+            .ensure_project_dir(catalog_id, project2_id)
             .await
             .unwrap();
-        tokio::fs::write(layout.task_json_path(catalog_id, task3_id), b"{}")
+        layout
+            .ensure_project_dir(catalog_id, project3_id)
             .await
             .unwrap();
 
-        let files = layout.scan_task_json_files(catalog_id).await.unwrap();
+        tokio::fs::write(layout.project_json_path(catalog_id, project1_id), b"{}")
+            .await
+            .unwrap();
+        tokio::fs::write(layout.project_json_path(catalog_id, project2_id), b"{}")
+            .await
+            .unwrap();
+        tokio::fs::write(layout.project_json_path(catalog_id, project3_id), b"{}")
+            .await
+            .unwrap();
+
+        let files = layout.scan_project_json_files(catalog_id).await.unwrap();
         assert_eq!(files.len(), 3);
 
         for file in &files {
@@ -734,9 +760,18 @@ mod tests {
         let task2_id = Uuid::new_v4();
         let task3_id = Uuid::new_v4();
 
-        layout.ensure_task_dir(catalog_id, task1_id).await.unwrap();
-        layout.ensure_task_dir(catalog_id, task2_id).await.unwrap();
-        layout.ensure_task_dir(catalog_id, task3_id).await.unwrap();
+        layout
+            .ensure_project_dir(catalog_id, task1_id)
+            .await
+            .unwrap();
+        layout
+            .ensure_project_dir(catalog_id, task2_id)
+            .await
+            .unwrap();
+        layout
+            .ensure_project_dir(catalog_id, task3_id)
+            .await
+            .unwrap();
 
         tokio::fs::write(layout.photos_json_path(catalog_id, task1_id), b"[]")
             .await
@@ -763,7 +798,10 @@ mod tests {
 
         assert!(layout.photos_json_exists(catalog_id, task_id).is_none());
 
-        layout.ensure_task_dir(catalog_id, task_id).await.unwrap();
+        layout
+            .ensure_project_dir(catalog_id, task_id)
+            .await
+            .unwrap();
         tokio::fs::write(layout.photos_json_path(catalog_id, task_id), b"[]")
             .await
             .unwrap();
